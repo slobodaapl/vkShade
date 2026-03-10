@@ -189,7 +189,14 @@ In-game UI toggled with End key (configurable). The overlay:
 
 ### Input Handling
 
-X11-based keyboard/mouse input (`keyboard_input_x11.cpp`, `mouse_input.cpp`) compiled as separate static libraries to avoid symbol conflicts with X11 headers.
+Input backends are compiled as separate static libraries to avoid symbol conflicts:
+
+- **X11**: `keyboard_input_x11.cpp`, `mouse_input.cpp` — uses `XQueryKeymap`/`XQueryPointer` with separate `Display*`
+- **Wayland**: `keyboard_input_wayland.cpp`, `mouse_input_wayland.cpp` — `wl_keyboard`/`wl_pointer` on a private `wl_event_queue`, with xkbcommon for key translation
+- **Shared Wayland**: `wayland_input_common.cpp` — shared `wl_seat` and event queue for both keyboard and mouse
+- **Input blocker**: `input_blocker.cpp` — X11: `XGrabPointer`/`XGrabKeyboard`; Wayland: sets atomic flag read by interposition wrapper
+- **Wayland interposition**: `wayland_interpose.cpp` — interposes `wl_proxy_add_listener` to wrap game's pointer/keyboard listeners; suppresses events when `isInputBlocked()` returns true. Overlay proxies are registered via `registerOverlayProxy()` and passed through unwrapped.
+- **Pointer constraints**: `wayland_pointer_constraints.cpp` — `zwp_confined_pointer_v1` (not used for input blocking, only for optional cursor confinement)
 
 ## Code Patterns
 
@@ -238,4 +245,4 @@ X11-based keyboard/mouse input (`keyboard_input_x11.cpp`, `mouse_input.cpp`) com
 ## User Preferences
 
 - **File organization**: Proactively suggest splitting code into separate files when a file gets too large or a distinct responsibility emerges. Always inform the user before refactoring.
-- **After meson reconfigure (debug only)**: During development, the `build/config/vkBasalt-overlay.json` library_path may revert to relative path. Manually edit `build/config/vkBasalt-overlay.json` to fix `library_path` to absolute path: `/home/boux/repo/vkBasalt/build/src/libvkbasalt-overlay.so`. This is not needed for actual builds/releases.
+- **After meson reconfigure (debug only)**: During development, the `builddir/config/vkBasalt-overlay.json` library_path may revert to relative path. Manually edit it to use the absolute path to your build's `libvkbasalt-overlay.so`. This is not needed for actual builds/releases.

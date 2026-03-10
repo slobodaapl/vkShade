@@ -5,11 +5,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```bash
+# Setup build directory (release — recommended)
+meson setup --buildtype=release builddir
+
 # Setup build directory (debug)
 meson setup --buildtype=debug builddir
-
-# Setup build directory (release)
-meson setup --buildtype=release --prefix=/usr builddir
 
 # Build
 ninja -C builddir
@@ -24,6 +24,19 @@ ninja -C builddir.32
 ```
 
 **Dependencies**: GCC >= 9, X11 development files, glslang, SPIR-V Headers, Vulkan Headers
+
+### Nix / Flake Build
+
+The flake defaults to **release** mode. A debug variant is available:
+
+```bash
+nix build .#vkbasalt-overlay          # release (default)
+nix build .#vkbasalt-overlay-debug    # debug build
+```
+
+### Pre-commit Formatting
+
+This repo has a treefmt pre-commit hook. **Always run `nix fmt` before committing `.nix` files** — the hook uses `--fail-on-change` and will reject unformatted code.
 
 ## Testing
 

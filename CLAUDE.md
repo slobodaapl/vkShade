@@ -47,6 +47,35 @@ ENABLE_VKBASALT=1 VKBASALT_LOG_LEVEL=debug ./game
 
 Use `VKBASALT_CONFIG_FILE=/path/to/config.conf` to test specific configurations.
 
+### Dev Build Testing (Implicit Layer)
+
+For implicit layers, `VK_LAYER_PATH` does NOT work. Use `VK_ADD_IMPLICIT_LAYER_PATH` to prioritize the dev build over the system-installed layer:
+
+```bash
+VK_ADD_IMPLICIT_LAYER_PATH="$PWD/builddir/config" ENABLE_VKBASALT=1 VKBASALT_LOG_LEVEL=debug vkcube
+```
+
+Verify the correct `.so` is loaded with `VK_LOADER_DEBUG=layer`.
+
+**Note:** After `meson setup`, `builddir/config/vkBasalt-overlay.json` must have an absolute `library_path` pointing to `builddir/src/libvkbasalt-overlay.so`.
+
+### Standalone Shader Test Tool
+
+`tools/test_shaders.cpp` compiles and tests all `.fx` shaders without needing Vulkan or ImGui:
+
+```bash
+# Build (links only against libreshade.a)
+g++ -std=c++20 -O2 -Isrc -Isrc/reshade tools/test_shaders.cpp -Lbuilddir/src/reshade -lreshade -o builddir/test_shaders
+
+# Run (reads shader paths from ~/.config/vkBasalt-overlay/shader_manager.conf)
+LD_LIBRARY_PATH=builddir/src/reshade ./builddir/test_shaders
+
+# Or test specific directories
+LD_LIBRARY_PATH=builddir/src/reshade ./builddir/test_shaders /path/to/Shaders/
+```
+
+Reports: pass/fail, warnings, depth usage, grouped failure diagnostics. Deduplicates by canonical path (resolves symlinks like `/etc/...` → `/nix/store/...`).
+
 ## CRITICAL: EffectRegistry is the Single Source of Truth
 
 **THIS IS THE MOST IMPORTANT ARCHITECTURAL CONCEPT IN THE CODEBASE.**
@@ -210,6 +239,29 @@ Input backends are compiled as separate static libraries to avoid symbol conflic
 - **Input blocker**: `input_blocker.cpp` — X11: `XGrabPointer`/`XGrabKeyboard`; Wayland: sets atomic flag read by interposition wrapper
 - **Wayland interposition**: `wayland_interpose.cpp` — interposes `wl_proxy_add_listener` to wrap game's pointer/keyboard listeners; suppresses events when `isInputBlocked()` returns true. Overlay proxies are registered via `registerOverlayProxy()` and passed through unwrapped.
 - **Pointer constraints**: `wayland_pointer_constraints.cpp` — `zwp_confined_pointer_v1` (not used for input blocking, only for optional cursor confinement)
+
+### Depth Detection Engine (Safe Anti-Cheat)
+
+When `safeAntiCheat` is enabled per-profile, shaders that use the depth buffer are blocked to avoid anti-cheat detection. The detection must have **zero false negatives** (never allow a depth shader) and **zero false positives** (never block a safe shader like Vibrance).
+
+**Problem**: ReShade.fxh and qUINT_common.fxh always declare depth texture + sampler + helper functions (e.g., `GetLinearizedDepth()`). These compile into the SPIR-V even when no entry point calls them. A naive scan would flag every shader that includes these headers.
+
+**Solution** (`src/reshade_parser.cpp` + `tools/test_shaders.cpp`): SPIR-V call graph reachability analysis.
+
+1. Find depth texture (semantic `"DEPTH"`) and its associated samplers in `module.textures`/`module.samplers`
+2. Parse SPIR-V bytecode (skip 5-word header: magic, version, generator, bound, reserved)
+3. Collect `OpEntryPoint` (opcode 15) function IDs
+4. Build per-function map from `OpFunction` (54) / `OpFunctionEnd` (56) blocks:
+   - Track `OpLoad` (61) where word 3 = depth sampler variable ID → marks function as "loads depth"
+   - Track `OpFunctionCall` (57) → call graph edges
+5. BFS from entry points through call graph — if any reachable function loads the depth sampler, `usesDepth = true`
+
+**Key SPIR-V details**:
+- Samplers are `StorageClassUniformConstant` — opaque handles, NOT loaded via regular `OpLoad` of data. But reshadefx DOES emit `OpLoad` for sampler variables to get the `SampledImage` value.
+- The sampler variable ID (`sampler_info.id`) is assigned by `make_id()` in `define_sampler()`. It's the `result` operand of the `OpVariable` instruction.
+- `module.spirv` starts with a 5-word SPIR-V header. Iterating from offset 0 misinterprets the magic number (`0x07230203`) as an instruction with word count 1827, skipping real instructions. **Always start iteration at offset 5.**
+
+**Auto-test on overlay open**: When the Add Effects tab opens with safe anti-cheat enabled, `startShaderTest()` automatically compiles all shaders (one per frame via `processShaderTest()`). Results populate `depthShaders` set and show per-shader status in the UI. Memory is reclaimed via `malloc_trim()` every 25 shaders to prevent OOM.
 
 ## Code Patterns
 

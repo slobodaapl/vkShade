@@ -20,7 +20,7 @@ This repo follows the **Daaboulex Nix Packaging Standard v1**.
 - **Verification first**: `nix flake check --no-build` + `nix build` before claiming done
 - **Format before commit**: `nix fmt` (enforced by git hooks via `nix develop`)
 - **Never auto-commit**: show diff, user approves
-- **Never commit as Claude**: commit as `Daaboulex <39669593+Daaboulex@users.noreply.github.com>`
+- **Never commit as Gemini**: commit as `Daaboulex <39669593+Daaboulex@users.noreply.github.com>`
 - **No Co-Authored-By trailers**
 - **Don't restructure** code you weren't asked to touch
 - **One task per session** — finish, verify, move on

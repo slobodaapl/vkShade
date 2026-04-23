@@ -11,19 +11,21 @@
 #include "vulkan_include.hpp"
 #include "params/effect_param.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class Effect
     {
     public:
         void virtual applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer) = 0;
         void virtual updateEffect(){};
-        void virtual useDepthImage(VkImageView depthImageView){};
+        void virtual useDepthImage(uint32_t imageIndex,
+                                   VkImageView depthImageView,
+                                   VkImageLayout depthImageLayout = VK_IMAGE_LAYOUT_UNDEFINED){};
         virtual std::vector<std::unique_ptr<EffectParam>> getParameters() const { return {}; }
         virtual ~Effect(){};
 
     private:
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_HPP_INCLUDED

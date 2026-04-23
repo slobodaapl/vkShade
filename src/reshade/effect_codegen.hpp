@@ -90,8 +90,11 @@ namespace reshadefx
 		/// Make a function a shader entry point.
 		/// </summary>
 		/// <param name="function">The function to use as entry point.</param>
-		/// <param name="is_ps"><c>true</c> if this is a pixel shader, <c>false</c> if it is a vertex shader.</param>
-		virtual void define_entry_point(const function_info &function, bool is_ps) = 0;
+		/// <param name="stage">Entry point stage.</param>
+		/// <param name="local_size_x">Compute local size X (ignored for non-compute).</param>
+		/// <param name="local_size_y">Compute local size Y (ignored for non-compute).</param>
+		/// <param name="local_size_z">Compute local size Z (ignored for non-compute).</param>
+		virtual void define_entry_point(const function_info &function, entry_point_stage stage, uint32_t local_size_x = 1, uint32_t local_size_y = 1, uint32_t local_size_z = 1) = 0;
 
 		/// <summary>
 		/// Resolve the access chain and add a load operation to the output.
@@ -134,8 +137,9 @@ namespace reshadefx
 		/// <param name="lhs">The SSA ID of the value on the left-hand side of the binary operation.</param>
 		/// <param name="rhs">The SSA ID of the value on the right-hand side of the binary operation.</param>
 		/// <returns>New SSA ID with the result of the operation.</returns>
-		virtual id emit_binary_op(const location &loc, tokenid op, const type &res_type, const type &type, id lhs, id rhs) = 0;
-		id emit_binary_op(const location &loc, tokenid op, const type &type, id lhs, id rhs) { return emit_binary_op(loc, op, type, type, lhs, rhs); }
+		virtual id emit_binary_op(const location &loc, tokenid op, const type &res_type, const type &calc_type, const type &lhs_type, const type &rhs_type, id lhs, id rhs) = 0;
+		id emit_binary_op(const location &loc, tokenid op, const type &res_type, const type &type, id lhs, id rhs) { return emit_binary_op(loc, op, res_type, type, type, type, lhs, rhs); }
+		id emit_binary_op(const location &loc, tokenid op, const type &type, id lhs, id rhs) { return emit_binary_op(loc, op, type, type, type, type, lhs, rhs); }
 		/// <summary>
 		/// Add a ternary operation to the output (built-in operation with three arguments).
 		/// </summary>
@@ -332,5 +336,6 @@ namespace reshadefx
 	/// <param name="debug_info">Whether to append debug information like line directives to the generated code.</param>
 	/// <param name="uniforms_to_spec_constants">Whether to convert uniform variables to specialization constants.</param>
 	/// <param name="invert_y">Insert code to invert the Y component of the output position in vertex shaders.</param>
-	codegen *create_codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y = false);
+	/// <param name="use_local_size_id">Use OpExecutionModeId(LocalSizeId) for compute local sizes; if false, emit literal LocalSize.</param>
+	codegen *create_codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y = false, bool use_local_size_id = true);
 }

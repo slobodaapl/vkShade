@@ -11,7 +11,7 @@
 
 #include "logical_device.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     VkDescriptorPool createDescriptorPool(LogicalDevice* pLogicalDevice, const std::vector<VkDescriptorPoolSize>& poolSizes);
 
@@ -22,13 +22,21 @@ namespace vkBasalt
                                              VkDescriptorSetLayout descriptorSetLayout,
                                              VkBuffer              buffer);
 
+    VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice*                         pLogicalDevice,
+                                                                const std::vector<VkDescriptorType>& bindingTypes);
     VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice* pLogicalDevice, uint32_t count);
 
     std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
                                                                             VkDescriptorPool                      descriptorPool,
                                                                             VkDescriptorSetLayout                 descriptorSetLayout,
                                                                             std::vector<VkSampler>                samplers,
+                                                                            std::vector<std::vector<VkImageView>> imageViewsVectors,
+                                                                            const std::vector<VkDescriptorType>&  bindingTypes);
+    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
+                                                                            VkDescriptorPool                      descriptorPool,
+                                                                            VkDescriptorSetLayout                 descriptorSetLayout,
+                                                                            std::vector<VkSampler>                samplers,
                                                                             std::vector<std::vector<VkImageView>> imageViewsVectors);
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // DESCRIPTOR_SET_HPP_INCLUDED

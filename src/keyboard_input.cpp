@@ -3,37 +3,39 @@
 #include "logger.hpp"
 #include "wayland_display.hpp"
 
-#ifndef VKBASALT_X11
-#define VKBASALT_X11 1
-#endif
-
-#if VKBASALT_X11
-#include "keyboard_input_x11.hpp"
-#endif
-
 #include "keyboard_input_wayland.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
+    static void warnNonWaylandKeyboardOnce(const char* message)
+    {
+        static bool warned = false;
+        if (!warned && isNonWaylandSurface())
+        {
+            Logger::warn(message);
+            warned = true;
+        }
+    }
+
     uint32_t convertToKeySym(std::string key)
     {
-        // XKB keysym names are compatible with X11 names
-        // so both backends produce the same keysym values
         if (isWayland())
             return convertToKeySymWayland(key);
-#if VKBASALT_X11
-        return convertToKeySymX11(key);
-#endif
         return 0u;
+    }
+
+    void beginKeyboardInputFrame()
+    {
+        if (isWayland())
+            return;
     }
 
     bool isKeyPressed(uint32_t ks)
     {
         if (isWayland())
             return isKeyPressedWayland(ks);
-#if VKBASALT_X11
-        return isKeyPressedX11(ks);
-#endif
+
+        warnNonWaylandKeyboardOnce("non-Wayland Vulkan surface: keyboard polling disabled; returning no input");
         return false;
     }
 
@@ -41,9 +43,8 @@ namespace vkBasalt
     {
         if (isWayland())
             return getKeyboardStateWayland();
-#if VKBASALT_X11
-        return getKeyboardStateX11();
-#endif
+
+        warnNonWaylandKeyboardOnce("non-Wayland Vulkan surface: keyboard polling disabled; returning default state");
         return KeyboardState();
     }
-} // namespace vkBasalt
+} // namespace vkShade

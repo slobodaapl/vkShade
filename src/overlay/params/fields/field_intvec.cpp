@@ -2,7 +2,7 @@
 #include "../../../imgui/imgui.h"
 #include "../../../imgui/imgui_internal.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     class IntVecFieldEditor : public FieldEditor
     {
@@ -57,4 +57,4 @@ namespace vkBasalt
 
     REGISTER_FIELD_EDITOR(ParamType::IntVec, IntVecFieldEditor)
 
-} // namespace vkBasalt
+} // namespace vkShade

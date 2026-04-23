@@ -1,6 +1,6 @@
 #include "graphics_pipeline.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     VkPipelineLayout createGraphicsPipelineLayout(LogicalDevice* pLogicalDevice, std::vector<VkDescriptorSetLayout> descriptorSetLayouts)
     {
@@ -178,4 +178,4 @@ namespace vkBasalt
 
         return pipeline;
     }
-} // namespace vkBasalt
+} // namespace vkShade

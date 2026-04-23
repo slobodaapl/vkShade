@@ -1,6 +1,6 @@
 #include "memory.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     uint32_t findMemoryTypeIndex(LogicalDevice* pLogicalDevice, uint32_t typeFilter, VkMemoryPropertyFlags properties)
     {
@@ -17,4 +17,4 @@ namespace vkBasalt
         Logger::err("Found no correct memory type");
         return 0x70AD;
     }
-} // namespace vkBasalt
+} // namespace vkShade

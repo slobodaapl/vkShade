@@ -10,7 +10,7 @@
 
 #include "imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     // Case-insensitive substring match
     static bool matchesSearch(const std::string& text, const char* search)
@@ -338,6 +338,7 @@ namespace vkBasalt
             {
                 pEffectRegistry->setSelectedEffects(selectedEffects);
                 applyRequested = true;
+                profileDirty = true;
             }
             pendingAddEffects.clear();
             insertPosition = -1;
@@ -354,4 +355,4 @@ namespace vkBasalt
         }
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

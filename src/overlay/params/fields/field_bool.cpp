@@ -1,7 +1,7 @@
 #include "../field_editor.hpp"
 #include "../../../imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     class BoolFieldEditor : public FieldEditor
     {
@@ -25,4 +25,4 @@ namespace vkBasalt
 
     REGISTER_FIELD_EDITOR(ParamType::Bool, BoolFieldEditor)
 
-} // namespace vkBasalt
+} // namespace vkShade

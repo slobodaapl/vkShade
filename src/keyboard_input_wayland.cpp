@@ -13,7 +13,7 @@
 #include <sys/mman.h>
 #include <unordered_set>
 
-namespace vkBasalt
+namespace vkShade
 {
     // Keyboard-specific state (seat/queue come from wayland_input_common)
     static wl_keyboard* wlKeyboard = nullptr;
@@ -216,14 +216,15 @@ namespace vkBasalt
         if (initialized)
             return wlKeyboard != nullptr;
 
-        initialized = true;
-
-        // Create XKB context
-        xkbCtx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+        // Create XKB context once and reuse across retries.
         if (!xkbCtx)
         {
-            Logger::err("Wayland: failed to create XKB context");
-            return false;
+            xkbCtx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+            if (!xkbCtx)
+            {
+                Logger::err("Wayland: failed to create XKB context");
+                return false;
+            }
         }
 
         // Register our callback before initializing shared resources
@@ -234,7 +235,10 @@ namespace vkBasalt
             return false;
 
         if (wlKeyboard)
+        {
+            initialized = true;
             Logger::info("Wayland keyboard input initialized");
+        }
         else
             Logger::warn("Wayland: no keyboard found on seat");
 
@@ -349,4 +353,4 @@ namespace vkBasalt
 
         return state;
     }
-} // namespace vkBasalt
+} // namespace vkShade

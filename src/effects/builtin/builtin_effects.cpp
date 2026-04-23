@@ -7,7 +7,7 @@
 #include "effect_deband.hpp"
 #include "effect_lut.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     const BuiltInEffects& BuiltInEffects::instance()
     {
@@ -126,4 +126,4 @@ namespace vkBasalt
         };
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

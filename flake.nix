@@ -1,5 +1,5 @@
 {
-  description = "vkBasalt overlay — Vulkan post-processing layer with in-game UI (Wayland + X11)";
+      description = "vkShade — Vulkan post-processing layer with in-game UI (Wayland + X11)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -26,10 +26,10 @@
           pkgs = import nixpkgs { localSystem.system = system; };
         in
         {
-          default = self.packages.${system}.vkbasalt-overlay;
+          default = self.packages.${system}.vkshade;
 
-          vkbasalt-overlay = pkgs.stdenv.mkDerivation {
-            pname = "vkbasalt-overlay";
+          vkshade = pkgs.stdenv.mkDerivation {
+            pname = "vkshade";
             version = "0.1.0-unstable-${self.shortRev or "dirty"}";
 
             src = self;
@@ -56,35 +56,28 @@
             mesonBuildType = "release";
 
             mesonFlags = [
-              "-Dappend_libdir_vkbasalt=false"
+              "-Dappend_libdir_vkshade=false"
               "--sysconfdir=/etc"
             ];
 
-            # Fix the layer JSON to use an absolute library path so the Vulkan
-            # loader finds it regardless of LD_LIBRARY_PATH.
             postInstall = ''
-              substituteInPlace "$out/share/vulkan/implicit_layer.d/vkBasalt-overlay.json" \
-                --replace-fail '"library_path": "libvkbasalt-overlay.so"' \
-                               '"library_path": "'"$out/lib/libvkbasalt-overlay.so"'"'
-
-              # vkbasalt-run wrapper: sets ENABLE_VKBASALT and LD_AUDIT for Wine
+              # vkshade-run wrapper: sets ENABLE_VKSHADE and LD_AUDIT for Wine
               # Wayland input interposition (dlopen RTLD_LOCAL bypass).
               mkdir -p "$out/bin"
-              substitute ${./vkbasalt-run.sh} "$out/bin/vkbasalt-run" \
+              substitute ${./vkshade-run.sh} "$out/bin/vkshade-run" \
                 --subst-var out
-              chmod +x "$out/bin/vkbasalt-run"
+              chmod +x "$out/bin/vkshade-run"
             '';
 
             meta = with pkgs.lib; {
               description = "Vulkan post-processing layer with real-time overlay UI (Wayland + X11)";
-              homepage = "https://github.com/Daaboulex/vkBasalt_overlay_wayland";
               license = licenses.zlib;
               platforms = [ "x86_64-linux" ];
-              mainProgram = "vkbasalt-run";
+              mainProgram = "vkshade-run";
             };
           };
 
-          vkbasalt-overlay-debug = self.packages.${system}.vkbasalt-overlay.overrideAttrs {
+          vkshade-debug = self.packages.${system}.vkshade.overrideAttrs {
             mesonBuildType = "debug";
           };
         }
@@ -117,7 +110,7 @@
       );
 
       overlays.default = final: _prev: {
-        inherit (self.packages.${final.stdenv.hostPlatform.system}) vkbasalt-overlay;
+        inherit (self.packages.${final.stdenv.hostPlatform.system}) vkshade;
       };
     };
 }

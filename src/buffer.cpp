@@ -1,7 +1,7 @@
 #include "buffer.hpp"
 #include "memory.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     void createBuffer(LogicalDevice*        pLogicalDevice,
                       VkDeviceSize          size,
@@ -36,4 +36,4 @@ namespace vkBasalt
         ASSERT_VULKAN(result);
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

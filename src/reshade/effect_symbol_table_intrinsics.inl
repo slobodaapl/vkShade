@@ -1517,14 +1517,10 @@ IMPLEMENT_INTRINSIC_HLSL(tex2D, 1, {
 		code += "tex2D(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + " + " + id_to_name(args[2].base) + " * " + id_to_name(args[0].base) + ".pixelsize)";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2D, 1, {
-	if (!args[2].is_constant)
-		add_capability(spv::CapabilityImageGatherExtended);
-
 	return add_instruction(spv::OpImageSampleImplicitLod, convert_type(res_type))
 		.add(args[0].base)
 		.add(args[1].base)
-		.add(args[2].is_constant ? spv::ImageOperandsConstOffsetMask : spv::ImageOperandsOffsetMask)
-		.add(args[2].base)
+		.add(spv::ImageOperandsMaskNone)
 		.result;
 	})
 
@@ -1542,15 +1538,10 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Doffset, 0, {
 		code += "tex2D(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + " + " + id_to_name(args[2].base) + " * " + id_to_name(args[0].base) + ".pixelsize)";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2Doffset, 0, {
-	// Non-constant offset operand needs extended capability
-	if (!args[2].is_constant)
-		add_capability(spv::CapabilityImageGatherExtended);
-
 	return add_instruction(spv::OpImageSampleImplicitLod, convert_type(res_type))
 		.add(args[0].base)
 		.add(args[1].base)
-		.add(args[2].is_constant ? spv::ImageOperandsConstOffsetMask : spv::ImageOperandsOffsetMask)
-		.add(args[2].base)
+		.add(spv::ImageOperandsMaskNone)
 		.result;
 	})
 
@@ -1600,9 +1591,6 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Dlod, 1, {
 		code += "tex2Dlod(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + " + float4(" + id_to_name(args[2].base) + " * " + id_to_name(args[0].base) + ".pixelsize, 0, 0))";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dlod, 1, {
-	if (!args[2].is_constant)
-		add_capability(spv::CapabilityImageGatherExtended);
-
 	const spv::Id xy = add_instruction(spv::OpVectorShuffle, convert_type({ type::t_float, 2, 1 }))
 		.add(args[1].base)
 		.add(args[1].base)
@@ -1617,9 +1605,8 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dlod, 1, {
 	return add_instruction(spv::OpImageSampleExplicitLod, convert_type(res_type))
 		.add(args[0].base)
 		.add(xy)
-		.add(spv::ImageOperandsLodMask | (args[2].is_constant ? spv::ImageOperandsConstOffsetMask : spv::ImageOperandsOffsetMask))
+		.add(spv::ImageOperandsLodMask)
 		.add(lod)
-		.add(args[2].base)
 		.result;
 	})
 
@@ -1638,9 +1625,6 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Dlodoffset, 0, {
 		code += "tex2Dlod(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + " + float4(" + id_to_name(args[2].base) + " * " + id_to_name(args[0].base) + ".pixelsize, 0, 0))";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dlodoffset, 0, {
-	if (!args[2].is_constant)
-		add_capability(spv::CapabilityImageGatherExtended);
-
 	const spv::Id xy = add_instruction(spv::OpVectorShuffle, convert_type({ type::t_float, 2, 1 }))
 		.add(args[1].base)
 		.add(args[1].base)
@@ -1655,9 +1639,8 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dlodoffset, 0, {
 	return add_instruction(spv::OpImageSampleExplicitLod, convert_type(res_type))
 		.add(args[0].base)
 		.add(xy)
-		.add(spv::ImageOperandsLodMask | (args[2].is_constant ? spv::ImageOperandsConstOffsetMask : spv::ImageOperandsOffsetMask))
+		.add(spv::ImageOperandsLodMask)
 		.add(lod)
-		.add(args[2].base)
 		.result;
 	})
 
@@ -1687,8 +1670,10 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Dsize, 1, {
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dsize, 0, {
 	add_capability(spv::CapabilityImageQuery);
 
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 	const spv::Id level = emit_constant(0u);
 
 	return add_instruction(spv::OpImageQuerySizeLod, convert_type(res_type))
@@ -1699,13 +1684,104 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dsize, 0, {
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dsize, 1, {
 	add_capability(spv::CapabilityImageQuery);
 
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 
 	return add_instruction(spv::OpImageQuerySizeLod, convert_type(res_type))
 		.add(image)
 		.add(args[1].base)
 		.result;
+	})
+
+// ret tex1Dfetch(s, x) — fetches texel at (x, 0), LOD 0
+DEFINE_INTRINSIC(tex1Dfetch, 0, float4, sampler, int)
+IMPLEMENT_INTRINSIC_GLSL(tex1Dfetch, 0, {
+	code += "texelFetch(" + id_to_name(args[0].base) + ", ivec2(" +
+		id_to_name(args[1].base) + ", textureSize(" + id_to_name(args[0].base) + ", 0).y - 1), 0)";
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex1Dfetch, 0, {
+	if (_shader_model >= 40u)
+		code += id_to_name(args[0].base) + ".t.Load(int3(" + id_to_name(args[1].base) + ", 0, 0))";
+	else
+		code += "tex2Dlod(" + id_to_name(args[0].base) + ".s, float4((" +
+			id_to_name(args[1].base) + " + 0.5) * " + id_to_name(args[0].base) + ".pixelsize.x, 0.5 * " + id_to_name(args[0].base) + ".pixelsize.y, 0, 0))";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex1Dfetch, 0, {
+	const spv::Id zero = emit_constant(0);
+	const spv::Id coords = add_instruction(spv::OpCompositeConstruct, convert_type({ type::t_int, 2, 1 }))
+		.add(args[1].base)
+		.add(zero)
+		.result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(coords)
+			.result;
+	}
+	return add_instruction(spv::OpImageFetch, convert_type(res_type))
+		.add(image)
+		.add(coords)
+		.add(spv::ImageOperandsLodMask)
+		.add(zero)
+		.result;
+	})
+
+// void tex1Dstore(s, x, value)
+DEFINE_INTRINSIC(tex1Dstore, 0, void, sampler, int, float4)
+DEFINE_INTRINSIC(tex1Dstore, 1, void, sampler, int, uint4)
+IMPLEMENT_INTRINSIC_GLSL(tex1Dstore, 0, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", ivec2(" + id_to_name(args[1].base) + ", 0), " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_GLSL(tex1Dstore, 1, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", ivec2(" + id_to_name(args[1].base) + ", 0), " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex1Dstore, 0, {
+	code += id_to_name(args[0].base) + ".Store(int2(" + id_to_name(args[1].base) + ", 0), " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex1Dstore, 1, {
+	code += id_to_name(args[0].base) + ".Store(int2(" + id_to_name(args[1].base) + ", 0), " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex1Dstore, 0, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id zero = emit_constant(0);
+	const spv::Id coords = add_instruction(spv::OpCompositeConstruct, convert_type({ type::t_int, 2, 1 }))
+		.add(args[1].base)
+		.add(zero)
+		.result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(coords)
+		.add(args[2].base);
+	return 0;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex1Dstore, 1, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id zero = emit_constant(0);
+	const spv::Id coords = add_instruction(spv::OpCompositeConstruct, convert_type({ type::t_int, 2, 1 }))
+		.add(args[1].base)
+		.add(zero)
+		.result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(coords)
+		.add(args[2].base);
+	return 0;
 	})
 
 // ret tex2Dfetch(s, coords)
@@ -1740,9 +1816,18 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dfetch, 0, {
 		.add(3) // .w
 		.result;
 
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(xy)
+			.result;
+	}
 	return add_instruction(spv::OpImageFetch, convert_type(res_type))
 		.add(image)
 		.add(xy)
@@ -1765,10 +1850,19 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Dfetch, 1, {
 			id_to_name(args[1].base) + " + 0.5) * " + id_to_name(args[0].base) + ".pixelsize, 0, 0))";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dfetch, 1, {
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 	const spv::Id lod = emit_constant(0);
 
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(args[1].base)
+			.result;
+	}
 	return add_instruction(spv::OpImageFetch, convert_type(res_type))
 		.add(image)
 		.add(args[1].base)
@@ -1796,9 +1890,18 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dfetch, 3, {
 		.add(args[1].base)
 		.add(zero)
 		.result;
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(coords)
+			.result;
+	}
 	return add_instruction(spv::OpImageFetch, convert_type(res_type))
 		.add(image)
 		.add(coords)
@@ -1823,14 +1926,136 @@ IMPLEMENT_INTRINSIC_HLSL(tex2Dfetch, 2, {
 			id_to_name(args[2].base) + "))";
 	})
 IMPLEMENT_INTRINSIC_SPIRV(tex2Dfetch, 2, {
-	const spv::Id image = add_instruction(spv::OpImage, convert_type({ type::t_texture }))
-		.add(args[0].base).result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
 
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(args[1].base)
+			.result;
+	}
 	return add_instruction(spv::OpImageFetch, convert_type(res_type))
 		.add(image)
 		.add(args[1].base)
 		.add(spv::ImageOperandsLodMask)
 		.add(args[2].base)
+		.result;
+	})
+
+// ret tex3Dfetch(s, coords) — 3D texel fetch, LOD 0
+DEFINE_INTRINSIC(tex3Dfetch, 0, float4, sampler, int3)
+IMPLEMENT_INTRINSIC_GLSL(tex3Dfetch, 0, {
+	code += "texelFetch(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", 0)";
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex3Dfetch, 0, {
+	if (_shader_model >= 40u)
+		code += id_to_name(args[0].base) + ".t.Load(int4(" + id_to_name(args[1].base) + ", 0))";
+	else
+		code += "tex3Dlod(" + id_to_name(args[0].base) + ".s, float4(" + id_to_name(args[1].base) + ", 0))";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex3Dfetch, 0, {
+	reshadefx::type texture_type = { type::t_texture };
+	texture_type.definition = args[0].type.definition;
+
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type(texture_type))
+			.add(args[0].base).result;
+	const spv::Id lod = emit_constant(0);
+
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(args[1].base)
+			.result;
+	}
+	return add_instruction(spv::OpImageFetch, convert_type(res_type))
+		.add(image)
+		.add(args[1].base)
+		.add(spv::ImageOperandsLodMask)
+		.add(lod)
+		.result;
+	})
+// ret tex3Dfetch(s, coords) — 4-component overload with explicit LOD in .w
+DEFINE_INTRINSIC(tex3Dfetch, 1, float4, sampler, int4)
+IMPLEMENT_INTRINSIC_GLSL(tex3Dfetch, 1, {
+	code += "texelFetch(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ".xyz, " + id_to_name(args[1].base) + ".w)";
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex3Dfetch, 1, {
+	if (_shader_model >= 40u)
+		code += id_to_name(args[0].base) + ".t.Load(" + id_to_name(args[1].base) + ')';
+	else
+		code += "tex3Dlod(" + id_to_name(args[0].base) + ".s, float4(" + id_to_name(args[1].base) + ".xyz, " + id_to_name(args[1].base) + ".w))";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex3Dfetch, 1, {
+	reshadefx::type texture_type = { type::t_texture };
+	texture_type.definition = args[0].type.definition;
+
+	const spv::Id xyz = add_instruction(spv::OpVectorShuffle, convert_type({ type::t_int, 3, 1 }))
+		.add(args[1].base)
+		.add(args[1].base)
+		.add(0)
+		.add(1)
+		.add(2)
+		.result;
+	const spv::Id lod = add_instruction(spv::OpCompositeExtract, convert_type({ type::t_int, 1, 1 }))
+		.add(args[1].base)
+		.add(3)
+		.result;
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type(texture_type))
+			.add(args[0].base).result;
+
+	if (args[0].type.has(type::q_storage))
+	{
+		return add_instruction(spv::OpImageRead, convert_type(res_type))
+			.add(image)
+			.add(xyz)
+			.result;
+	}
+	return add_instruction(spv::OpImageFetch, convert_type(res_type))
+		.add(image)
+		.add(xyz)
+		.add(spv::ImageOperandsLodMask)
+		.add(lod)
+		.result;
+	})
+
+// ret tex3Dlod(s, coords) — explicit LOD in coords.w
+DEFINE_INTRINSIC(tex3Dlod, 0, float4, sampler, float4)
+IMPLEMENT_INTRINSIC_GLSL(tex3Dlod, 0, {
+	code += "textureLod(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ".xyz, " + id_to_name(args[1].base) + ".w)";
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex3Dlod, 0, {
+	if (_shader_model >= 40u)
+		code += id_to_name(args[0].base) + ".t.SampleLevel(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + ".xyz, " + id_to_name(args[1].base) + ".w)";
+	else
+		code += "tex3Dlod(" + id_to_name(args[0].base) + ".s, " + id_to_name(args[1].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex3Dlod, 0, {
+	const spv::Id xyz = add_instruction(spv::OpVectorShuffle, convert_type({ type::t_float, 3, 1 }))
+		.add(args[1].base)
+		.add(args[1].base)
+		.add(0)
+		.add(1)
+		.add(2)
+		.result;
+	const spv::Id lod = add_instruction(spv::OpCompositeExtract, convert_type({ type::t_float, 1, 1 }))
+		.add(args[1].base)
+		.add(3)
+		.result;
+
+	return add_instruction(spv::OpImageSampleExplicitLod, convert_type(res_type))
+		.add(args[0].base)
+		.add(xyz)
+		.add(spv::ImageOperandsLodMask)
+		.add(lod)
 		.result;
 	})
 
@@ -1937,6 +2162,536 @@ IMPLEMENT_INTRINSIC_SPIRV(tex2Dgatheroffset, 0, {
 		.add(args[3].base)
 		.add(args[2].is_constant ? spv::ImageOperandsConstOffsetMask : spv::ImageOperandsOffsetMask)
 		.add(args[2].base)
+		.result;
+	})
+
+// void tex2Dstore(s, coords, value)
+DEFINE_INTRINSIC(tex2Dstore, 0, void, sampler, int2, float4)
+DEFINE_INTRINSIC(tex2Dstore, 1, void, sampler, int2, uint4)
+IMPLEMENT_INTRINSIC_GLSL(tex2Dstore, 0, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_GLSL(tex2Dstore, 1, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex2Dstore, 0, {
+	code += id_to_name(args[0].base) + ".Store(" + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex2Dstore, 1, {
+	code += id_to_name(args[0].base) + ".Store(" + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex2Dstore, 0, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(args[1].base)
+		.add(args[2].base);
+	return 0;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex2Dstore, 1, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(args[1].base)
+		.add(args[2].base);
+	return 0;
+	})
+
+// void tex3Dstore(s, coords, value)
+DEFINE_INTRINSIC(tex3Dstore, 0, void, sampler, int3, float4)
+DEFINE_INTRINSIC(tex3Dstore, 1, void, sampler, int3, uint4)
+IMPLEMENT_INTRINSIC_GLSL(tex3Dstore, 0, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_GLSL(tex3Dstore, 1, {
+	code += "imageStore(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex3Dstore, 0, {
+	code += id_to_name(args[0].base) + ".Store(" + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(tex3Dstore, 1, {
+	code += id_to_name(args[0].base) + ".Store(" + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex3Dstore, 0, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(args[1].base)
+		.add(args[2].base);
+	return 0;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(tex3Dstore, 1, {
+	add_capability(spv::CapabilityStorageImageWriteWithoutFormat);
+	const spv::Id image = args[0].type.has(type::q_storage) ?
+		args[0].base :
+		add_instruction(spv::OpImage, convert_type({ type::t_texture }))
+			.add(args[0].base).result;
+	add_instruction_without_result(spv::OpImageWrite)
+		.add(image)
+		.add(args[1].base)
+		.add(args[2].base);
+	return 0;
+	})
+
+// Atomic operations (compute shaders)
+DEFINE_INTRINSIC(atomicAdd, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicAdd, 1, int, inout_int, int)
+IMPLEMENT_INTRINSIC_GLSL(atomicAdd, 0, { code += "atomicAdd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicAdd, 1, { code += "atomicAdd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicAdd, 0, { code += "InterlockedAdd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicAdd, 1, { code += "InterlockedAdd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_SPIRV(atomicAdd, 0, {
+	spv::StorageClass storage = spv::StorageClassFunction;
+	if (const auto it = _storage_lookup.find(args[0].base); it != _storage_lookup.end())
+		storage = it->second;
+
+	spv::Scope scope = spv::ScopeDevice;
+	spv::MemorySemanticsMask semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+	switch (storage)
+	{
+	case spv::StorageClassWorkgroup:
+		scope = spv::ScopeWorkgroup;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsWorkgroupMemoryMask;
+		break;
+	case spv::StorageClassImage:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsImageMemoryMask;
+		break;
+	case spv::StorageClassUniform:
+	case spv::StorageClassStorageBuffer:
+	case spv::StorageClassPhysicalStorageBuffer:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+		break;
+	default:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+		break;
+	}
+	const spv::Id scope_id = emit_constant(static_cast<uint32_t>(scope));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(semantics_mask));
+	return add_instruction(spv::OpAtomicIAdd, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope_id)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicAdd, 1, {
+	spv::StorageClass storage = spv::StorageClassFunction;
+	if (const auto it = _storage_lookup.find(args[0].base); it != _storage_lookup.end())
+		storage = it->second;
+
+	spv::Scope scope = spv::ScopeDevice;
+	spv::MemorySemanticsMask semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+	switch (storage)
+	{
+	case spv::StorageClassWorkgroup:
+		scope = spv::ScopeWorkgroup;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsWorkgroupMemoryMask;
+		break;
+	case spv::StorageClassImage:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsImageMemoryMask;
+		break;
+	case spv::StorageClassUniform:
+	case spv::StorageClassStorageBuffer:
+	case spv::StorageClassPhysicalStorageBuffer:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+		break;
+	default:
+		scope = spv::ScopeDevice;
+		semantics_mask = spv::MemorySemanticsAcquireReleaseMask | spv::MemorySemanticsUniformMemoryMask;
+		break;
+	}
+	const spv::Id scope_id = emit_constant(static_cast<uint32_t>(scope));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(semantics_mask));
+	return add_instruction(spv::OpAtomicIAdd, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope_id)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+
+DEFINE_INTRINSIC(atomicMax, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicMax, 1, int, inout_int, int)
+IMPLEMENT_INTRINSIC_GLSL(atomicMax, 0, { code += "atomicMax(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicMax, 1, { code += "atomicMax(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicMax, 0, { code += "InterlockedMax(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicMax, 1, { code += "InterlockedMax(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_SPIRV(atomicMax, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicUMax, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicMax, 1, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicSMax, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+
+DEFINE_INTRINSIC(atomicMin, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicMin, 1, int, inout_int, int)
+IMPLEMENT_INTRINSIC_GLSL(atomicMin, 0, { code += "atomicMin(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicMin, 1, { code += "atomicMin(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicMin, 0, { code += "InterlockedMin(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicMin, 1, { code += "InterlockedMin(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_SPIRV(atomicMin, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicUMin, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicMin, 1, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicSMin, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+
+DEFINE_INTRINSIC(atomicOr, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicAnd, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicXor, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicExchange, 0, uint, inout_uint, uint)
+DEFINE_INTRINSIC(atomicExchange, 1, int, inout_int, int)
+IMPLEMENT_INTRINSIC_GLSL(atomicOr, 0, { code += "atomicOr(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicAnd, 0, { code += "atomicAnd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicXor, 0, { code += "atomicXor(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicExchange, 0, { code += "atomicExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicExchange, 1, { code += "atomicExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicOr, 0, { code += "InterlockedOr(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicAnd, 0, { code += "InterlockedAnd(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicXor, 0, { code += "InterlockedXor(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicExchange, 0, { code += "InterlockedExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicExchange, 1, { code += "InterlockedExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_SPIRV(atomicOr, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicOr, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicAnd, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicAnd, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicXor, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicXor, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicExchange, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicExchange, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicExchange, 1, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicExchange, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(args[1].base)
+		.result;
+	})
+
+DEFINE_INTRINSIC(atomicCompSwap, 0, uint, inout_uint, uint, uint)
+DEFINE_INTRINSIC(atomicCompSwap, 1, int, inout_int, int, int)
+IMPLEMENT_INTRINSIC_GLSL(atomicCompSwap, 0, { code += "atomicCompSwap(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')'; })
+IMPLEMENT_INTRINSIC_GLSL(atomicCompSwap, 1, { code += "atomicCompSwap(" + id_to_name(args[0].base) + ", " + id_to_name(args[1].base) + ", " + id_to_name(args[2].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicCompSwap, 0, { code += "InterlockedCompareExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[2].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_HLSL(atomicCompSwap, 1, { code += "InterlockedCompareExchange(" + id_to_name(args[0].base) + ", " + id_to_name(args[2].base) + ", " + id_to_name(args[1].base) + ')'; })
+IMPLEMENT_INTRINSIC_SPIRV(atomicCompSwap, 0, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicCompareExchange, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(semantics)
+		.add(args[2].base)
+		.add(args[1].base)
+		.result;
+	})
+IMPLEMENT_INTRINSIC_SPIRV(atomicCompSwap, 1, {
+	const spv::Id scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	return add_instruction(spv::OpAtomicCompareExchange, convert_type(res_type))
+		.add(args[0].base)
+		.add(scope)
+		.add(semantics)
+		.add(semantics)
+		.add(args[2].base)
+		.add(args[1].base)
+		.result;
+	})
+
+// void barrier()
+DEFINE_INTRINSIC(barrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(barrier, 0, {
+	code += "barrier()";
+	})
+IMPLEMENT_INTRINSIC_HLSL(barrier, 0, {
+	code += "GroupMemoryBarrierWithGroupSync()";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(barrier, 0, {
+	const spv::Id execution_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsWorkgroupMemoryMask));
+	add_instruction_without_result(spv::OpControlBarrier)
+		.add(execution_scope)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+// void memoryBarrier()
+DEFINE_INTRINSIC(memoryBarrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(memoryBarrier, 0, {
+	code += "memoryBarrier()";
+	})
+IMPLEMENT_INTRINSIC_HLSL(memoryBarrier, 0, {
+	code += "DeviceMemoryBarrier()";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(memoryBarrier, 0, {
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	add_instruction_without_result(spv::OpMemoryBarrier)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+// void groupMemoryBarrier()
+DEFINE_INTRINSIC(groupMemoryBarrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(groupMemoryBarrier, 0, {
+	code += "groupMemoryBarrier()";
+	})
+IMPLEMENT_INTRINSIC_HLSL(groupMemoryBarrier, 0, {
+	code += "GroupMemoryBarrier()";
+	})
+IMPLEMENT_INTRINSIC_SPIRV(groupMemoryBarrier, 0, {
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsWorkgroupMemoryMask));
+	add_instruction_without_result(spv::OpMemoryBarrier)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+// ReShade/HLSL-style barrier aliases
+DEFINE_INTRINSIC(DeviceMemoryBarrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(DeviceMemoryBarrier, 0, { code += "memoryBarrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(DeviceMemoryBarrier, 0, { code += "DeviceMemoryBarrier()"; })
+IMPLEMENT_INTRINSIC_SPIRV(DeviceMemoryBarrier, 0, {
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	add_instruction_without_result(spv::OpMemoryBarrier)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+DEFINE_INTRINSIC(GroupMemoryBarrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(GroupMemoryBarrier, 0, { code += "groupMemoryBarrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(GroupMemoryBarrier, 0, { code += "GroupMemoryBarrier()"; })
+IMPLEMENT_INTRINSIC_SPIRV(GroupMemoryBarrier, 0, {
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsWorkgroupMemoryMask));
+	add_instruction_without_result(spv::OpMemoryBarrier)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+DEFINE_INTRINSIC(AllMemoryBarrier, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(AllMemoryBarrier, 0, { code += "memoryBarrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(AllMemoryBarrier, 0, { code += "AllMemoryBarrier()"; })
+IMPLEMENT_INTRINSIC_SPIRV(AllMemoryBarrier, 0, {
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	add_instruction_without_result(spv::OpMemoryBarrier)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+DEFINE_INTRINSIC(DeviceMemoryBarrierWithGroupSync, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(DeviceMemoryBarrierWithGroupSync, 0, { code += "barrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(DeviceMemoryBarrierWithGroupSync, 0, { code += "DeviceMemoryBarrierWithGroupSync()"; })
+IMPLEMENT_INTRINSIC_SPIRV(DeviceMemoryBarrierWithGroupSync, 0, {
+	const spv::Id execution_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	add_instruction_without_result(spv::OpControlBarrier)
+		.add(execution_scope)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+DEFINE_INTRINSIC(GroupMemoryBarrierWithGroupSync, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(GroupMemoryBarrierWithGroupSync, 0, { code += "barrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(GroupMemoryBarrierWithGroupSync, 0, { code += "GroupMemoryBarrierWithGroupSync()"; })
+IMPLEMENT_INTRINSIC_SPIRV(GroupMemoryBarrierWithGroupSync, 0, {
+	const spv::Id execution_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsWorkgroupMemoryMask));
+	add_instruction_without_result(spv::OpControlBarrier)
+		.add(execution_scope)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+DEFINE_INTRINSIC(AllMemoryBarrierWithGroupSync, 0, void)
+IMPLEMENT_INTRINSIC_GLSL(AllMemoryBarrierWithGroupSync, 0, { code += "barrier()"; })
+IMPLEMENT_INTRINSIC_HLSL(AllMemoryBarrierWithGroupSync, 0, { code += "AllMemoryBarrierWithGroupSync()"; })
+IMPLEMENT_INTRINSIC_SPIRV(AllMemoryBarrierWithGroupSync, 0, {
+	const spv::Id execution_scope = emit_constant(static_cast<uint32_t>(spv::ScopeWorkgroup));
+	const spv::Id memory_scope = emit_constant(static_cast<uint32_t>(spv::ScopeDevice));
+	const spv::Id semantics = emit_constant(static_cast<uint32_t>(
+		spv::MemorySemanticsAcquireReleaseMask |
+		spv::MemorySemanticsUniformMemoryMask |
+		spv::MemorySemanticsWorkgroupMemoryMask |
+		spv::MemorySemanticsImageMemoryMask));
+	add_instruction_without_result(spv::OpControlBarrier)
+		.add(execution_scope)
+		.add(memory_scope)
+		.add(semantics);
+	return 0;
+	})
+
+// int firstbithigh(uint x) — index of highest set bit, or -1 when x == 0
+DEFINE_INTRINSIC(firstbithigh, 0, int, uint)
+IMPLEMENT_INTRINSIC_GLSL(firstbithigh, 0, {
+	code += "findMSB(" + id_to_name(args[0].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_HLSL(firstbithigh, 0, {
+	code += "firstbithigh(" + id_to_name(args[0].base) + ')';
+	})
+IMPLEMENT_INTRINSIC_SPIRV(firstbithigh, 0, {
+	return add_instruction(spv::OpExtInst, convert_type(res_type))
+		.add(_glsl_ext)
+		.add(spv::GLSLstd450FindUMsb)
+		.add(args[0].base)
 		.result;
 	})
 

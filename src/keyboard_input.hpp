@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace vkBasalt
+namespace vkShade
 {
     struct KeyboardState
     {
@@ -19,6 +19,7 @@ namespace vkBasalt
     };
 
     uint32_t convertToKeySym(std::string key);
+    void beginKeyboardInputFrame();
     bool     isKeyPressed(uint32_t ks);
     KeyboardState getKeyboardState();
-} // namespace vkBasalt
+} // namespace vkShade

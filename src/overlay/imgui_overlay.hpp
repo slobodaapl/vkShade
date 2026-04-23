@@ -15,7 +15,7 @@
 #include "config_serializer.hpp"
 #include "settings_manager.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class Effect;
     class EffectRegistry;
@@ -25,7 +25,7 @@ namespace vkBasalt
         std::vector<std::string> effectNames;           // Effects in current config
         std::vector<std::string> disabledEffects;       // Effects that are unchecked (in list but not rendered)
         std::vector<std::string> currentConfigEffects;  // ReShade effects from current config (e.g., tunic.conf)
-        std::vector<std::string> defaultConfigEffects;  // ReShade effects from default vkBasalt.conf (no duplicates)
+        std::vector<std::string> defaultConfigEffects;  // ReShade effects from default vkShade.conf (no duplicates)
         std::map<std::string, std::string> effectPaths; // Effect name -> file path (for reshade effects)
         std::string configPath;
         std::string configName;  // Just the filename (e.g., "tunic.conf")
@@ -69,7 +69,7 @@ namespace vkBasalt
         // Set the effect registry (single source of truth for enabled states)
         void setEffectRegistry(EffectRegistry* registry) { pEffectRegistry = registry; }
 
-        // Set game/profile info for auto-save (called from basalt.cpp after detection)
+        // Set game/profile info for auto-save (called from vkshade.cpp after detection)
         void setGameProfile(const std::string& gameName, const std::string& profileName, const std::string& profilePath)
         {
             activeGameName = gameName;
@@ -109,7 +109,7 @@ namespace vkBasalt
 
         VkCommandBuffer recordFrame(uint32_t imageIndex, VkImageView imageView, uint32_t width, uint32_t height);
 
-        // Get fence for command buffer synchronization (used by basalt.cpp submit)
+        // Get fence for command buffer synchronization (used by vkshade.cpp submit)
         VkFence getCommandBufferFence(uint32_t imageIndex) const
         {
             return (imageIndex < commandBufferFences.size()) ? commandBufferFences[imageIndex] : VK_NULL_HANDLE;
@@ -174,17 +174,14 @@ namespace vkBasalt
 
         // UI state for settings view
         int listeningForKey = 0;  // 0=none, 1=toggle, 2=reload, 3=overlay
-        bool settingsSaved = false;  // True when settings saved, cleared by basalt.cpp
-        bool shaderPathsChanged = false;  // True when shader manager saved, cleared by basalt.cpp
+        bool settingsSaved = false;  // True when settings saved, cleared by vkshade.cpp
+        bool shaderPathsChanged = false;  // True when shader manager saved, cleared by vkshade.cpp
         size_t maxEffects = 10;  // Cached from settingsManager for VRAM estimates
 
         // UI state for debug window
         int debugWindowTab = 0;  // 0=Registry, 1=Log
         bool debugLogFilters[5] = {false, false, true, true, true};  // Trace, Debug, Info, Warn, Error
         char debugLogSearch[128] = "";  // Search filter for log tab
-        int dragSourceIndex = -1;   // Index of effect being dragged, -1 if none
-        int dragTargetIndex = -1;   // Index where effect will be dropped
-        bool isDragging = false;    // True while actively dragging
         bool applyRequested = false;
         bool toggleEffectsRequested = false;
         bool paramsDirty = false;  // True when params changed, waiting for debounce
@@ -215,6 +212,6 @@ namespace vkBasalt
             std::vector<PreprocessorDefinition>& allDefs);
     };
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // IMGUI_OVERLAY_HPP_INCLUDED

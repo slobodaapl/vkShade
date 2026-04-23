@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <array>
 
 #include "vulkan_include.hpp"
 
@@ -22,7 +23,7 @@
 #include "reshade/effect_codegen.hpp"
 #include "reshade/effect_preprocessor.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class ReshadeEffect : public Effect
     {
@@ -38,8 +39,9 @@ namespace vkBasalt
                       std::vector<PreprocessorDefinition> customDefs = {});  // Custom preprocessor definitions
         void virtual applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer) override;
         void virtual updateEffect() override;
-        void virtual useDepthImage(VkImageView depthImageView) override;
+        void virtual useDepthImage(uint32_t imageIndex, VkImageView depthImageView, VkImageLayout depthImageLayout) override;
         std::vector<std::unique_ptr<EffectParam>> getParameters() const override;
+        int getOutputWrites() const { return outputWrites; }
         virtual ~ReshadeEffect();
 
     private:
@@ -66,18 +68,29 @@ namespace vkBasalt
         std::vector<VkDescriptorSet> outputDescriptorSets;
         std::vector<VkDescriptorSet> backBufferDescriptorSets;
 
-        std::vector<std::vector<VkFramebuffer>> framebuffers;
+        struct PassRuntime
+        {
+            bool                        isCompute = false;
+            VkPipeline                  pipeline = VK_NULL_HANDLE;
+            VkRenderPass                renderPass = VK_NULL_HANDLE;
+            std::vector<VkFramebuffer>  framebuffers;
+            std::vector<std::string>    renderTargets;
+            bool                        switchSamplers = false;
+            uint32_t                    vertexCount = 3;
+            uint32_t                    dispatchSizeX = 1;
+            uint32_t                    dispatchSizeY = 1;
+            uint32_t                    dispatchSizeZ = 1;
+            VkRect2D                    renderArea = {};
+            uint32_t                    clearValueCount = 0;
+            std::array<VkClearValue, 9> clearValues = {};
+        };
+        std::vector<PassRuntime> passRuntimes;
 
         VkDescriptorSetLayout                 uniformDescriptorSetLayout;
         VkDescriptorSetLayout                 imageSamplerDescriptorSetLayout;
         VkShaderModule                        shaderModule;
         VkDescriptorPool                      descriptorPool;
-        std::vector<VkRenderPass>             renderPasses;
-        std::vector<std::vector<std::string>> renderTargets;
-        std::vector<VkRenderPassBeginInfo>    renderPassBeginInfos;
         VkPipelineLayout                      pipelineLayout;
-        std::vector<VkPipeline>               graphicsPipelines;
-        std::vector<bool>                     switchSamplers;
         VkExtent2D                            imageExtent;
         std::vector<VkSampler>                samplers;
         EffectRegistry*                       pEffectRegistry;
@@ -96,6 +109,7 @@ namespace vkBasalt
         // we need to flip the "backbuffer" after each write if there is a next one
         int                      outputWrites = 0;
         std::vector<VkImage>     backBufferImages;
+        std::vector<bool>        outputImageInitialized;
         std::vector<VkImageView> backBufferImageViewsUNORM;
         std::vector<VkImageView> backBufferImageViewsSRGB;
         VkBuffer                 stagingBuffer;
@@ -103,6 +117,7 @@ namespace vkBasalt
         uint32_t                 bufferSize;
         void*                    stagingBufferMapped = nullptr;  // Persistent map (HOST_COHERENT)
         VkDescriptorSet          bufferDescriptorSet;
+        bool                     disableComputePipelineOptimization = false;
 
         std::vector<std::shared_ptr<ReshadeUniform>> uniforms;
 
@@ -113,6 +128,6 @@ namespace vkBasalt
         VkBlendOp     convertReshadeBlendOp(reshadefx::pass_blend_op blendOp);
         VkBlendFactor convertReshadeBlendFactor(reshadefx::pass_blend_func blendFactor);
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_RESHADE_HPP_INCLUDED

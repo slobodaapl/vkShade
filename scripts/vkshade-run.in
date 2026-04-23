@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 1 ]; then
+  echo "usage: vkshade-run <command> [args...]" >&2
+  exit 2
+fi
+
+VKSHADE_LIB=@VKSHADE_LIB@
+VKSHADE_AUDIT_LIB=@VKSHADE_AUDIT_LIB@
+
+if [ ! -r "$VKSHADE_LIB" ]; then
+  echo "vkshade-run: missing library: $VKSHADE_LIB" >&2
+  exit 1
+fi
+
+export ENABLE_VKSHADE="${ENABLE_VKSHADE:-1}"
+
+case ":${LD_PRELOAD:-}:" in
+  *":$VKSHADE_LIB:"*) ;;
+  *) export LD_PRELOAD="$VKSHADE_LIB${LD_PRELOAD:+:$LD_PRELOAD}" ;;
+esac
+
+# Enable audit redirection by default on Wayland to catch RTLD_LOCAL clients.
+if [ "${VKSHADE_USE_LD_AUDIT:-1}" != "0" ] && [ -n "${WAYLAND_DISPLAY:-}" ] && [ -r "$VKSHADE_AUDIT_LIB" ]; then
+  case ":${LD_AUDIT:-}:" in
+    *":$VKSHADE_AUDIT_LIB:"*) ;;
+    *) export LD_AUDIT="$VKSHADE_AUDIT_LIB${LD_AUDIT:+:$LD_AUDIT}" ;;
+  esac
+fi
+
+exec "$@"

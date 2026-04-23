@@ -6,7 +6,7 @@
 #include <map>
 #include <functional>
 
-namespace vkBasalt
+namespace vkShade
 {
     // Base class for field editors
     // Each field type (float, int, bool, float2, etc.) has its own editor
@@ -56,6 +56,6 @@ namespace vkBasalt
     // Main entry point - renders the appropriate editor for a parameter
     bool renderFieldEditor(EffectParam& param);
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // FIELD_EDITOR_HPP_INCLUDED

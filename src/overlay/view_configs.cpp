@@ -5,7 +5,7 @@
 
 #include "imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     void ImGuiOverlay::renderConfigManagerView()
     {
@@ -33,7 +33,7 @@ namespace vkBasalt
             float nameWidth = buttonGroupX - ImGui::GetStyle().ItemSpacing.x;
             if (ImGui::Selectable(cfg.c_str(), false, 0, ImVec2(nameWidth, 0)))
             {
-                // Signal to basalt.cpp to load this config
+                // Signal to vkshade.cpp to load this config
                 pendingConfigPath = ConfigSerializer::getConfigsDir() + "/" + cfg + ".conf";
                 strncpy(saveConfigName, cfg.c_str(), sizeof(saveConfigName) - 1);
                 applyRequested = true;
@@ -69,4 +69,4 @@ namespace vkBasalt
         }
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

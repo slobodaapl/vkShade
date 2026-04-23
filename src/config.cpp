@@ -5,28 +5,28 @@
 #include <locale>
 #include <array>
 
-namespace vkBasalt
+namespace vkShade
 {
     Config::Config()
     {
-        // Find vkBasalt.conf in standard locations (vkBasalt-overlay fork)
+        // Find vkShade.conf in standard locations
         const char* homeEnv = std::getenv("HOME");
         std::string homePath = homeEnv ? homeEnv : "/tmp";
 
         const char* tmpHomeEnv     = std::getenv("XDG_DATA_HOME");
-        std::string userConfigFile = tmpHomeEnv ? std::string(tmpHomeEnv) + "/vkBasalt-overlay/vkBasalt.conf"
-                                                : homePath + "/.local/share/vkBasalt-overlay/vkBasalt.conf";
+        std::string userConfigFile = tmpHomeEnv ? std::string(tmpHomeEnv) + "/vkShade/vkShade.conf"
+                                                : homePath + "/.local/share/vkShade/vkShade.conf";
 
         const char* tmpConfigEnv      = std::getenv("XDG_CONFIG_HOME");
-        std::string userXdgConfigFile = tmpConfigEnv ? std::string(tmpConfigEnv) + "/vkBasalt-overlay/vkBasalt.conf"
-                                                     : homePath + "/.config/vkBasalt-overlay/vkBasalt.conf";
+        std::string userXdgConfigFile = tmpConfigEnv ? std::string(tmpConfigEnv) + "/vkShade/vkShade.conf"
+                                                     : homePath + "/.config/vkShade/vkShade.conf";
 
         const std::array<std::string, 5> configPaths = {
             userXdgConfigFile,
             userConfigFile,
-            std::string(SYSCONFDIR) + "/vkBasalt-overlay.conf",
-            std::string(SYSCONFDIR) + "/vkBasalt-overlay/vkBasalt.conf",
-            std::string(DATADIR) + "/vkBasalt-overlay/vkBasalt.conf",
+            std::string(SYSCONFDIR) + "/vkShade.conf",
+            std::string(SYSCONFDIR) + "/vkShade/vkShade.conf",
+            std::string(DATADIR) + "/vkShade/vkShade.conf",
         };
 
         for (const auto& path : configPaths)
@@ -42,7 +42,7 @@ namespace vkBasalt
             }
         }
 
-        Logger::err("no vkBasalt.conf found");
+        Logger::err("no vkShade.conf found");
     }
 
     Config::Config(const std::string& path)
@@ -76,6 +76,13 @@ namespace vkBasalt
         struct stat fileStat;
         if (stat(configFilePath.c_str(), &fileStat) == 0)
             lastModifiedTime = fileStat.st_mtime;
+    }
+
+    bool Config::hasOptionKey(const std::string& option) const
+    {
+        if (overrides.find(option) != overrides.end() || options.find(option) != options.end())
+            return true;
+        return pFallback ? pFallback->hasOptionKey(option) : false;
     }
 
     bool Config::hasConfigChanged()
@@ -168,7 +175,8 @@ namespace vkBasalt
         }
 
     DONE:
-        if (!key.empty() && !value.empty())
+        const bool allowEmptyValue = (key == "effects" || key == "disabledEffects");
+        if (!key.empty() && (allowEmptyValue || !value.empty()))
         {
             Logger::info(key + " = " + value);
             options[key] = value;
@@ -324,4 +332,4 @@ namespace vkBasalt
         return effects;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

@@ -20,18 +20,18 @@
 #include "imgui/imgui_internal.h"
 #include "imgui/backends/imgui_impl_vulkan.h"
 
-namespace vkBasalt
+namespace vkShade
 {
-    // No-op dummy for Vulkan functions ImGui requests but vkBasalt doesn't intercept.
+    // No-op dummy for Vulkan functions ImGui requests but vkShade doesn't intercept.
     // ImGui's LoadFunctions treats nullptr returns as failures, so we need a valid pointer.
     static void VKAPI_CALL dummyVulkanFunc() {}
 
-    // Function loader using vkBasalt's dispatch tables
+    // Function loader using vkShade's dispatch tables
     static PFN_vkVoidFunction imguiVulkanLoaderDummy(const char* function_name, void* user_data)
     {
         LogicalDevice* device = static_cast<LogicalDevice*>(user_data);
 
-        // Device functions from vkBasalt's dispatch table
+        // Device functions from vkShade's dispatch table
         #define CHECK_FUNC(name) if (strcmp(function_name, "vk" #name) == 0) return (PFN_vkVoidFunction)device->vkd.name
 
         CHECK_FUNC(AllocateCommandBuffers);
@@ -102,7 +102,7 @@ namespace vkBasalt
 
         #undef CHECK_FUNC
 
-        // Instance functions from vkBasalt's dispatch
+        // Instance functions from vkShade's dispatch
         #define CHECK_IFUNC(name) if (strcmp(function_name, "vk" #name) == 0) return (PFN_vkVoidFunction)device->vki.name
         CHECK_IFUNC(GetPhysicalDeviceMemoryProperties);
         CHECK_IFUNC(GetPhysicalDeviceProperties);
@@ -122,6 +122,7 @@ namespace vkBasalt
         ImGui::CreateContext();
         ImGuiIO& io = ImGui::GetIO();
         io.IniFilename = nullptr;
+        io.ConfigWindowsMoveFromTitleBarOnly = true;
 
         std::string iniPath = ConfigSerializer::getBaseConfigDir() + "/imgui.ini";
         std::ifstream iniFile(iniPath);
@@ -143,6 +144,7 @@ namespace vkBasalt
         // Restore UI preferences from persistent state
         if (pPersistentState)
             visible = pPersistentState->visible;
+        setInputBlocked(visible);
 
         initialized = true;
         Logger::info("ImGui overlay initialized");
@@ -399,7 +401,7 @@ namespace vkBasalt
 
     void ImGuiOverlay::initVulkanBackend(VkFormat swapchainFormat, uint32_t imageCount)
     {
-        // Load Vulkan functions for ImGui using vkBasalt's dispatch tables
+        // Load Vulkan functions for ImGui using vkShade's dispatch tables
         bool loaded = ImGui_ImplVulkan_LoadFunctions(VK_API_VERSION_1_3, imguiVulkanLoaderDummy, pLogicalDevice);
         if (!loaded)
         {
@@ -497,10 +499,53 @@ namespace vkBasalt
         initInfo.PipelineInfoMain.RenderPass = renderPass;
 
         ImGui_ImplVulkan_Init(&initInfo);
-        backendInitialized = true;
 
         this->swapchainFormat = swapchainFormat;
         this->imageCount = imageCount;
+        bool commandBuffersAllocated = false;
+
+        auto rollbackBackendInit = [&]() {
+            for (auto fence : commandBufferFences)
+            {
+                if (fence != VK_NULL_HANDLE)
+                    pLogicalDevice->vkd.DestroyFence(pLogicalDevice->device, fence, nullptr);
+            }
+            commandBufferFences.clear();
+
+            if (commandBuffersAllocated && !commandBuffers.empty() && commandPool != VK_NULL_HANDLE)
+            {
+                pLogicalDevice->vkd.FreeCommandBuffers(
+                    pLogicalDevice->device, commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+            }
+            commandBuffers.clear();
+
+            for (auto fb : framebuffers)
+            {
+                if (fb != VK_NULL_HANDLE)
+                    pLogicalDevice->vkd.DestroyFramebuffer(pLogicalDevice->device, fb, nullptr);
+            }
+            framebuffers.clear();
+            framebufferImageViews.clear();
+
+            if (commandPool != VK_NULL_HANDLE)
+            {
+                pLogicalDevice->vkd.DestroyCommandPool(pLogicalDevice->device, commandPool, nullptr);
+                commandPool = VK_NULL_HANDLE;
+            }
+            if (renderPass != VK_NULL_HANDLE)
+            {
+                pLogicalDevice->vkd.DestroyRenderPass(pLogicalDevice->device, renderPass, nullptr);
+                renderPass = VK_NULL_HANDLE;
+            }
+            if (descriptorPool != VK_NULL_HANDLE)
+            {
+                pLogicalDevice->vkd.DestroyDescriptorPool(pLogicalDevice->device, descriptorPool, nullptr);
+                descriptorPool = VK_NULL_HANDLE;
+            }
+
+            ImGui_ImplVulkan_Shutdown();
+            backendInitialized = false;
+        };
 
         // Create command pool
         VkCommandPoolCreateInfo poolCreateInfo = {};
@@ -511,6 +556,7 @@ namespace vkBasalt
         if (vr != VK_SUCCESS)
         {
             Logger::err("Failed to create ImGui command pool: " + std::to_string(vr));
+            rollbackBackendInit();
             return;
         }
 
@@ -525,8 +571,10 @@ namespace vkBasalt
         if (vr != VK_SUCCESS)
         {
             Logger::err("Failed to allocate ImGui command buffers: " + std::to_string(vr));
+            rollbackBackendInit();
             return;
         }
+        commandBuffersAllocated = true;
 
         // Create fences for command buffer synchronization (signaled initially so first frame doesn't wait)
         commandBufferFences.resize(imageCount);
@@ -537,9 +585,14 @@ namespace vkBasalt
         {
             vr = pLogicalDevice->vkd.CreateFence(pLogicalDevice->device, &fenceInfo, nullptr, &commandBufferFences[i]);
             if (vr != VK_SUCCESS)
+            {
                 Logger::err("Failed to create ImGui fence " + std::to_string(i) + ": " + std::to_string(vr));
+                rollbackBackendInit();
+                return;
+            }
         }
 
+        backendInitialized = true;
         Logger::debug("ImGui Vulkan backend initialized");
     }
 
@@ -547,6 +600,9 @@ namespace vkBasalt
     {
         if (!backendInitialized || !visible)
             return VK_NULL_HANDLE;
+
+        const bool blockOverlayInput = visible && settingsManager.getOverlayBlockInput();
+        setInputBlocked(blockOverlayInput);
 
         // Store current resolution for VRAM estimates in settings
         currentWidth = width;
@@ -653,11 +709,6 @@ namespace vkBasalt
             io.DeltaTime = lastGoodDt;
         }
 
-        // Fresh input dispatch — keybinding checks earlier in the frame already
-        // dispatched once, but new mouse events may have arrived since then.
-        // This gives the overlay the latest cursor position for smooth tracking.
-        beginWaylandInputFrame();
-
         // Mouse input for interactivity
         MouseState mouse = getMouseState();
         io.MousePos = ImVec2((float)mouse.x, (float)mouse.y);
@@ -704,7 +755,7 @@ namespace vkBasalt
             ImGui::SetNextWindowSize(ImVec2(400, 500), ImGuiCond_FirstUseEver);
         }
 
-        ImGui::Begin("vkBasalt Overlay", nullptr, ImGuiWindowFlags_NoCollapse);
+        ImGui::Begin("vkShade Overlay", nullptr, ImGuiWindowFlags_NoCollapse);
 
         // Clamp position after the window is created (prevents dragging offscreen)
         ImVec2 winPos = ImGui::GetWindowPos();
@@ -754,7 +805,7 @@ namespace vkBasalt
             ImGui::EndTabBar();
         }
 
-        ImGui::End();  // vkBasalt Overlay
+        ImGui::End();  // vkShade Overlay
 
         // Debug window (separate, controlled by setting)
         renderDebugWindow();
@@ -764,7 +815,11 @@ namespace vkBasalt
         {
             auto now = std::chrono::steady_clock::now();
             auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastChangeTime).count();
-            if (elapsed >= settingsManager.getAutoApplyDelay())
+            const bool leftMouseDown = ImGui::GetIO().MouseDown[0];
+
+            // Defer auto-apply while left mouse is held (dragging/resizing/sliders).
+            // Apply on the first frame after release once delay has already elapsed.
+            if (elapsed >= settingsManager.getAutoApplyDelay() && !leftMouseDown)
             {
                 applyRequested = true;
                 paramsDirty = false;
@@ -808,4 +863,4 @@ namespace vkBasalt
         return cmd;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

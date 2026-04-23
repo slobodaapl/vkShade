@@ -11,7 +11,7 @@
 
 #include "logical_device.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     void createBuffer(LogicalDevice*        pLogicalDevice,
                       VkDeviceSize          size,

@@ -6,7 +6,7 @@
 
 #define FORVKFUNC(func) PFN_vk##func func = nullptr;
 
-namespace vkBasalt
+namespace vkShade
 {
 
     struct InstanceDispatch
@@ -22,7 +22,7 @@ namespace vkBasalt
     void fillDispatchTableInstance(VkInstance instance, PFN_vkGetInstanceProcAddr gipa, InstanceDispatch* table);
     void fillDispatchTableDevice(VkDevice device, PFN_vkGetDeviceProcAddr gdpa, DeviceDispatch* table);
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #undef FORVKFUNC
 #undef VK_INSTANCE_FUNCS

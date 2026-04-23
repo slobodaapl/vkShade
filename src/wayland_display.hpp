@@ -3,7 +3,7 @@
 struct wl_display;
 struct wl_surface;
 
-namespace vkBasalt
+namespace vkShade
 {
     // Called from vkCreateWaylandSurfaceKHR to capture the game's wl_display
     void setWaylandDisplay(wl_display* display);
@@ -17,6 +17,13 @@ namespace vkBasalt
     // Returns the captured wl_surface, or nullptr if not on Wayland
     wl_surface* getWaylandSurface();
 
-    // Returns true if running under Wayland (WAYLAND_DISPLAY env var is set)
+    // Returns true if the game created a Wayland Vulkan surface.
     bool isWayland();
-} // namespace vkBasalt
+
+    // Returns true after an Xlib/Xcb Vulkan surface has been marked unsupported.
+    bool isNonWaylandSurface();
+
+    // Called from X11/Xwayland Vulkan surface creation wrappers to mark the
+    // surface unsupported and disable processing/input interception.
+    void markNonWaylandSurface(const char* source);
+} // namespace vkShade

@@ -9,7 +9,7 @@
 #include <chrono>
 #include <cstring>
 
-namespace vkBasalt
+namespace vkShade
 {
     // Mouse-specific state (seat/queue come from wayland_input_common)
     static wl_pointer* wlPointer = nullptr;
@@ -26,20 +26,23 @@ namespace vkBasalt
     // pointer frame, so we skip the continuous axis event to avoid double-counting.
     static bool discreteScrollReceived = false;
 
-    // Time-based auto-release. When a button release is consumed by the
-    // compositor (or never arrives), we synthesize a release after the button
-    // has been idle (no pointer motion) for AUTO_RELEASE_MS milliseconds.
-    // Time-based instead of frame-based so it works at any framerate.
+    // Time-based auto-release safety net. We intentionally avoid releasing
+    // just because the cursor stopped moving while still inside the surface
+    // (that breaks drag/resize holds). Fast release is only used after leave.
+    // A long hard timeout remains as fallback for truly stuck states.
     using Clock = std::chrono::steady_clock;
     static Clock::time_point leftPressTime{};
     static Clock::time_point rightPressTime{};
     static Clock::time_point middlePressTime{};
-    static constexpr int AUTO_RELEASE_MS = 200; // 200ms idle = stuck button
+    static constexpr int AUTO_RELEASE_AFTER_LEAVE_MS = 250;
+    static constexpr int AUTO_RELEASE_HARD_TIMEOUT_MS = 30000;
 
     // Track whether motion occurred since last getMouseStateWayland() poll
     static bool motionSinceLastPoll = false;
     // Last time we saw motion — used to measure idle duration
     static Clock::time_point lastMotionTime{};
+    // Track pointer focus so we only do aggressive release when pointer left.
+    static bool pointerInsideSurface = false;
 
     static bool mouseInitialized = false;
 
@@ -48,8 +51,10 @@ namespace vkBasalt
                              uint32_t /*serial*/, wl_surface* /*surface*/,
                              wl_fixed_t sx, wl_fixed_t sy)
     {
+        pointerInsideSurface = true;
         pointerX = wl_fixed_to_int(sx);
         pointerY = wl_fixed_to_int(sy);
+        lastMotionTime = Clock::now();
 
         // Do NOT clear button state here. Surface reconfigurations (swapchain
         // resize) cause rapid leave/enter cycles while the user is dragging.
@@ -63,6 +68,7 @@ namespace vkBasalt
     static void pointerLeave(void* /*data*/, wl_pointer* /*pointer*/,
                              uint32_t /*serial*/, wl_surface* /*surface*/)
     {
+        pointerInsideSurface = false;
         Logger::trace("Wayland: pointer leave");
     }
 
@@ -98,6 +104,8 @@ namespace vkBasalt
                 if (pressed) middlePressTime = now;
                 break;
         }
+        if (pressed)
+            lastMotionTime = now;
     }
 
     static void pointerAxis(void* /*data*/, wl_pointer* /*pointer*/,
@@ -192,8 +200,6 @@ namespace vkBasalt
         if (mouseInitialized)
             return wlPointer != nullptr;
 
-        mouseInitialized = true;
-
         // Register our callback before initializing shared resources
         setPointerBindCallback(bindPointer);
 
@@ -202,7 +208,10 @@ namespace vkBasalt
             return false;
 
         if (wlPointer)
+        {
+            mouseInitialized = true;
             Logger::info("Wayland mouse input initialized");
+        }
         else
             Logger::warn("Wayland: no pointer found on seat");
 
@@ -242,6 +251,8 @@ namespace vkBasalt
                 if (pressed) middlePressTime = now;
                 break;
         }
+        if (pressed)
+            lastMotionTime = now;
     }
 
     MouseState getMouseStateWayland()
@@ -254,9 +265,9 @@ namespace vkBasalt
         dispatchWaylandInputEvents();
 
         // Time-based auto-release for stuck buttons.
-        // While the pointer is moving, keep buttons held (user is dragging).
-        // When motion stops and no release arrives within AUTO_RELEASE_MS,
-        // synthesize the release. Time-based so it works at any framerate.
+        // Do NOT synthesize release from motion idle while pointer remains
+        // inside the surface (this breaks hold-to-drag). Release quickly only
+        // after leave, with a long hard timeout as a fallback.
         auto now = Clock::now();
         if (motionSinceLastPoll)
         {
@@ -265,17 +276,25 @@ namespace vkBasalt
         }
 
         auto idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMotionTime).count();
-        if (idleMs > AUTO_RELEASE_MS)
+        if (leftButton || rightButton || middleButton)
         {
             auto leftMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - leftPressTime).count();
             auto rightMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - rightPressTime).count();
             auto middleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - middlePressTime).count();
 
-            if (leftButton && leftMs > AUTO_RELEASE_MS)
+            const bool shouldReleaseAfterLeave =
+                !pointerInsideSurface && idleMs > AUTO_RELEASE_AFTER_LEAVE_MS;
+            const bool shouldReleaseHard =
+                idleMs > AUTO_RELEASE_HARD_TIMEOUT_MS;
+
+            if (leftButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
+                leftMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 leftButton = false;
-            if (rightButton && rightMs > AUTO_RELEASE_MS)
+            if (rightButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
+                rightMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 rightButton = false;
-            if (middleButton && middleMs > AUTO_RELEASE_MS)
+            if (middleButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
+                middleMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 middleButton = false;
         }
 
@@ -289,4 +308,4 @@ namespace vkBasalt
 
         return state;
     }
-} // namespace vkBasalt
+} // namespace vkShade

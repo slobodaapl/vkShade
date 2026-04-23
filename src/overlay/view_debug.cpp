@@ -10,7 +10,7 @@
 
 #include "imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     void ImGuiOverlay::renderDebugWindow()
     {
@@ -194,7 +194,7 @@ namespace vkBasalt
                 ImGui::SameLine();
                 if (ImGui::Button("Export"))
                 {
-                    std::string exportPath = ConfigSerializer::getBaseConfigDir() + "/vkbasalt-log.txt";
+                    std::string exportPath = ConfigSerializer::getBaseConfigDir() + "/vkshade-log.txt";
                     auto history = Logger::getHistory();
                     std::ofstream out(exportPath);
                     if (out.is_open())
@@ -206,7 +206,7 @@ namespace vkBasalt
                     }
                 }
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Save log to ~/.config/vkBasalt-overlay/vkbasalt-log.txt");
+                    ImGui::SetTooltip("Save log to ~/.config/vkShade/vkshade-log.txt");
 
                 if (!hasSearch)
                     ImGui::TextDisabled("Type to search...");
@@ -266,4 +266,4 @@ namespace vkBasalt
         ImGui::End();
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

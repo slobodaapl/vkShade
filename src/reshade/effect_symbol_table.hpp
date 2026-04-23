@@ -6,6 +6,7 @@
 #pragma once
 
 #include "effect_module.hpp"
+#include <cstddef>
 #include <unordered_map> // Used for symbol lookup table
 
 namespace reshadefx
@@ -89,7 +90,7 @@ namespace reshadefx
 		/// <summary>
 		/// Search for the best function or intrinsic overload matching the argument list.
 		/// </summary>
-		bool resolve_function_call(const std::string &name, const std::vector<expression> &args, const scope &scope, symbol &data, bool &ambiguous) const;
+		bool resolve_function_call(const std::string &name, const std::vector<expression> &args, const scope &scope, symbol &data, bool &ambiguous, size_t &implicit_argument_count) const;
 
 	private:
 		struct scoped_symbol : symbol {

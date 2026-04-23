@@ -12,7 +12,7 @@
 #include "sampler.hpp"
 #include "util.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     SimpleEffect::SimpleEffect()
     {
@@ -175,4 +175,4 @@ namespace vkBasalt
         Logger::debug("after DestroyImageView");
         pLogicalDevice->vkd.DestroySampler(pLogicalDevice->device, sampler, nullptr);
     }
-} // namespace vkBasalt
+} // namespace vkShade

@@ -28,22 +28,24 @@ namespace reshadefx
 			t_texture,
 			t_function,
 		};
-		enum qualifier : uint32_t
-		{
-			q_extern = 1 << 0,
-			q_static = 1 << 1,
-			q_uniform = 1 << 2,
-			q_volatile = 1 << 3,
-			q_precise = 1 << 4,
-			q_in = 1 << 5,
-			q_out = 1 << 6,
-			q_inout = q_in | q_out,
-			q_const = 1 << 8,
-			q_linear = 1 << 10,
-			q_noperspective = 1 << 11,
-			q_centroid = 1 << 12,
-			q_nointerpolation = 1 << 13,
-		};
+			enum qualifier : uint32_t
+			{
+				q_extern = 1 << 0,
+				q_static = 1 << 1,
+				q_uniform = 1 << 2,
+				q_volatile = 1 << 3,
+				q_precise = 1 << 4,
+				q_in = 1 << 5,
+				q_out = 1 << 6,
+				q_inout = q_in | q_out,
+				q_const = 1 << 8,
+				q_storage = 1 << 9,
+				q_linear = 1 << 10,
+				q_noperspective = 1 << 11,
+				q_centroid = 1 << 12,
+				q_nointerpolation = 1 << 13,
+				q_group_shared = 1 << 14,
+			};
 
 		/// <summary>
 		/// Get the result type of an operation involving the two input types.

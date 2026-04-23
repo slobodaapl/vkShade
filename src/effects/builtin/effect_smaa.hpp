@@ -15,7 +15,7 @@
 
 #include "logical_device.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class SmaaEffect : public Effect
     {
@@ -70,6 +70,6 @@ namespace vkBasalt
 
         Config* pConfig;
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_SMAA_HPP_INCLUDED

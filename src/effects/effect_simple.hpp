@@ -15,7 +15,7 @@
 
 #include "logical_device.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class SimpleEffect : public Effect
     {
@@ -58,6 +58,6 @@ namespace vkBasalt
                   std::vector<VkImage> outputImages,
                   Config*              pConfig);
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_SIMPLE_HPP_INCLUDED

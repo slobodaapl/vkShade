@@ -24,7 +24,11 @@ struct intrinsic
 		function.return_type = ret_type;
 		function.parameter_list.reserve(arg_types.size());
 		for (const type &arg_type : arg_types)
-			function.parameter_list.push_back({ arg_type, {}, {}, {} });
+		{
+			struct_member_info parameter = {};
+			parameter.type = arg_type;
+			function.parameter_list.push_back(std::move(parameter));
+		}
 	}
 
 	unsigned int id;
@@ -67,6 +71,8 @@ enum {
 #define out_float2 { reshadefx::type::t_float, 2, 1, reshadefx::type::q_out }
 #define out_float3 { reshadefx::type::t_float, 3, 1, reshadefx::type::q_out }
 #define out_float4 { reshadefx::type::t_float, 4, 1, reshadefx::type::q_out }
+#define inout_int { reshadefx::type::t_int, 1, 1, reshadefx::type::q_inout }
+#define inout_uint { reshadefx::type::t_uint, 1, 1, reshadefx::type::q_inout }
 #define sampler { reshadefx::type::t_sampler }
 
 // Import intrinsic function definitions
@@ -105,6 +111,8 @@ static const intrinsic s_intrinsics[] = {
 #undef out_float2
 #undef out_float3
 #undef out_float4
+#undef inout_int
+#undef inout_uint
 #undef sampler
 
 #pragma endregion
@@ -277,29 +285,44 @@ static int compare_functions(const std::vector<reshadefx::expression> &arguments
 {
 	const size_t num_arguments = arguments.size();
 
+	const auto is_viable_with_defaults = [num_arguments](const reshadefx::function_info *function) {
+		if (function == nullptr)
+			return false;
+		if (num_arguments > function->parameter_list.size())
+			return false;
+
+		for (size_t i = num_arguments; i < function->parameter_list.size(); ++i)
+			if (!function->parameter_list[i].has_default_value)
+				return false;
+
+		return true;
+	};
+
 	// Check if the first function matches the argument types
-	bool function1_viable = true;
+	bool function1_viable = is_viable_with_defaults(function1);
 	const auto function1_ranks = static_cast<unsigned int *>(alloca(num_arguments * sizeof(unsigned int)));
-	for (size_t i = 0; i < num_arguments; ++i)
-		if ((function1_ranks[i] = reshadefx::type::rank(arguments[i].type, function1->parameter_list[i].type)) == 0)
-		{
-			function1_viable = false;
-			break;
-		}
+	if (function1_viable)
+		for (size_t i = 0; i < num_arguments; ++i)
+			if ((function1_ranks[i] = reshadefx::type::rank(arguments[i].type, function1->parameter_list[i].type)) == 0)
+			{
+				function1_viable = false;
+				break;
+			}
 
 	// Catch case where the second function does not exist
 	if (function2 == nullptr)
 		return function1_viable ? -1 : 1; // If the first function is not viable, this compare fails
 
 	// Check if the second function matches the argument types
-	bool function2_viable = true;
+	bool function2_viable = is_viable_with_defaults(function2);
 	const auto function2_ranks = static_cast<unsigned int *>(alloca(num_arguments * sizeof(unsigned int)));
-	for (size_t i = 0; i < num_arguments; ++i)
-		if ((function2_ranks[i] = reshadefx::type::rank(arguments[i].type, function2->parameter_list[i].type)) == 0)
-		{
-			function2_viable = false;
-			break;
-		}
+	if (function2_viable)
+		for (size_t i = 0; i < num_arguments; ++i)
+			if ((function2_ranks[i] = reshadefx::type::rank(arguments[i].type, function2->parameter_list[i].type)) == 0)
+			{
+				function2_viable = false;
+				break;
+			}
 
 	// If one of the functions is not viable, then the other one automatically wins
 	if (!function1_viable || !function2_viable)
@@ -318,9 +341,10 @@ static int compare_functions(const std::vector<reshadefx::expression> &arguments
 	return 0; // Both functions are equally viable
 }
 
-bool reshadefx::symbol_table::resolve_function_call(const std::string &name, const std::vector<expression> &arguments, const scope &scope, symbol &out_data, bool &is_ambiguous) const
+bool reshadefx::symbol_table::resolve_function_call(const std::string &name, const std::vector<expression> &arguments, const scope &scope, symbol &out_data, bool &is_ambiguous, size_t &implicit_argument_count) const
 {
 	out_data.op = symbol_type::function;
+	implicit_argument_count = 0;
 
 	const function_info *result = nullptr;
 	unsigned int num_overloads = 0;
@@ -359,7 +383,7 @@ bool reshadefx::symbol_table::resolve_function_call(const std::string &name, con
 					continue;
 				}
 			}
-			else if (arguments.size() != function->parameter_list.size())
+			else if (arguments.size() > function->parameter_list.size())
 			{
 				continue;
 			}
@@ -374,6 +398,7 @@ bool reshadefx::symbol_table::resolve_function_call(const std::string &name, con
 				out_data.function = result = function;
 				num_overloads = 1;
 				overload_namespace = it->scope.namespace_level;
+				implicit_argument_count = function->parameter_list.size() - arguments.size();
 			}
 			else if (comparison == 0 && overload_namespace == it->scope.namespace_level) // Both functions are equally viable, so the call is ambiguous
 			{
@@ -387,7 +412,7 @@ bool reshadefx::symbol_table::resolve_function_call(const std::string &name, con
 	{
 		for (const intrinsic &intrinsic : s_intrinsics)
 		{
-			if (intrinsic.function.name != name || intrinsic.function.parameter_list.size() != arguments.size())
+			if (intrinsic.function.name != name)
 				continue;
 
 			// A new possibly-matching intrinsic function was found, compare it against the current result
@@ -401,6 +426,7 @@ bool reshadefx::symbol_table::resolve_function_call(const std::string &name, con
 				out_data.function = &intrinsic.function;
 				result = out_data.function;
 				num_overloads = 1;
+				implicit_argument_count = intrinsic.function.parameter_list.size() - arguments.size();
 			}
 			else if (comparison == 0 && overload_namespace == 0) // Both functions are equally viable, so the call is ambiguous (intrinsics are always in the global namespace)
 			{

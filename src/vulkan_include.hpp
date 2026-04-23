@@ -18,13 +18,13 @@
         Logger::err("ASSERT_VULKAN failed in " + std::string(__FILE__) + " : " + std::to_string(__LINE__) + "; " + std::to_string(val)); \
     }
 #endif
-namespace vkBasalt
+namespace vkShade
 {
     template<typename DispatchableType, typename SuperDispatchableType>
     inline void initializeDispatchTable(DispatchableType dispatchableObject, SuperDispatchableType source)
     {
         *reinterpret_cast<void**>(dispatchableObject) = *reinterpret_cast<void**>(source);
     }
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // VULKAN_INCLUDE_HPP_INCLUDED

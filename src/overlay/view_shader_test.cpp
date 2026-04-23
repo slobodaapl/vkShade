@@ -5,6 +5,7 @@
 
 #include <filesystem>
 #include <set>
+#include <algorithm>
 
 #ifdef __linux__
 #include <malloc.h>  // malloc_trim — reclaim fragmented heap memory
@@ -12,7 +13,7 @@
 
 #include "imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     void ImGuiOverlay::startShaderTest()
     {
@@ -45,12 +46,14 @@ namespace vkBasalt
         {
             try
             {
-                for (const auto& entry : std::filesystem::directory_iterator(shaderPath))
+                for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                         shaderPath, std::filesystem::directory_options::skip_permission_denied))
                 {
                     if (!entry.is_regular_file())
                         continue;
                     std::string ext = entry.path().extension().string();
-                    if (ext != ".fx" && ext != ".FX")
+                    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                    if (ext != ".fx")
                         continue;
 
                     // Deduplicate by canonical path — catches symlinks pointing
@@ -292,10 +295,10 @@ namespace vkBasalt
         }
     }
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 // Expose renderShaderTestResults for use by view_shader_manager.cpp
-namespace vkBasalt
+namespace vkShade
 {
     void renderShaderTestResultsUI(
         const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,

@@ -12,7 +12,7 @@
 #include "../effect_simple.hpp"
 #include "config.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class DlsEffect : public SimpleEffect
     {
@@ -25,4 +25,4 @@ namespace vkBasalt
                   Config*              pConfig);
         ~DlsEffect();
     };
-} // namespace vkBasalt
+} // namespace vkShade

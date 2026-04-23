@@ -3,7 +3,7 @@
 
 #include <cstdint>
 
-namespace vkBasalt
+namespace vkShade
 {
     struct MouseState
     {
@@ -17,6 +17,6 @@ namespace vkBasalt
 
     MouseState getMouseState();
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // MOUSE_INPUT_HPP_INCLUDED

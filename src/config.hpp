@@ -12,12 +12,12 @@
 
 #include "vulkan_include.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class Config
     {
     public:
-        Config();  // Finds and loads vkBasalt.conf
+        Config();  // Finds and loads vkShade.conf
         Config(const std::string& path);  // Loads specific config file
         Config(const Config& other);
 
@@ -55,7 +55,15 @@ namespace vkBasalt
         template<typename T>
         T getInstanceOption(const std::string& effectName, const std::string& paramName, const T& defaultValue = {})
         {
-            return getOption<T>(effectName + "." + paramName, defaultValue);
+            const std::string dotKey = effectName + "." + paramName;
+            if (hasOptionKey(dotKey))
+                return getOption<T>(dotKey, defaultValue);
+
+            const std::string atKey = effectName + "@" + paramName;
+            if (hasOptionKey(atKey))
+                return getOption<T>(atKey, defaultValue);
+
+            return defaultValue;
         }
 
         // In-memory override support (does not modify config file)
@@ -82,6 +90,7 @@ namespace vkBasalt
         void readConfigLine(std::string line);
         void readConfigFile(std::ifstream& stream);
         void updateLastModifiedTime();
+        bool hasOptionKey(const std::string& option) const;
 
         void parseOption(const std::string& option, int32_t& result);
         void parseOption(const std::string& option, uint32_t& result);
@@ -98,6 +107,6 @@ namespace vkBasalt
         void parseOverride(const std::string& value, std::string& result);
         void parseOverride(const std::string& value, std::vector<std::string>& result);
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // CONFIG_HPP_INCLUDED

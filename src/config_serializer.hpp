@@ -7,7 +7,7 @@
 
 #include "effects/effect_config.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     // Serialized parameter format for config files
     struct ConfigParam
@@ -17,14 +17,14 @@ namespace vkBasalt
         std::string value;
     };
 
-    // Global vkBasalt settings (from vkBasalt.conf)
+    // Global vkShade settings (from vkShade.conf)
     struct VkBasaltSettings
     {
         int maxEffects = 10;
-        bool overlayBlockInput = false;
-        std::string toggleKey = "Home";
+        bool overlayBlockInput = true;
+        std::string toggleKey = "End";
         std::string reloadKey = "F10";
-        std::string overlayKey = "End";
+        std::string overlayKey = "Home";
         bool enableOnLaunch = true;
         bool depthCapture = false;
         bool autoApply = true;  // Auto-apply changes without clicking Apply
@@ -49,7 +49,7 @@ namespace vkBasalt
     class ConfigSerializer
     {
     public:
-        // Save a game-specific config to ~/.config/vkBasalt-overlay/configs/<name>.conf
+        // Save a game-specific config to ~/.config/vkShade/configs/<name>.conf
         // effects: all effects in the list (enabled + disabled)
         // disabledEffects: effects that are unchecked (won't be rendered)
         // params: all effect parameters
@@ -63,10 +63,10 @@ namespace vkBasalt
             const std::map<std::string, std::string>& effectPaths = {},
             const std::vector<PreprocessorDefinition>& preprocessorDefs = {});
 
-        // Get the base config directory path (~/.config/vkBasalt-overlay/)
+        // Get the base config directory path (~/.config/vkShade/)
         static std::string getBaseConfigDir();
 
-        // Get the configs directory path (~/.config/vkBasalt-overlay/configs/)
+        // Get the configs directory path (~/.config/vkShade/configs/)
         static std::string getConfigsDir();
 
         // List available config files
@@ -80,7 +80,7 @@ namespace vkBasalt
         static std::string getDefaultConfig();
         static std::string getDefaultConfigPath();
 
-        // Global settings management (vkBasalt.conf)
+        // Global settings management (vkShade.conf)
         static VkBasaltSettings loadSettings();
         static bool saveSettings(const VkBasaltSettings& settings);
 
@@ -88,7 +88,7 @@ namespace vkBasalt
         static ShaderManagerConfig loadShaderManagerConfig();
         static bool saveShaderManagerConfig(const ShaderManagerConfig& config);
 
-        // Ensure vkBasalt.conf exists with defaults (call early at startup)
+        // Ensure vkShade.conf exists with defaults (call early at startup)
         static void ensureConfigExists();
 
         // Detect the game executable name from /proc/self/exe
@@ -141,6 +141,6 @@ namespace vkBasalt
             const ProfileSettings& profileSettings = {});
     };
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // CONFIG_SERIALIZER_HPP_INCLUDED

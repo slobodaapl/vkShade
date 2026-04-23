@@ -12,7 +12,7 @@
 
 #include "reshade/effect_module.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     void enumerateReshadeUniforms(reshadefx::module module);
 
@@ -143,6 +143,6 @@ namespace vkBasalt
     private:
         bool depthAvailable = false;
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // RESHADE_UNIFORMS_HPP_INCLUDED

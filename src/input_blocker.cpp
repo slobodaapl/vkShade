@@ -5,75 +5,22 @@
 
 #include <atomic>
 
-#ifndef VKBASALT_X11
-#define VKBASALT_X11 1
-#endif
-
-#if VKBASALT_X11
-#include "keyboard_input_x11.hpp"
-#include <X11/Xlib.h>
-#endif
-
-namespace vkBasalt
+namespace vkShade
 {
     static bool blockingEnabled = false;
     // Atomic: written by overlay thread (setInputBlocked), read by game thread
     // (isInputBlocked via Wayland interpose wrapper callbacks)
     static std::atomic<bool> blocked{false};
 
-#if VKBASALT_X11
-    static bool grabbed = false;
-
-    static void grabInput()
+    static void warnNonWaylandInputOnce(const char* message)
     {
-        if (grabbed)
-            return;
-
-        Display* display = (Display*)getKeyboardDisplay();
-        if (!display)
-            return;
-
-        Window root = DefaultRootWindow(display);
-
-        int kbResult = XGrabKeyboard(display, root, False, GrabModeAsync, GrabModeAsync, CurrentTime);
-        int ptrResult = XGrabPointer(display, root, False,
-                                     ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
-                                     GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
-
-        if (kbResult == GrabSuccess && ptrResult == GrabSuccess)
+        static bool warned = false;
+        if (!warned && isNonWaylandSurface())
         {
-            grabbed = true;
-            Logger::debug("Input grabbed for overlay");
+            Logger::warn(message);
+            warned = true;
         }
-        else
-        {
-            if (kbResult == GrabSuccess)
-                XUngrabKeyboard(display, CurrentTime);
-            if (ptrResult == GrabSuccess)
-                XUngrabPointer(display, CurrentTime);
-            Logger::debug("Failed to grab input");
-        }
-
-        XFlush(display);
     }
-
-    static void ungrabInput()
-    {
-        if (!grabbed)
-            return;
-
-        Display* display = (Display*)getKeyboardDisplay();
-        if (!display)
-            return;
-
-        XUngrabKeyboard(display, CurrentTime);
-        XUngrabPointer(display, CurrentTime);
-        XFlush(display);
-
-        grabbed = false;
-        Logger::debug("Input released from overlay");
-    }
-#endif
 
     void initInputBlocker(bool enabled)
     {
@@ -88,15 +35,9 @@ namespace vkBasalt
             return;
         }
 
-#if VKBASALT_X11
-        if (!enabled && grabbed)
-        {
-            ungrabInput();
-            blocked.store(false, std::memory_order_release);
-        }
-#endif
-
-        Logger::debug(std::string("Input blocking ") + (enabled ? "enabled" : "disabled"));
+        blocked.store(false, std::memory_order_release);
+        warnNonWaylandInputOnce("non-Wayland Vulkan surface: input blocking disabled; pass-through only");
+        Logger::debug(std::string("Input blocking ") + (enabled ? "disabled for non-Wayland surface" : "disabled"));
     }
 
     void setInputBlocked(bool shouldBlock)
@@ -104,36 +45,29 @@ namespace vkBasalt
         if (!blockingEnabled)
             return;
 
+        if (!isWayland())
+        {
+            blocked.store(false, std::memory_order_release);
+            return;
+        }
+
         if (shouldBlock == blocked.load(std::memory_order_acquire))
             return;
 
         blocked.store(shouldBlock, std::memory_order_release);
 
-        if (isWayland())
-        {
-            // On Wayland, interposed wl_proxy_add_listener wrapper callbacks
-            // check isInputBlocked() and suppress events to the game.
-            // NOTE: This does NOT work for Wine Wayland games — Wine loads
-            // winewayland.so via dlopen(RTLD_LOCAL), so libwayland-client
-            // resolves in Wine's local scope, bypassing our LD_PRELOAD
-            // interposition entirely. No workaround exists without LD_AUDIT
-            // or a wrapper libwayland-client.so. X11 grabs are NOT used as
-            // fallback because Wine Wayland games don't use XWayland for input,
-            // and stale X11 grabs cause compositor focus issues.
-            Logger::debug(std::string("Wayland input blocking: ") + (shouldBlock ? "suppressing game events" : "forwarding game events"));
-            // Send synthetic leave/enter to game keyboards so held keys
-            // are released when overlay opens (prevents stuck movement/actions).
-            // Only works when wl_proxy_add_listener interposition is active.
-            notifyGameKeyboardFocus(!shouldBlock);
-            return;
-        }
-
-#if VKBASALT_X11
-        if (blocked)
-            grabInput();
-        else
-            ungrabInput();
-#endif
+        // On Wayland, interposed wl_proxy_add_listener wrapper callbacks
+        // check isInputBlocked() and suppress events to the game.
+        // NOTE: This does NOT work for Wine Wayland games — Wine loads
+        // winewayland.so via dlopen(RTLD_LOCAL), so libwayland-client
+        // resolves in Wine's local scope, bypassing our LD_PRELOAD
+        // interposition entirely. No workaround exists without LD_AUDIT
+        // or a wrapper libwayland-client.so.
+        Logger::debug(std::string("Wayland input blocking: ") + (shouldBlock ? "suppressing game events" : "forwarding game events"));
+        // Send synthetic leave/enter to game keyboards so held keys
+        // are released when overlay opens (prevents stuck movement/actions).
+        // Only works when wl_proxy_add_listener interposition is active.
+        notifyGameKeyboardFocus(!shouldBlock);
     }
 
     bool isInputBlocked()

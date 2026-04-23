@@ -9,7 +9,7 @@
 #include "effects/params/effect_param.hpp"
 #include "config.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     // Result of testing a shader for compilation errors
     struct ShaderTestResult
@@ -55,6 +55,6 @@ namespace vkBasalt
         const std::string& effectName,
         const std::string& effectPath);
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // RESHADE_PARSER_HPP_INCLUDED

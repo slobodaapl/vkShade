@@ -2,6 +2,7 @@
 #define VK_INSTANCE_FUNCS \
     FORVKFUNC(DestroyInstance) \
     FORVKFUNC(EnumerateDeviceExtensionProperties) \
+    FORVKFUNC(GetPhysicalDeviceFeatures2) \
     FORVKFUNC(GetInstanceProcAddr) \
     FORVKFUNC(GetPhysicalDeviceFormatProperties) \
     FORVKFUNC(GetPhysicalDeviceMemoryProperties) \
@@ -16,16 +17,34 @@
     FORVKFUNC(BindBufferMemory) \
     FORVKFUNC(BindImageMemory) \
     FORVKFUNC(CmdBeginRenderPass) \
+    FORVKFUNC(CmdBeginRenderPass2) \
+    FORVKFUNC(CmdBeginRenderPass2KHR) \
+    FORVKFUNC(CmdBeginRendering) \
+    FORVKFUNC(CmdBeginRenderingKHR) \
     FORVKFUNC(CmdBindDescriptorSets) \
     FORVKFUNC(CmdBindIndexBuffer) \
     FORVKFUNC(CmdBindPipeline) \
     FORVKFUNC(CmdBindVertexBuffers) \
     FORVKFUNC(CmdBlitImage) \
     FORVKFUNC(CmdCopyBufferToImage) \
+    FORVKFUNC(CmdCopyImageToBuffer) \
     FORVKFUNC(CmdCopyImage) \
+    FORVKFUNC(CmdExecuteCommands) \
+    FORVKFUNC(CmdClearColorImage) \
+    FORVKFUNC(CmdDispatch) \
     FORVKFUNC(CmdDraw) \
     FORVKFUNC(CmdDrawIndexed) \
+    FORVKFUNC(CmdDrawIndirect) \
+    FORVKFUNC(CmdDrawIndexedIndirect) \
+    FORVKFUNC(CmdDrawIndirectCount) \
+    FORVKFUNC(CmdDrawIndirectCountKHR) \
+    FORVKFUNC(CmdDrawIndexedIndirectCount) \
+    FORVKFUNC(CmdDrawIndexedIndirectCountKHR) \
     FORVKFUNC(CmdEndRenderPass) \
+    FORVKFUNC(CmdEndRenderPass2) \
+    FORVKFUNC(CmdEndRenderPass2KHR) \
+    FORVKFUNC(CmdEndRendering) \
+    FORVKFUNC(CmdEndRenderingKHR) \
     FORVKFUNC(CmdPipelineBarrier) \
     FORVKFUNC(CmdPushConstants) \
     FORVKFUNC(CmdSetScissor) \
@@ -37,10 +56,13 @@
     FORVKFUNC(CreateFence) \
     FORVKFUNC(CreateFramebuffer) \
     FORVKFUNC(CreateGraphicsPipelines) \
+    FORVKFUNC(CreateComputePipelines) \
     FORVKFUNC(CreateImage) \
     FORVKFUNC(CreateImageView) \
     FORVKFUNC(CreatePipelineLayout) \
     FORVKFUNC(CreateRenderPass) \
+    FORVKFUNC(CreateRenderPass2) \
+    FORVKFUNC(CreateRenderPass2KHR) \
     FORVKFUNC(CreateSampler) \
     FORVKFUNC(CreateSemaphore) \
     FORVKFUNC(CreateShaderModule) \
@@ -67,12 +89,16 @@
     FORVKFUNC(FreeDescriptorSets) \
     FORVKFUNC(FreeMemory) \
     FORVKFUNC(GetBufferMemoryRequirements) \
+    FORVKFUNC(GetDeviceFaultInfoEXT) \
     FORVKFUNC(GetDeviceProcAddr) \
     FORVKFUNC(GetDeviceQueue) \
     FORVKFUNC(GetDeviceQueue2) \
     FORVKFUNC(GetImageMemoryRequirements) \
+    FORVKFUNC(GetQueueCheckpointData2NV) \
+    FORVKFUNC(GetQueueCheckpointDataNV) \
     FORVKFUNC(GetSwapchainImagesKHR) \
     FORVKFUNC(MapMemory) \
+    FORVKFUNC(CmdSetCheckpointNV) \
     FORVKFUNC(QueuePresentKHR) \
     FORVKFUNC(QueueSubmit) \
     FORVKFUNC(QueueWaitIdle) \

@@ -4,8 +4,9 @@
 
 #include <sstream>
 
-namespace vkBasalt
+namespace vkShade
 {
+    Logger Logger::s_instance;
 
     Logger::Logger() : m_minLevel(getMinLogLevel())
     {
@@ -81,7 +82,7 @@ namespace vkBasalt
         if (level >= m_minLevel)
         {
             static std::array<const char*, 5> s_prefixes = {
-                {"vkBasalt trace: ", "vkBasalt debug: ", "vkBasalt info:  ", "vkBasalt warn:  ", "vkBasalt err:   "}};
+                {"vkShade trace: ", "vkShade debug: ", "vkShade info:  ", "vkShade warn:  ", "vkShade err:   "}};
 
             const char* prefix = s_prefixes.at(static_cast<uint32_t>(level));
 
@@ -92,6 +93,7 @@ namespace vkBasalt
             {
                 *m_outStream << prefix << line << '\n';
             }
+            m_outStream->flush();
         }
     }
 
@@ -141,7 +143,7 @@ namespace vkBasalt
             {"none", LogLevel::None},
         }};
 
-        const char* envVar = getenv("VKBASALT_LOG_LEVEL");
+        const char* envVar = getenv("VKSHADE_LOG_LEVEL");
 
         const std::string logLevelStr = envVar ? envVar : "";
 
@@ -156,7 +158,7 @@ namespace vkBasalt
 
     std::string Logger::getFileName()
     {
-        const char* envVar = getenv("VKBASALT_LOG_FILE");
+        const char* envVar = getenv("VKSHADE_LOG_FILE");
 
         std::string filename = envVar ? envVar : "";
 
@@ -168,4 +170,4 @@ namespace vkBasalt
         return filename;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

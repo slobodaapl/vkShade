@@ -3,10 +3,14 @@
 #include <vector>
 #include <cstdint>
 
-namespace vkBasalt
+namespace vkShade
 {
     const std::vector<uint32_t> cas_frag = {
 #include "cas.frag.h"
+    };
+
+    const std::vector<uint32_t> depth_resolve_frag = {
+#include "depth_resolve.frag.h"
     };
 
     const std::vector<uint32_t> deband_frag = {
@@ -56,4 +60,4 @@ namespace vkBasalt
     const std::vector<uint32_t> smaa_neighbor_vert = {
 #include "smaa_neighbor.vert.h"
     };
-} // namespace vkBasalt
+} // namespace vkShade

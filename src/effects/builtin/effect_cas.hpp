@@ -13,7 +13,7 @@
 #include "../effect_simple.hpp"
 #include "config.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     class CasEffect : public SimpleEffect
     {
@@ -26,6 +26,6 @@ namespace vkBasalt
                   Config*              pConfig);
         ~CasEffect();
     };
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_CAS_HPP_INCLUDED

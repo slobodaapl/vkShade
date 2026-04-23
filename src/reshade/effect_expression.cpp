@@ -176,6 +176,11 @@ void reshadefx::expression::reset_to_rvalue_constant(const reshadefx::location &
 
 void reshadefx::expression::add_cast_operation(const reshadefx::type &cast_type)
 {
+	// Non-numeric, non-struct casts between the same base type are metadata-only.
+	// Keep the original type details (e.g. sampler texture dimension) so backend codegen can use them.
+	if (!type.is_numeric() && !type.is_struct() && type.base == cast_type.base)
+		return;
+
 	// First try to simplify the cast with a swizzle operation (only works with scalars and vectors)
 	if (type.cols == 1 && cast_type.cols == 1 && type.rows != cast_type.rows)
 	{

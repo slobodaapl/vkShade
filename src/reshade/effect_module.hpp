@@ -30,6 +30,7 @@ namespace reshadefx
 		rgba16f,
 		rgba32f,
 		rgb10a2,
+		r32u,
 	};
 
 	/// <summary>
@@ -150,6 +151,8 @@ namespace reshadefx
 		std::string semantic;
 		reshadefx::location location;
 		uint32_t definition = 0;
+		bool has_default_value = false;
+		reshadefx::constant default_value = {};
 	};
 
 	/// <summary>
@@ -174,7 +177,9 @@ namespace reshadefx
 		std::vector<annotation> annotations;
 		uint32_t width = 1;
 		uint32_t height = 1;
+		uint32_t depth = 1;
 		uint32_t levels = 1;
+		uint8_t dimensions = 2;
 		texture_format format = texture_format::rgba8;
 	};
 
@@ -189,6 +194,7 @@ namespace reshadefx
 		std::string unique_name;
 		std::string texture_name;
 		std::vector<annotation> annotations;
+		uint8_t dimensions = 2;
 		texture_filter filter = texture_filter::min_mag_mip_linear;
 		texture_address_mode address_u = texture_address_mode::clamp;
 		texture_address_mode address_v = texture_address_mode::clamp;
@@ -197,6 +203,7 @@ namespace reshadefx
 		float max_lod = +3.402823466e+38f;
 		float lod_bias = 0.0f;
 		uint8_t srgb = false;
+		bool storage = false;
 	};
 
 	/// <summary>
@@ -216,10 +223,20 @@ namespace reshadefx
 	/// <summary>
 	/// A shader entry point function.
 	/// </summary>
+	enum class entry_point_stage : uint8_t
+	{
+		vertex,
+		pixel,
+		compute,
+	};
+
 	struct entry_point
 	{
 		std::string name;
-		bool is_pixel_shader;
+		entry_point_stage stage = entry_point_stage::pixel;
+		uint32_t local_size_x = 1;
+		uint32_t local_size_y = 1;
+		uint32_t local_size_z = 1;
 	};
 
 	/// <summary>
@@ -243,6 +260,13 @@ namespace reshadefx
 		std::string render_target_names[8] = {};
 		std::string vs_entry_point;
 		std::string ps_entry_point;
+		std::string cs_entry_point;
+		uint32_t compute_group_size_x = 1;
+		uint32_t compute_group_size_y = 1;
+		uint32_t compute_group_size_z = 1;
+		uint32_t dispatch_size_x = 0;
+		uint32_t dispatch_size_y = 0;
+		uint32_t dispatch_size_z = 0;
 		uint8_t clear_render_targets = false;
 		uint8_t srgb_write_enable = false;
 		uint8_t blend_enable = false;

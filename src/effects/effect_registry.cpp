@@ -1,6 +1,7 @@
 #include "effect_registry.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <filesystem>
 #include <set>
 #include <sstream>
@@ -10,11 +11,47 @@
 #include "builtin/builtin_effects.hpp"
 #include "logger.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
 
     namespace
     {
+        std::string toLower(std::string value)
+        {
+            std::transform(value.begin(), value.end(), value.begin(),
+                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            return value;
+        }
+
+        bool hasFxExtension(const std::filesystem::path& path)
+        {
+            return toLower(path.extension().string()) == ".fx";
+        }
+
+        std::string tryResolveDirectEffectPath(const std::string& value)
+        {
+            if (value.empty())
+                return "";
+
+            std::error_code ec;
+            std::filesystem::path candidate(value);
+            if (std::filesystem::exists(candidate, ec) && std::filesystem::is_regular_file(candidate, ec))
+            {
+                if (hasFxExtension(candidate))
+                    return candidate.string();
+            }
+
+            if (!candidate.has_extension())
+            {
+                std::filesystem::path withFx = candidate;
+                withFx.replace_extension(".fx");
+                if (std::filesystem::exists(withFx, ec) && std::filesystem::is_regular_file(withFx, ec))
+                    return withFx.string();
+            }
+
+            return "";
+        }
+
         // Helper to create a float parameter
         std::unique_ptr<FloatParam> makeFloatParam(
             const std::string& effectName,
@@ -61,15 +98,59 @@ namespace vkBasalt
         std::string searchDirsForEffect(const std::string& name,
                                         const std::vector<std::string>& dirs)
         {
+            const std::filesystem::path queryPath(name);
+            const std::string queryFilenameLower = toLower(queryPath.filename().string());
+            const std::string queryStemLower = toLower(queryPath.stem().string());
+
             for (const auto& dir : dirs)
             {
-                std::string path = dir + "/" + name + ".fx";
-                if (std::filesystem::exists(path))
-                    return path;
+                std::error_code ec;
+                std::filesystem::path base(dir);
 
-                path = dir + "/" + name;
-                if (std::filesystem::exists(path))
-                    return path;
+                std::filesystem::path path = base / name;
+                if (std::filesystem::exists(path, ec) && std::filesystem::is_regular_file(path, ec))
+                {
+                    if (hasFxExtension(path))
+                        return path.string();
+                }
+
+                if (!queryPath.has_extension())
+                {
+                    std::filesystem::path withFx = base / (name + ".fx");
+                    if (std::filesystem::exists(withFx, ec) && std::filesystem::is_regular_file(withFx, ec))
+                        return withFx.string();
+                }
+
+                if (!std::filesystem::exists(base, ec) || !std::filesystem::is_directory(base, ec))
+                    continue;
+
+                try
+                {
+                    for (const auto& entry : std::filesystem::recursive_directory_iterator(
+                             base, std::filesystem::directory_options::skip_permission_denied))
+                    {
+                        if (!entry.is_regular_file())
+                            continue;
+
+                        const auto& filePath = entry.path();
+                        if (!hasFxExtension(filePath))
+                            continue;
+
+                        const std::string filenameLower = toLower(filePath.filename().string());
+                        const std::string stemLower = toLower(filePath.stem().string());
+
+                        // Match either full filename (for "Foo.fx") or stem (for "Foo")
+                        if ((!queryFilenameLower.empty() && filenameLower == queryFilenameLower) ||
+                            (!queryStemLower.empty() && stemLower == queryStemLower))
+                        {
+                            return filePath.string();
+                        }
+                    }
+                }
+                catch (const std::filesystem::filesystem_error&)
+                {
+                    // Keep searching other paths if one directory is inaccessible
+                }
             }
             return "";
         }
@@ -77,10 +158,16 @@ namespace vkBasalt
         // Try to find effect file path
         std::string findEffectPath(const std::string& name, Config* pConfig)
         {
+            // If caller already provides a path (absolute or relative), use it directly.
+            std::string directPath = tryResolveDirectEffectPath(name);
+            if (!directPath.empty())
+                return directPath;
+
             // First check if path is directly configured (e.g. "Vibrance = /path/to/Vibrance.fx")
             std::string path = pConfig->getOption<std::string>(name, "");
-            if (!path.empty() && std::filesystem::exists(path))
-                return path;
+            std::string resolvedConfiguredPath = tryResolveDirectEffectPath(path);
+            if (!resolvedConfiguredPath.empty())
+                return resolvedConfiguredPath;
 
             // Search in reshadeIncludePath from config (colon-separated list)
             std::string includePath = pConfig->getOption<std::string>("reshadeIncludePath", "");
@@ -627,4 +714,4 @@ namespace vkBasalt
                       " effects from config (" + std::to_string(disabledEffects.size()) + " disabled)");
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

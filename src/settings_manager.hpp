@@ -2,32 +2,33 @@
 #define SETTINGS_MANAGER_HPP_INCLUDED
 
 #include <string>
+#include <algorithm>
 
 #include "config_serializer.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
-    // Single source of truth for all vkBasalt settings.
+    // Single source of truth for all vkShade settings.
     // Similar to EffectRegistry for effect parameters.
     //
     // Usage:
     // - Call initialize() once at startup to load from config
     // - Read/write settings directly via getters/setters
-    // - Call save() to persist changes to vkBasalt.conf
+    // - Call save() to persist changes to vkShade.conf
     class SettingsManager
     {
     public:
-        // Initialize from vkBasalt.conf (call once at startup)
+        // Initialize from vkShade.conf (call once at startup)
         void initialize();
 
         // Check if already initialized
         bool isInitialized() const { return initialized; }
 
-        // Save current settings to vkBasalt.conf
+        // Save current settings to vkShade.conf
         bool save();
 
         // Getters
-        int getMaxEffects() const { return settings.maxEffects; }
+        int getMaxEffects() const { return std::clamp(settings.maxEffects, 1, 200); }
         bool getOverlayBlockInput() const { return settings.overlayBlockInput; }
         const std::string& getToggleKey() const { return settings.toggleKey; }
         const std::string& getReloadKey() const { return settings.reloadKey; }
@@ -40,7 +41,7 @@ namespace vkBasalt
         bool getSafeAntiCheat() const { return safeAntiCheat; }
 
         // Setters (update in-memory state, call save() to persist)
-        void setMaxEffects(int value) { settings.maxEffects = value; }
+        void setMaxEffects(int value) { settings.maxEffects = std::clamp(value, 1, 200); }
         void setOverlayBlockInput(bool value) { settings.overlayBlockInput = value; }
         void setToggleKey(const std::string& value) { settings.toggleKey = value; }
         void setReloadKey(const std::string& value) { settings.reloadKey = value; }
@@ -64,6 +65,6 @@ namespace vkBasalt
     // Global settings manager instance (like effectRegistry)
     extern SettingsManager settingsManager;
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // SETTINGS_MANAGER_HPP_INCLUDED

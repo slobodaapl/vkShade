@@ -12,19 +12,24 @@
 #include "logical_device.hpp"
 
 #include "effects/effect.hpp"
-namespace vkBasalt
+namespace vkShade
 {
+    struct LogicalSwapchain;
 
     std::vector<VkCommandBuffer> allocateCommandBuffer(LogicalDevice* pLogicalDevice, uint32_t count);
 
     void writeCommandBuffers(LogicalDevice*                                 pLogicalDevice,
-                             std::vector<std::shared_ptr<vkBasalt::Effect>> effects,
-                             VkImage                                        depthImage,
-                             VkImageView                                    depthImageView,
-                             VkFormat                                       depthFormat,
+                             LogicalSwapchain*                              pLogicalSwapchain,
+                             std::vector<std::shared_ptr<vkShade::Effect>> effects,
                              std::vector<VkCommandBuffer>                   commandBuffers);
 
+    void recordDepthResolveSnapshot(LogicalDevice*            pLogicalDevice,
+                                    LogicalSwapchain*         pLogicalSwapchain,
+                                    VkCommandBuffer           commandBuffer,
+                                    uint32_t                  imageIndex,
+                                    const DepthState&         depthState);
+
     std::vector<VkSemaphore> createSemaphores(LogicalDevice* pLogicalDevice, uint32_t count);
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // COMMAND_BUFFER_HPP_INCLUDED

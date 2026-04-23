@@ -1,6 +1,6 @@
 #include "format.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     VkFormat convertToSRGB(VkFormat format)
     {
@@ -144,4 +144,4 @@ namespace vkBasalt
             default: return false;
         }
     }
-} // namespace vkBasalt
+} // namespace vkShade

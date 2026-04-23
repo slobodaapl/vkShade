@@ -1,7 +1,9 @@
 #include "logical_swapchain.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
+    void destroyDepthResolveResources(LogicalSwapchain* pLogicalSwapchain);
+
     void LogicalSwapchain::destroy()
     {
         if (imageCount > 0)
@@ -17,6 +19,8 @@ namespace vkBasalt
             pLogicalDevice->vkd.FreeCommandBuffers(
                 pLogicalDevice->device, pLogicalDevice->commandPool, commandBuffersNoEffect.size(), commandBuffersNoEffect.data());
             Logger::debug("after free commandbuffer");
+
+            destroyDepthResolveResources(this);
 
             pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, fakeImageMemory, nullptr);
 
@@ -42,4 +46,4 @@ namespace vkBasalt
             // Note: ImGui overlay is now at device level, not destroyed here
         }
     }
-} // namespace vkBasalt
+} // namespace vkShade

@@ -12,7 +12,7 @@
 #include "effect_config.hpp"
 #include "config.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     // EffectRegistry is the single source of truth for all effect configurations.
     // UI reads/writes here, rendering reads from here.
@@ -130,6 +130,6 @@ namespace vkBasalt
         const EffectParam* findParam(const EffectConfig& effect, const std::string& paramName) const;
     };
 
-} // namespace vkBasalt
+} // namespace vkShade
 
 #endif // EFFECT_REGISTRY_HPP_INCLUDED

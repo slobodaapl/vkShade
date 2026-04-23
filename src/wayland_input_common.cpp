@@ -5,7 +5,7 @@
 #include <cstring>
 #include <poll.h>
 
-namespace vkBasalt
+namespace vkShade
 {
     static wl_display* displayWrapper = nullptr;
     static wl_event_queue* queue = nullptr;
@@ -95,8 +95,6 @@ namespace vkBasalt
         if (commonInitialized)
             return seat != nullptr;
 
-        commonInitialized = true;
-
         wl_display* display = getWaylandDisplay();
         if (!display)
             return false;
@@ -124,9 +122,29 @@ namespace vkBasalt
         wl_display_roundtrip_queue(display, queue);
 
         if (seat)
+        {
+            commonInitialized = true;
             Logger::info("Wayland: shared input resources initialized");
+        }
         else
+        {
             Logger::warn("Wayland: no seat found");
+            if (registry)
+            {
+                wl_registry_destroy(registry);
+                registry = nullptr;
+            }
+            if (queue)
+            {
+                wl_event_queue_destroy(queue);
+                queue = nullptr;
+            }
+            if (displayWrapper)
+            {
+                wl_proxy_wrapper_destroy(displayWrapper);
+                displayWrapper = nullptr;
+            }
+        }
 
         return seat != nullptr;
     }
@@ -196,4 +214,4 @@ namespace vkBasalt
         commonInitialized = false;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

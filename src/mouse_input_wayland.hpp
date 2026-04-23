@@ -2,7 +2,7 @@
 
 #include "mouse_input.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     MouseState getMouseStateWayland();
 
@@ -16,4 +16,4 @@ namespace vkBasalt
     // The game's wl_pointer receives releases via implicit grab that our
     // overlay's private pointer never sees. Called from wayland_interpose.cpp.
     void mirrorButtonState(uint32_t button, bool pressed);
-} // namespace vkBasalt
+} // namespace vkShade

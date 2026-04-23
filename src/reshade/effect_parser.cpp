@@ -159,6 +159,7 @@ bool reshadefx::parser::accept_symbol(std::string &identifier, scope &scope, sym
 bool reshadefx::parser::accept_type_class(type &type)
 {
 	type.rows = type.cols = 0;
+	type.definition = 0;
 
 	if (peek(tokenid::identifier) || peek(tokenid::colon_colon))
 	{
@@ -310,12 +311,19 @@ bool reshadefx::parser::accept_type_class(type &type)
 		break;
 	case tokenid::texture:
 		type.base = type::t_texture;
+		type.definition = (_token_next.literal_as_string.find("1D") != std::string::npos) ? 1 :
+			(_token_next.literal_as_string.find("3D") != std::string::npos) ? 3 : 2;
 		break;
 	case tokenid::sampler:
 		type.base = type::t_sampler;
+		type.definition = (_token_next.literal_as_string.find("1D") != std::string::npos) ? 1 :
+			(_token_next.literal_as_string.find("3D") != std::string::npos) ? 3 : 2;
 		break;
 	case tokenid::storage:
-		type.base = type::t_sampler; // Treat storage as sampler for compilation (no compute dispatch)
+		type.base = type::t_sampler;
+		type.qualifiers |= type::q_storage;
+		type.definition = (_token_next.literal_as_string.find("1D") != std::string::npos) ? 1 :
+			(_token_next.literal_as_string.find("3D") != std::string::npos) ? 3 : 2;
 		break;
 	default:
 		return false;
@@ -338,13 +346,17 @@ bool reshadefx::parser::accept_type_qualifiers(type &type)
 {
 	unsigned int qualifiers = 0;
 
-	// Storage
-	if (accept(tokenid::extern_))
-		qualifiers |= type::q_extern;
-	if (accept(tokenid::static_))
-		qualifiers |= type::q_static;
-	if (accept(tokenid::uniform_))
-		qualifiers |= type::q_uniform;
+		// Storage
+		if (accept(tokenid::extern_))
+			qualifiers |= type::q_extern;
+		if (accept(tokenid::static_))
+		{
+			qualifiers |= type::q_static;
+			if (_token.literal_as_string == "groupshared")
+				qualifiers |= type::q_group_shared;
+		}
+		if (accept(tokenid::uniform_))
+			qualifiers |= type::q_uniform;
 	if (accept(tokenid::volatile_))
 		qualifiers |= type::q_volatile;
 	if (accept(tokenid::precise))
@@ -870,7 +882,8 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 			// Try to resolve the call by searching through both function symbols and intrinsics
 			bool undeclared = !symbol.id, ambiguous = false;
 
-			if (!resolve_function_call(identifier, arguments, scope, symbol, ambiguous))
+			size_t implicit_argument_count = 0;
+			if (!resolve_function_call(identifier, arguments, scope, symbol, ambiguous, implicit_argument_count))
 			{
 				if (undeclared)
 					error(location, 3004, "undeclared identifier or no matching intrinsic overload for '" + identifier + '\'');
@@ -882,11 +895,29 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 			}
 
 			assert(symbol.function != nullptr);
+			assert(symbol.function->parameter_list.size() >= arguments.size());
 
-			std::vector<expression> parameters(arguments.size());
+			const size_t total_argument_count = symbol.function->parameter_list.size();
+			if (total_argument_count > arguments.size())
+			{
+				const size_t expected_implicit_count = total_argument_count - arguments.size();
+				assert(implicit_argument_count == expected_implicit_count);
+
+				for (size_t i = arguments.size(); i < total_argument_count; ++i)
+				{
+					const auto &param = symbol.function->parameter_list[i];
+					assert(param.has_default_value);
+
+					expression default_argument;
+					default_argument.reset_to_rvalue_constant(location, param.default_value, param.type);
+					arguments.push_back(std::move(default_argument));
+				}
+			}
+
+			std::vector<expression> parameters(total_argument_count);
 
 			// We need to allocate some temporary variables to pass in and load results from pointer parameters
-			for (size_t i = 0; i < arguments.size(); ++i)
+			for (size_t i = 0; i < total_argument_count; ++i)
 			{
 				const auto &param_type = symbol.function->parameter_list[i].type;
 
@@ -900,11 +931,11 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 
 				if (symbol.op == symbol_type::function || param_type.has(type::q_out))
 				{
-					if (param_type.is_sampler())
-					{
-						// Do not shadow sampler parameters to function calls (but do load them for intrinsics)
-						parameters[i] = arguments[i];
-					}
+				if (param_type.is_sampler() || (symbol.op != symbol_type::function && param_type.has(type::q_inout)))
+				{
+					// Do not shadow sampler parameters to function calls (but do load them for intrinsics)
+					parameters[i] = arguments[i];
+				}
 					else
 					{
 						// All user-defined functions actually accept pointers as arguments, same applies to intrinsics with 'out' parameters
@@ -914,7 +945,11 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 				}
 				else
 				{
-					parameters[i].reset_to_rvalue(arguments[i].location, _codegen->emit_load(arguments[i]), param_type);
+					// Preserve sampler/storage qualifiers for intrinsics (e.g. storage samplers)
+					// so backend codegen can pick the correct SPIR-V image operations.
+					const reshadefx::type loaded_type = (symbol.op != symbol_type::function && param_type.is_sampler()) ?
+						arguments[i].type : param_type;
+					parameters[i].reset_to_rvalue(arguments[i].location, _codegen->emit_load(arguments[i]), loaded_type);
 
 					// Keep track of whether the parameter is a constant for code generation (this makes the expression invalid for all other uses)
 					parameters[i].is_constant = arguments[i].is_constant;
@@ -922,7 +957,7 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 			}
 
 			// Copy in parameters from the argument access chains to parameter variables
-			for (size_t i = 0; i < arguments.size(); ++i)
+			for (size_t i = 0; i < total_argument_count; ++i)
 				// Only do this for pointer parameters as discovered above
 				if (parameters[i].is_lvalue && parameters[i].type.has(type::q_in) && !parameters[i].type.is_sampler())
 					_codegen->emit_store(parameters[i], _codegen->emit_load(arguments[i]));
@@ -935,7 +970,7 @@ bool reshadefx::parser::parse_expression_unary(expression &exp)
 			exp.reset_to_rvalue(location, result, symbol.type);
 
 			// Copy out parameters from parameter variables back to the argument access chains
-			for (size_t i = 0; i < arguments.size(); ++i)
+			for (size_t i = 0; i < total_argument_count; ++i)
 				// Only do this for pointer parameters as discovered above
 				if (parameters[i].is_lvalue && parameters[i].type.has(type::q_out) && !parameters[i].type.is_sampler())
 					_codegen->emit_store(arguments[i], _codegen->emit_load(parameters[i]));
@@ -1274,12 +1309,25 @@ bool reshadefx::parser::parse_expression_multary(expression &lhs, unsigned int l
 					return error(rhs.location, 3022, "scalar, vector, or matrix expected"), false;
 			}
 
+			// Arithmetic on booleans is defined via integer promotion.
+			// Keep logical/comparison operators on bool, but cast arithmetic paths to int.
+			const bool is_arithmetic_op =
+				op == tokenid::plus || op == tokenid::plus_equal ||
+				op == tokenid::minus || op == tokenid::minus_equal ||
+				op == tokenid::star || op == tokenid::star_equal ||
+				op == tokenid::slash || op == tokenid::slash_equal ||
+				op == tokenid::percent || op == tokenid::percent_equal;
+			if (is_arithmetic_op && type.is_boolean())
+				type.base = type::t_int;
+
 			// Perform implicit type conversion
 			if (lhs.type.components() > type.components())
 				warning(lhs.location, 3206, "implicit truncation of vector type");
 			if (rhs.type.components() > type.components())
 				warning(rhs.location, 3206, "implicit truncation of vector type");
 
+			const reshadefx::type lhs_input_type = lhs.type;
+			const reshadefx::type rhs_input_type = rhs.type;
 			lhs.add_cast_operation(type);
 			rhs.add_cast_operation(type);
 
@@ -1322,11 +1370,12 @@ bool reshadefx::parser::parse_expression_multary(expression &lhs, unsigned int l
 #endif
 			const auto rhs_value = _codegen->emit_load(rhs);
 
+			const reshadefx::type calc_type = type;
 			// Certain operations return a boolean type instead of the type of the input expressions
 			if (is_bool_result)
 				type = { type::t_bool, type.rows, type.cols };
 
-			const auto result_value = _codegen->emit_binary_op(lhs.location, op, type, lhs.type, lhs_value, rhs_value);
+			const auto result_value = _codegen->emit_binary_op(lhs.location, op, type, calc_type, lhs_input_type, rhs_input_type, lhs_value, rhs_value);
 
 			lhs.reset_to_rvalue(lhs.location, result_value, type);
 			#pragma endregion
@@ -1751,8 +1800,12 @@ bool reshadefx::parser::parse_statement(bool scoped)
 			}
 			else // Initializer can also contain an expression if not a variable declaration list
 			{
-				expression expression;
-				parse_expression(expression); // It is valid for there to be no initializer expression, so ignore result
+				if (!peek(';'))
+				{
+					expression expression;
+					if (!parse_expression(expression))
+						return false;
+				}
 			}
 
 			if (!expect(';'))
@@ -1777,8 +1830,11 @@ bool reshadefx::parser::parse_statement(bool scoped)
 			{ // Parse condition block
 				_codegen->enter_block(condition_block);
 
-				if (expression condition; parse_expression(condition))
+				if (!peek(';'))
 				{
+					expression condition;
+					if (!parse_expression(condition))
+						return false;
 					if (!condition.type.is_scalar())
 						return error(condition.location, 3019, "scalar value expected"), false;
 
@@ -1801,8 +1857,12 @@ bool reshadefx::parser::parse_statement(bool scoped)
 			{ // Parse loop continue block into separate block so it can be appended to the end down the line
 				_codegen->enter_block(continue_label);
 
-				expression continue_exp;
-				parse_expression(continue_exp); // It is valid for there to be no continue expression, so ignore result
+				if (!peek(')'))
+				{
+					expression continue_exp;
+					if (!parse_expression(continue_exp))
+						return false;
+				}
 
 				if (!expect(')'))
 					return false;
@@ -2316,6 +2376,7 @@ bool reshadefx::parser::parse_function(type type, std::string name)
 
 	bool parse_success = true;
 	bool expect_parenthesis = true;
+	bool saw_default_parameter = false;
 
 	// Enter function scope
 	enter_scope(); on_scope_exit _([this]() { leave_scope(); _codegen->leave_function(); });
@@ -2385,7 +2446,6 @@ bool reshadefx::parser::parse_function(type type, std::string name)
 		}
 
 		// Handle optional default parameter value (e.g., float x = 0.0)
-		// Skip the default value — it's not used, but must be consumed for parsing
 		if (accept('='))
 		{
 			expression default_value;
@@ -2396,6 +2456,29 @@ bool reshadefx::parser::parse_function(type type, std::string name)
 				consume_until(')');
 				break;
 			}
+
+			if (param.type.has(type::q_out))
+			{
+				parse_success = false;
+				error(param.location, 3046, '\'' + param.name + "': output parameters cannot have default values");
+			}
+			else if (!default_value.is_constant)
+			{
+				parse_success = false;
+				error(default_value.location, 3011, '\'' + param.name + "': default argument must be a constant expression");
+			}
+			else
+			{
+				default_value.add_cast_operation(param.type);
+				param.has_default_value = true;
+				param.default_value = default_value.constant;
+				saw_default_parameter = true;
+			}
+		}
+		else if (saw_default_parameter)
+		{
+			parse_success = false;
+			error(param.location, 3070, '\'' + param.name + "': missing default argument after previous default parameter");
 		}
 
 		// Handle parameter type semantic
@@ -2526,6 +2609,14 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 	expression initializer;
 	texture_info texture_info;
 	sampler_info sampler_info;
+	if (type.is_texture() || type.is_sampler())
+	{
+		const uint8_t dimensions = (type.definition >= 1 && type.definition <= 3) ? static_cast<uint8_t>(type.definition) : 2;
+		texture_info.dimensions = dimensions;
+		texture_info.depth = dimensions == 3 ? texture_info.depth : 1;
+		sampler_info.dimensions = dimensions;
+		sampler_info.storage = type.has(type::q_storage);
+	}
 
 	if (accept(':'))
 	{
@@ -2571,17 +2662,22 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 
 			initializer.add_cast_operation(type);
 		}
-		else if (type.is_numeric() || type.is_struct()) // Numeric variables without an initializer need special handling
-		{
-			if (type.has(type::q_const)) // Constants have to have an initial value
-				return error(location, 3012, '\'' + name + "': missing initial value"), false;
-			else if (!type.has(type::q_uniform)) // Zero initialize all global variables
-				initializer.reset_to_rvalue_constant(location, {}, type);
-		}
+			else if (type.is_numeric() || type.is_struct()) // Numeric variables without an initializer need special handling
+			{
+				if (type.has(type::q_const)) // Constants have to have an initial value
+					return error(location, 3012, '\'' + name + "': missing initial value"), false;
+				else if (!type.has(type::q_uniform) && !type.has(type::q_group_shared)) // Zero initialize global non-shared variables
+					initializer.reset_to_rvalue_constant(location, {}, type);
+			}
 		else if (global && accept('{')) // Textures and samplers can have a property block attached to their declaration
 		{
 			if (type.has(type::q_const)) // Non-numeric variables cannot be constants
 				return error(location, 3035, '\'' + name + "': this variable type cannot be declared 'const'"), false;
+
+			// Match upstream defaults before parsing sampler/texture properties.
+			// In particular, integral textures cannot use linear filtering, so they default to point filtering.
+			texture_info.format = texture_format::rgba8;
+			sampler_info.filter = type.is_integral() ? texture_filter::min_mag_mip_point : texture_filter::min_mag_mip_linear;
 
 			while (!peek('}'))
 			{
@@ -2615,6 +2711,7 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 						{ "R16F", uint32_t(texture_format::r16f) },
 						{ "R32F", uint32_t(texture_format::r32f) },
 						{ "R32I", uint32_t(texture_format::r32i) },
+						{ "R32U", uint32_t(texture_format::r32u) },
 						{ "RG8", uint32_t(texture_format::rg8) }, { "R8G8", uint32_t(texture_format::rg8) },
 						{ "RG16", uint32_t(texture_format::rg16) }, { "R16G16", uint32_t(texture_format::rg16) },
 						{ "RG16F", uint32_t(texture_format::rg16f) }, { "R16G16F", uint32_t(texture_format::rg16f) },
@@ -2649,6 +2746,7 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 
 					texture_info = _codegen->find_texture(expression.base);
 					sampler_info.texture_name = texture_info.unique_name;
+					sampler_info.dimensions = texture_info.dimensions;
 				}
 				else
 				{
@@ -2663,6 +2761,15 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 						texture_info.width = value > 0 ? value : 1;
 					else if (property_name == "Height")
 						texture_info.height = value > 0 ? value : 1;
+					else if (property_name == "Depth")
+					{
+						texture_info.depth = value > 0 ? value : 1;
+						if (texture_info.depth > 1)
+						{
+							texture_info.dimensions = 3;
+							sampler_info.dimensions = 3;
+						}
+					}
 					else if (property_name == "MipLevels")
 						texture_info.levels = value > 0 ? value : 1;
 					else if (property_name == "Format")
@@ -2683,6 +2790,11 @@ bool reshadefx::parser::parse_variable(type type, std::string name, bool global)
 						sampler_info.filter = static_cast<texture_filter>((uint32_t(sampler_info.filter) & 0x3C) |  (value       & 0x03));
 					else if (property_name == "MinLOD" || property_name == "MaxMipLevel")
 						sampler_info.min_lod = static_cast<float>(value);
+					else if (property_name == "MipLevel")
+					{
+						sampler_info.min_lod = static_cast<float>(value);
+						sampler_info.max_lod = static_cast<float>(value);
+					}
 					else if (property_name == "MaxLOD")
 						sampler_info.max_lod = static_cast<float>(value);
 					else if (property_name == "MipLODBias" || property_name == "MipMapLodBias")
@@ -2860,35 +2972,72 @@ bool reshadefx::parser::parse_technique_pass(pass_info &info)
 					else if (!symbol.type.is_function())
 						parse_success = false,
 						error(location, 3020, "type mismatch, expected function name");
-					else {
-						const bool is_vs = state[0] == 'V';
-						const bool is_ps = state[0] == 'P' || state[0] == 'C'; // Treat ComputeShader as pixel shader for compilation
+						else {
+							const bool is_vs = state[0] == 'V';
+							const bool is_ps = state[0] == 'P';
+							const bool is_cs = state[0] == 'C';
 
-						// Look up the matching function info for this function definition
-						function_info &function_info = _codegen->find_function(symbol.id);
+							// Look up the matching function info for this function definition
+							function_info &function_info = _codegen->find_function(symbol.id);
 
-						// We potentially need to generate a special entry point function which translates between function parameters and input/output variables
-						_codegen->define_entry_point(function_info, is_ps);
+							uint32_t local_size_x = 1;
+							uint32_t local_size_y = 1;
+							uint32_t local_size_z = 1;
 
-						// Consume optional dispatch size template for compute shaders: CS<X, Y, Z>
-						if (state[0] == 'C' && accept('<'))
-						{
-							while (!peek('>') && !peek(tokenid::end_of_file) && !peek(';'))
-								consume();
-							expect('>');
+							// Parse optional local size template for compute shaders: CS<X, Y, Z>
+							if (is_cs && accept('<'))
+							{
+								uint32_t local_sizes[3] = { 1, 1, 1 };
+								size_t local_size_index = 0;
+
+								while (!peek('>') && !peek(tokenid::end_of_file) && !peek(';'))
+								{
+									expression local_size_expr;
+									// Parse constant arithmetic (e.g. 32, 64/2, 1<<3) but stop before template delimiters ('<' and '>').
+									if (!parse_expression_multary(local_size_expr, 8) || !local_size_expr.is_constant || !local_size_expr.type.is_scalar())
+									{
+										parse_success = false;
+										error(location, 3011, "compute shader local size must be a literal scalar expression");
+										break;
+									}
+
+									local_size_expr.add_cast_operation({ type::t_uint, 1, 1 });
+
+									if (local_size_index < 3)
+										local_sizes[local_size_index] = std::max(local_size_expr.constant.as_uint[0], 1u);
+									local_size_index++;
+
+									if (!accept(','))
+										break;
+								}
+								expect('>');
+
+								local_size_x = local_sizes[0];
+								local_size_y = local_sizes[1];
+								local_size_z = local_sizes[2];
+							}
+
+							if (is_vs)
+							{
+								_codegen->define_entry_point(function_info, entry_point_stage::vertex, 1, 1, 1);
+								vs_info = function_info;
+								info.vs_entry_point = function_info.unique_name;
+							}
+							if (is_ps)
+							{
+								_codegen->define_entry_point(function_info, entry_point_stage::pixel, 1, 1, 1);
+								ps_info = function_info;
+								info.ps_entry_point = function_info.unique_name;
+							}
+							if (is_cs)
+							{
+								_codegen->define_entry_point(function_info, entry_point_stage::compute, local_size_x, local_size_y, local_size_z);
+								info.cs_entry_point = function_info.unique_name;
+								info.compute_group_size_x = local_size_x;
+								info.compute_group_size_y = local_size_y;
+								info.compute_group_size_z = local_size_z;
+							}
 						}
-
-						if (is_vs)
-						{
-							vs_info = function_info;
-							info.vs_entry_point = function_info.unique_name;
-						}
-						if (is_ps)
-						{
-							ps_info = function_info;
-							info.ps_entry_point = function_info.unique_name;
-						}
-					}
 				}
 				else
 				{
@@ -3035,8 +3184,14 @@ bool reshadefx::parser::parse_technique_pass(pass_info &info)
 				info.num_vertices = value;
 			else if (state == "PrimitiveType" || state == "PrimitiveTopology")
 				info.topology = static_cast<primitive_topology>(value);
-			else if (state == "DispatchSizeX" || state == "DispatchSizeY" || state == "DispatchSizeZ" || state == "GenerateMipMaps")
-				; // Compute shader pass states — accepted but ignored (no compute dispatch in fragment pipeline)
+				else if (state == "DispatchSizeX")
+					info.dispatch_size_x = value;
+				else if (state == "DispatchSizeY")
+					info.dispatch_size_y = value;
+				else if (state == "DispatchSizeZ")
+					info.dispatch_size_z = value;
+				else if (state == "GenerateMipMaps")
+					;
 			else if (state.compare(0, 11, "BlendEnable") == 0 && state.size() == 12 && state[11] >= '0' && state[11] <= '7')
 				info.blend_enable = value != 0; // Per-RT blend enable — apply to global blend state
 			else if ((state.compare(0, 8, "SrcBlend") == 0 || state.compare(0, 9, "DestBlend") == 0 ||
@@ -3053,15 +3208,38 @@ bool reshadefx::parser::parse_technique_pass(pass_info &info)
 
 	if (parse_success)
 	{
-		if (info.vs_entry_point.empty() && info.ps_entry_point.empty())
+		const bool has_vs = !info.vs_entry_point.empty();
+		const bool has_ps = !info.ps_entry_point.empty();
+		const bool has_cs = !info.cs_entry_point.empty();
+
+		if (has_cs)
+		{
+			if (has_vs || has_ps)
+			{
+				parse_success = false;
+				error(pass_location, 3012, "pass cannot mix ComputeShader with VertexShader/PixelShader");
+			}
+
+			if (info.dispatch_size_x == 0)
+				info.dispatch_size_x = info.viewport_width;
+			if (info.dispatch_size_y == 0)
+				info.dispatch_size_y = info.viewport_height;
+			if (info.dispatch_size_x == 0)
+				info.dispatch_size_x = 1;
+			if (info.dispatch_size_y == 0)
+				info.dispatch_size_y = 1;
+			if (info.dispatch_size_z == 0)
+				info.dispatch_size_z = 1;
+		}
+		else if (!has_vs && !has_ps)
 		{
 			parse_success = false;
 			error(pass_location, 3012, "pass is missing 'VertexShader' or 'PixelShader' property");
 		}
-		else if (info.vs_entry_point.empty() || info.ps_entry_point.empty())
+		else if (!has_vs || !has_ps)
 		{
-			// Compute-only pass or pass missing one shader — skip VS/PS signature validation
-			// but still register the pass for compilation purposes
+			parse_success = false;
+			error(pass_location, 3012, "graphics pass requires both 'VertexShader' and 'PixelShader' properties");
 		}
 		else
 		{

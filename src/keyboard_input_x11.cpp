@@ -9,11 +9,14 @@
 
 #include <memory>
 #include <functional>
+#include <unordered_map>
+#include <cstdint>
+#include <limits>
 
 #include <unistd.h>
 #include <cstring>
 
-namespace vkBasalt
+namespace vkShade
 {
     static Display* kbDisplay = nullptr;
     static int xiOpcode = 0;
@@ -27,6 +30,15 @@ namespace vkBasalt
     static bool rightPressed = false;
     static bool homePressed = false;
     static bool endPressed = false;
+    static uint64_t keymapFrameId = 0;
+    static uint64_t lastQueriedKeymapFrame = std::numeric_limits<uint64_t>::max();
+    static char cachedKeymap[32] = {};
+    static std::unordered_map<uint32_t, KeyCode> keysymToKeycodeCache;
+
+    void beginKeyboardInputFrameX11()
+    {
+        keymapFrameId++;
+    }
 
     static void initKeyboardX11()
     {
@@ -88,23 +100,38 @@ namespace vkBasalt
             else
             {
                 display = std::unique_ptr<Display, std::function<void(Display*)>>(XOpenDisplay(disVar), [](Display* d) { XCloseDisplay(d); });
-                usesX11 = 1;
-                Logger::debug("X11 support");
+                usesX11 = display ? 1 : 0;
+                Logger::debug(usesX11 ? "X11 support" : "X11 unavailable");
             }
         }
 
-        if (!usesX11)
+        if (!usesX11 || !display)
         {
             return false;
         }
 
-        char keys_return[32];
+        if (lastQueriedKeymapFrame != keymapFrameId)
+        {
+            XQueryKeymap(display.get(), cachedKeymap);
+            lastQueriedKeymapFrame = keymapFrameId;
+        }
 
-        XQueryKeymap(display.get(), keys_return);
+        KeyCode keycode = 0;
+        auto cached = keysymToKeycodeCache.find(ks);
+        if (cached != keysymToKeycodeCache.end())
+        {
+            keycode = cached->second;
+        }
+        else
+        {
+            keycode = XKeysymToKeycode(display.get(), (KeySym) ks);
+            keysymToKeycodeCache.emplace(ks, keycode);
+        }
 
-        KeyCode kc2 = XKeysymToKeycode(display.get(), (KeySym) ks);
+        if (keycode == 0)
+            return false;
 
-        return !!(keys_return[kc2 >> 3] & (1 << (kc2 & 7)));
+        return !!(cachedKeymap[keycode >> 3] & (1 << (keycode & 7)));
     }
 
     // Helper to process a keycode and update state
@@ -213,4 +240,4 @@ namespace vkBasalt
         return kbDisplay;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

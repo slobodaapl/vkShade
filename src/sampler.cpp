@@ -1,6 +1,6 @@
 #include "sampler.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     VkSampler createSampler(LogicalDevice* pLogicalDevice)
     {
@@ -124,4 +124,4 @@ namespace vkBasalt
                 return;
         }
     }
-} // namespace vkBasalt
+} // namespace vkShade

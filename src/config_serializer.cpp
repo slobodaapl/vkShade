@@ -13,17 +13,23 @@
 #include <unistd.h>
 #include <climits>
 
-namespace vkBasalt
+namespace vkShade
 {
+    namespace
+    {
+        constexpr int MIN_MAX_EFFECTS = 1;
+        constexpr int MAX_MAX_EFFECTS = 200;
+    } // namespace
+
     std::string ConfigSerializer::getBaseConfigDir()
     {
         const char* xdgConfig = std::getenv("XDG_CONFIG_HOME");
         if (xdgConfig)
-            return std::string(xdgConfig) + "/vkBasalt-overlay";
+            return std::string(xdgConfig) + "/vkShade";
 
         const char* home = std::getenv("HOME");
         if (home)
-            return std::string(home) + "/.config/vkBasalt-overlay";
+            return std::string(home) + "/.config/vkShade";
 
         return "";
     }
@@ -114,7 +120,7 @@ namespace vkBasalt
     {
         const char* home = std::getenv("HOME");
         if (home)
-            return std::string(home) + "/.config/vkBasalt-overlay/default_config";
+            return std::string(home) + "/.config/vkShade/default_config";
         return "";
     }
 
@@ -157,12 +163,12 @@ namespace vkBasalt
         VkBasaltSettings settings;
 
         // Check user config first, then fall back to system paths (same order as Config)
-        std::string userConfig = getBaseConfigDir() + "/vkBasalt.conf";
+        std::string userConfig = getBaseConfigDir() + "/vkShade.conf";
 
         const std::array<std::string, 3> configPaths = {
             userConfig,
-            std::string(SYSCONFDIR) + "/vkBasalt-overlay/vkBasalt.conf",
-            std::string(SYSCONFDIR) + "/vkBasalt-overlay.conf",
+            std::string(SYSCONFDIR) + "/vkShade/vkShade.conf",
+            std::string(SYSCONFDIR) + "/vkShade.conf",
         };
 
         std::string configPath;
@@ -211,8 +217,27 @@ namespace vkBasalt
 
             if (key == "maxEffects")
             {
-                try { settings.maxEffects = std::stoi(value); }
-                catch (...) { Logger::err("invalid maxEffects value: " + value); }
+                try
+                {
+                    int parsed = std::stoi(value);
+                    if (parsed < 0)
+                    {
+                        Logger::err("invalid maxEffects value (negative): " + value);
+                    }
+                    else
+                    {
+                        settings.maxEffects = std::clamp(parsed, MIN_MAX_EFFECTS, MAX_MAX_EFFECTS);
+                        if (settings.maxEffects != parsed)
+                        {
+                            Logger::warn("clamped maxEffects from " + std::to_string(parsed) + " to "
+                                         + std::to_string(settings.maxEffects));
+                        }
+                    }
+                }
+                catch (...)
+                {
+                    Logger::err("invalid maxEffects value: " + value);
+                }
             }
             else if (key == "overlayBlockInput")
                 settings.overlayBlockInput = (value == "true" || value == "1");
@@ -251,20 +276,22 @@ namespace vkBasalt
 
         mkdir(baseDir.c_str(), 0755);
 
-        std::string configPath = baseDir + "/vkBasalt.conf";
+        std::string configPath = baseDir + "/vkShade.conf";
         std::ofstream file(configPath);
         if (!file.is_open())
         {
-            Logger::err("Could not open vkBasalt.conf for writing: " + configPath);
+            Logger::err("Could not open vkShade.conf for writing: " + configPath);
             return false;
         }
 
         // Write settings with comments
-        file << "# vkBasalt configuration\n\n";
+        file << "# vkShade configuration\n\n";
 
         file << "# Overlay settings\n";
+        const int clampedMaxEffects = std::clamp(settings.maxEffects, MIN_MAX_EFFECTS, MAX_MAX_EFFECTS);
+
         file << "overlayBlockInput = " << (settings.overlayBlockInput ? "true" : "false") << "\n";
-        file << "maxEffects = " << settings.maxEffects << "\n";
+        file << "maxEffects = " << clampedMaxEffects << "\n";
         file << "autoApply = " << (settings.autoApply ? "true" : "false") << "\n";
         file << "autoApplyDelay = " << settings.autoApplyDelay << "\n";
 
@@ -294,7 +321,7 @@ namespace vkBasalt
         // Create directory if needed
         mkdir(baseDir.c_str(), 0755);
 
-        std::string configPath = baseDir + "/vkBasalt.conf";
+        std::string configPath = baseDir + "/vkShade.conf";
 
         // Only create if no user config exists
         struct stat st;
@@ -303,7 +330,7 @@ namespace vkBasalt
 
         VkBasaltSettings defaults;
         saveSettings(defaults);
-        Logger::info("Created default vkBasalt.conf");
+        Logger::info("Created default vkShade.conf");
     }
 
     std::string ConfigSerializer::detectGameName()
@@ -530,7 +557,7 @@ namespace vkBasalt
             return "";
         }
 
-        file << "# vkBasalt profile for " << gameName << "\n";
+        file << "# vkShade profile for " << gameName << "\n";
         file << "# Auto-created on first launch\n\n";
         file << "effects = \n";
 
@@ -686,7 +713,7 @@ namespace vkBasalt
         if (!file.is_open())
             return false;
 
-        file << "# vkBasalt profile '" << profileName << "' for " << gameName << "\n\n";
+        file << "# vkShade profile '" << profileName << "' for " << gameName << "\n\n";
         file << "effects = \n";
         file.close();
 
@@ -859,4 +886,4 @@ namespace vkBasalt
         return true;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

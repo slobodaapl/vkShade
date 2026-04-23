@@ -1,36 +1,19 @@
-## Fork Notice
+# vkShade
 
-This is a fork of [vkBasalt](https://github.com/DadSchoorse/vkBasalt) by [@DadSchoorse](https://github.com/DadSchoorse), via the overlay fork by [@Boux](https://github.com/Boux/vkBasalt_overlay). Most of this fork was written with vibe-coding (AI assistance). The original vkBasalt is a mature, well-tested project; this fork adds experimental features on top.
-
-**Use at your own risk** — it may crash or freeze games. Adding GPU-intensive shaders (e.g., CRT-Guest) to a game already at 100% GPU usage will freeze your system.
-
----
-
-# vkBasalt Overlay (Wayland Fork)
-
-[![CI](https://github.com/Daaboulex/vkBasalt_overlay_wayland/actions/workflows/ci.yml/badge.svg)](https://github.com/Daaboulex/vkBasalt_overlay_wayland/actions/workflows/ci.yml)
-[![License](https://img.shields.io/github/license/Daaboulex/vkBasalt_overlay_wayland)](./LICENSE)
+[![License](https://img.shields.io/badge/license-zlib-green)](./LICENSE)
 [![NixOS](https://img.shields.io/badge/NixOS-unstable-78C0E8?logo=nixos&logoColor=white)](https://nixos.org)
-[![Last commit](https://img.shields.io/github/last-commit/Daaboulex/vkBasalt_overlay_wayland)](https://github.com/Daaboulex/vkBasalt_overlay_wayland/commits)
-[![Stars](https://img.shields.io/github/stars/Daaboulex/vkBasalt_overlay_wayland?style=flat)](https://github.com/Daaboulex/vkBasalt_overlay_wayland/stargazers)
-[![Issues](https://img.shields.io/github/issues/Daaboulex/vkBasalt_overlay_wayland)](https://github.com/Daaboulex/vkBasalt_overlay_wayland/issues)
 
 A Vulkan post-processing layer with an in-game ImGui overlay for real-time effect configuration. Works on both **X11** and **Wayland**.
 
-Feature showcase (slightly outdated): https://www.youtube.com/watch?v=_KJTToAynr0
+This project also includes many additional compatibility fixes for various ReShade shaders.
 
-<details>
-  <summary>Click to view screenshots</summary>
-  <img width="1920" height="1080" alt="Screenshot_20251231_184224" src="https://github.com/user-attachments/assets/06f05dfd-b429-4f1d-bb5d-b9d49a1719b1" />
-  <img width="1920" height="1080" alt="Screenshot_20251231_183856" src="https://github.com/user-attachments/assets/3ba85dc9-d3de-4795-bd3a-6bbc2028e0dd" />
-  <img width="1920" height="1080" alt="Screenshot_20251231_183700" src="https://github.com/user-attachments/assets/195e44df-1cd6-47bd-b543-5ee431b53483" />
-</details>
+**Use at your own risk**: unstable shaders or extreme GPU load can still crash or freeze games.
 
 ## Features
 
-Upstream vkBasalt requires editing config files and restarting. This fork adds:
+The base project required editing config files and restarting. vkShade adds:
 
-- **In-game overlay** (`End` key) with dockable/undockable tab windows
+- **In-game overlay** (`Home` key) with dockable/undockable tab windows
 - **Add/remove/reorder effects** without restart (drag to reorder)
 - **Parameter sliders** for all types (float, int, uint, bool, vectors)
 - **Preprocessor definitions** editor for ReShade `#define` values
@@ -46,7 +29,7 @@ Upstream vkBasalt requires editing config files and restarting. This fork adds:
 - **Shader test tool** — batch-tests all `.fx` shaders for compilation errors and depth usage
 - **Graceful error handling** — failed effects show errors instead of crashing
 
-### This Wayland Fork Adds
+### Additional Platform and Overlay Work
 
 - **Wayland input blocking** — `wl_proxy_add_listener` interposition wraps game's pointer/keyboard listeners to suppress events when the overlay has focus
 - **X11 input blocking** — `XGrabPointer`/`XGrabKeyboard` when overlay is active
@@ -99,11 +82,11 @@ Download shader packs and point the Shader Manager at them:
 - https://github.com/HelelSingh/CRT-Guest-ReShade
 - https://github.com/kevinlekiller/reshade-steam-proton
 
-Place shaders in `~/.config/vkBasalt-overlay/reshade/Shaders/` and textures in `~/.config/vkBasalt-overlay/reshade/Textures/`, or use the Shader Manager's browse feature to add directories.
+Place shaders in `~/.config/vkShade/reshade/Shaders/` and textures in `~/.config/vkShade/reshade/Textures/`, or use the Shader Manager's browse feature to add directories.
 
 ## Installation
 
-**Warning:** You must uninstall the original vkBasalt before installing this fork. Both use the same `ENABLE_VKBASALT` environment variable and cannot coexist (see [why](#why-cant-this-fork-coexist-with-original-vkbasalt)).
+**Warning:** If you have other Vulkan post-processing layers installed, avoid enabling them at the same time as vkShade.
 
 ### Dependencies
 
@@ -116,17 +99,13 @@ Place shaders in `~/.config/vkBasalt-overlay/reshade/Shaders/` and textures in `
 - wayland-client + wayland-protocols + wayland-scanner
 - libxkbcommon
 
-### AUR
-
-```
-yay -S vkbasalt-overlay-git
-```
+**Runtime requirement:** vkShade targets **Vulkan API 1.3 / SPIR-V 1.3** and does not support older stacks. In practice, most modern **NVIDIA** and **AMD** Linux drivers should work unless they are roughly older than about a year.
 
 ### From Source
 
 ```bash
-git clone https://github.com/Daaboulex/vkBasalt_overlay_wayland.git
-cd vkBasalt_overlay_wayland
+git clone https://github.com/<your-user>/vkShade.git
+cd vkShade
 meson setup --buildtype=release --prefix=/usr build-release
 ninja -C build-release
 sudo ninja -C build-release install
@@ -144,68 +123,68 @@ nix-shell -p meson ninja pkg-config gcc wayland wayland-protocols wayland-scanne
 
 ## Usage
 
-### Test
-
-```bash
-ENABLE_VKBASALT=1 vkcube
-# or
-ENABLE_VKBASALT=1 vkgears
-```
-
 ### Steam
 
 Add to launch options:
 ```
-ENABLE_VKBASALT=1 %command%
+vkshade-run %command%
 ```
 
 Example with Proton optimizations and GameMode:
 ```
-ENABLE_VKBASALT=1 PROTON_ENABLE_WAYLAND=1 PROTON_USE_NTSYNC=1 DXVK_ASYNC=1 PROTON_FSR4_UPGRADE=1 gamemoderun %command%
+PROTON_ENABLE_WAYLAND=1 PROTON_USE_NTSYNC=1 DXVK_ASYNC=1 PROTON_FSR4_UPGRADE=1 vkshade-run gamemoderun %command%
 ```
 
 ### Lutris
 
 1. Right-click game -> Configure
 2. System options -> Environment variables
-3. Add `ENABLE_VKBASALT` = `1`
+3. Set command prefix to `vkshade-run`
 
 ### Debug Logging
 
 ```bash
-ENABLE_VKBASALT=1 VKBASALT_LOG_LEVEL=debug ./game
+VKSHADE_LOG_LEVEL=debug vkshade-run ./game
 ```
 
 Log levels: `trace`, `debug`, `info`, `warn`, `error`, `none`
 
-To log to a file: `VKBASALT_LOG_FILE=/tmp/vkbasalt.log`
+To log to a file: `VKSHADE_LOG_FILE=/tmp/vkshade.log`
 
-### Why can't this fork coexist with original vkBasalt?
+### GPU Crash Diagnostics (Single-GPU Friendly)
 
-This fork **cannot** be installed alongside the original vkBasalt because both must use the same `ENABLE_VKBASALT` environment variable. Gamescope and other Vulkan compositors [filter known layer environment variables](https://github.com/Boux/vkBasalt_overlay/issues/5#issuecomment-3706694598) to prevent layers from loading twice (on both the compositor and nested apps). Using a different env var name would break this filtering, causing the overlay and all active effects to render twice when using gamescope.
+For deeper device-lost diagnostics without Nsight Shader Debugger multi-GPU setup:
 
-The library and layer names are still different to avoid file conflicts:
-- Library: `libvkbasalt-overlay.so` (vs `libvkbasalt.so`)
-- Layer: `VK_LAYER_VKBASALT_OVERLAY_post_processing` (vs `VK_LAYER_VKBASALT_post_processing`)
-- Layer JSON: `vkBasalt-overlay.json` (vs `vkBasalt.json`)
+```bash
+VKSHADE_GPU_CRASH_DIAGNOSTICS=1 VKSHADE_LOG_LEVEL=debug vkshade-run ./game
+```
 
-In theory, you could change the env var in `/usr/share/vulkan/implicit_layer.d/vkBasalt-overlay.json`, but only do that if you never use gamescope.
+When enabled, vkShade will try to use supported Vulkan diagnostics extensions (`VK_NV_device_diagnostic_checkpoints`, `VK_NV_device_diagnostics_config`, `VK_EXT_device_fault`) and emit extra logs on `VK_ERROR_DEVICE_LOST`.
+
+This mode is fully opt-in and may add overhead. Keep it off for normal gameplay.
+
+### Layer Naming
+
+vkShade uses its own layer and environment names:
+- Enable env: `ENABLE_VKSHADE=1`
+- Layer name: `VK_LAYER_VKSHADE_post_processing`
+- Layer JSON: `vkShade.json`
 
 ## Configuration
 
-Configuration is stored in `~/.config/vkBasalt-overlay/`. All required config files and subfolders are generated on first run.
+vkShade configuration lives in `~/.config/vkShade/`. All required config files and subfolders are generated on first run.
 
 ### Key Bindings
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| Toggle Effects | `Home` | Enable/disable all effects |
+| Toggle Effects | `End` | Enable/disable all effects |
 | Reload Config | `F10` | Reload configuration and recompile shaders |
-| Toggle Overlay | `End` | Show/hide the overlay GUI |
+| Toggle Overlay | `Home` | Show/hide the overlay GUI |
 
 ### Settings File
 
-`~/.config/vkBasalt-overlay/vkBasalt.conf`:
+`~/.config/vkShade/vkShade.conf`:
 
 ```ini
 # Maximum effects (requires restart, 1-200)
@@ -213,9 +192,9 @@ Configuration is stored in `~/.config/vkBasalt-overlay/`. All required config fi
 maxEffects = 10
 
 # Key bindings
-toggleKey = Home
+toggleKey = End
 reloadKey = F10
-overlayKey = End
+overlayKey = Home
 
 # Startup behavior
 enableOnLaunch = true
@@ -228,15 +207,15 @@ autoApplyDelay = 200  # ms delay before auto-applying changes
 
 ### Per-Game Profiles
 
-When a game is detected, vkBasalt creates a config directory at `~/.config/vkBasalt-overlay/configs/<game>/`. Multiple named profiles can be created per game from the overlay UI. The active profile is stored in `~/.config/vkBasalt-overlay/configs/<game>/active_profile`.
+When a game is detected, vkShade creates a config directory at `~/.config/vkShade/configs/<game>/`. Multiple named profiles can be created per game from the overlay UI. The active profile is stored in `~/.config/vkShade/configs/<game>/active_profile`.
 
 ### Shader Manager
 
-ReShade shader and texture paths are managed through the Shader Manager tab in the overlay. Add parent directories and the manager will recursively discover `Shaders/` and `Textures/` subdirectories. Paths are stored in `~/.config/vkBasalt-overlay/shader_manager.conf`.
+ReShade shader and texture paths are managed through the Shader Manager tab in the overlay. Add parent directories and the manager will recursively discover `Shaders/` and `Textures/` subdirectories. Paths are stored in `~/.config/vkShade/shader_manager.conf`.
 
 ## Anti-Cheat Safety
 
-vkBasalt is a **read-only visual filter** — it applies post-processing shaders to the final rendered image, similar to NVIDIA Freestyle, AMD Adrenalin filters, or monitor-level color adjustments. It does **not**:
+vkShade is a **read-only visual filter** — it applies post-processing shaders to the final rendered image, similar to NVIDIA Freestyle, AMD Adrenalin filters, or monitor-level color adjustments. It does **not**:
 
 - Modify game memory or game files
 - Read game state (player positions, health, etc.)
@@ -246,11 +225,11 @@ vkBasalt is a **read-only visual filter** — it applies post-processing shaders
 
 **Anti-cheat compatibility varies by game and platform:**
 
-- **On Linux/Proton**, EAC and BattlEye have limited kernel-level access compared to Windows. Vulkan implicit layers like vkBasalt and MangoHud generally work because the anti-cheat cannot deeply inspect the Vulkan layer chain. No confirmed bans from vkBasalt have been reported.
-- **On Windows**, some games actively block ReShade and even NVIDIA Freestyle (e.g., Arc Raiders blocks both). vkBasalt falls in the same category as ReShade from an anti-cheat perspective — it is a third-party rendering layer, not a whitelisted vendor feature.
-- **Per-game policies**: Anti-cheat detection is configured per-game by the developer. A game that allows vkBasalt today could block it tomorrow. The original vkBasalt FAQ says: *"Will vkBasalt get me banned? Maybe. To my knowledge this hasn't happened yet but don't blame me if your frog dies."*
+- **On Linux/Proton**, EAC and BattlEye have limited kernel-level access compared to Windows. Vulkan implicit layers like vkShade and MangoHud generally work because the anti-cheat cannot deeply inspect the Vulkan layer chain. No confirmed bans from comparable post-processing layer usage are known.
+- **On Windows**, some games actively block ReShade and even NVIDIA Freestyle (e.g., Arc Raiders blocks both). vkShade falls in the same category as ReShade from an anti-cheat perspective — it is a third-party rendering layer, not a whitelisted vendor feature.
+- **Per-game policies**: Anti-cheat detection is configured per-game by the developer. A game that allows vkShade today could block it tomorrow. The original vkBasalt FAQ says: *"Will vkBasalt get me banned? Maybe. To my knowledge this hasn't happened yet but don't blame me if your frog dies."*
 
-**No guarantee can be made** — use at your own discretion. vkBasalt only applies visual post-processing and provides zero competitive advantage, but anti-cheat systems don't always distinguish between cosmetic and malicious modifications.
+**No guarantee can be made** — use at your own discretion. vkShade only applies visual post-processing and provides zero competitive advantage, but anti-cheat systems don't always distinguish between cosmetic and malicious modifications.
 
 ## Known Limitations
 
@@ -265,7 +244,7 @@ vkBasalt is a **read-only visual filter** — it applies post-processing shaders
 
 ### Vulkan Layer
 
-vkBasalt is a Vulkan implicit layer that intercepts API calls:
+vkShade is a Vulkan implicit layer that intercepts API calls:
 - `vkCreateSwapchainKHR` — creates intermediate images for effect processing
 - `vkQueuePresentKHR` — applies effects before presentation
 - `vkCreateImage` — detects depth images and adds `SAMPLED_BIT`
@@ -287,10 +266,13 @@ Since `wl_pointer_add_listener` is a `static inline` function in `<wayland-clien
 2. Skips overlay-owned proxies (registered via `registerOverlayProxy()`)
 3. Wraps the game's listener with callbacks that check `isInputBlocked()` before forwarding
 
+For Wayland, use `vkshade-run` so these interposition symbols are injected early enough in all loader scopes (including `RTLD_LOCAL` clients).
+
 ## Credits
 
 - Original **vkBasalt** by [@DadSchoorse](https://github.com/DadSchoorse) (Georg Lehmann) — [zlib license](LICENSE)
-- **vkBasalt Overlay** by [@Boux](https://github.com/Boux/vkBasalt_overlay) — ImGui overlay, effect management, shader manager
-- **Wayland fork** by [@Daaboulex](https://github.com/Daaboulex/vkBasalt_overlay_wayland) — Wayland input, input blocking interposition, depth fix
+- **vkShade Overlay** by [@Boux](https://github.com/Boux/vkBasalt_overlay) — ImGui overlay, effect management, shader manager
+- **Wayland support implementation** by [@Daaboulex](https://github.com/Daaboulex/vkBasalt_overlay_wayland) — Wayland input, input blocking interposition, depth fixes
+- **Additional ReShade shader compatibility fixes** by this project maintainer
 - **ReShade** shader compiler by [@crosire](https://github.com/crosire)
 - **ImGui** by [@ocornut](https://github.com/ocornut)

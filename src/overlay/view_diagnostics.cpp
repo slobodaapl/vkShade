@@ -12,7 +12,7 @@
 
 #include "imgui/imgui.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     // Build version - increment this each build
     static constexpr int BUILD_NUMBER = 14;
@@ -568,4 +568,4 @@ namespace vkBasalt
         ImGui::EndChild();
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

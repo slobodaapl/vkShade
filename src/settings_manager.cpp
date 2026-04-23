@@ -1,7 +1,7 @@
 #include "settings_manager.hpp"
 #include "logger.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     // Global instance
     SettingsManager settingsManager;
@@ -26,4 +26,4 @@ namespace vkBasalt
         return success;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

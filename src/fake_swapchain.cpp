@@ -2,13 +2,22 @@
 #include "memory.hpp"
 #include "format.hpp"
 
-namespace vkBasalt
+#include <limits>
+
+namespace vkShade
 {
     std::vector<VkImage> createFakeSwapchainImages(LogicalDevice*           pLogicalDevice,
                                                    VkSwapchainCreateInfoKHR swapchainCreateInfo,
                                                    uint32_t                 count,
                                                    VkDeviceMemory&          deviceMemory)
     {
+        deviceMemory = VK_NULL_HANDLE;
+        if (count == 0)
+        {
+            Logger::err("Cannot create fake swapchain images with count=0");
+            return {};
+        }
+
         std::vector<VkImage> fakeImages(count);
 
         VkFormat srgbFormat =
@@ -38,7 +47,7 @@ namespace vkBasalt
         imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
         imageCreateInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
         imageCreateInfo.usage         = swapchainCreateInfo.imageUsage | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT; // TODO what usage do we need?
+                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         imageCreateInfo.sharingMode           = swapchainCreateInfo.imageSharingMode;
         imageCreateInfo.queueFamilyIndexCount = swapchainCreateInfo.queueFamilyIndexCount;
         imageCreateInfo.pQueueFamilyIndices   = swapchainCreateInfo.pQueueFamilyIndices;
@@ -50,6 +59,14 @@ namespace vkBasalt
             result = pLogicalDevice->vkd.CreateImage(pLogicalDevice->device, &imageCreateInfo, nullptr, &(fakeImages[i]));
             ASSERT_VULKAN(result);
         }
+
+        auto cleanupCreatedImages = [&]() {
+            for (VkImage image : fakeImages)
+            {
+                if (image != VK_NULL_HANDLE)
+                    pLogicalDevice->vkd.DestroyImage(pLogicalDevice->device, image, nullptr);
+            }
+        };
 
         // Allocate a bunch of memory for all images at one
         VkMemoryRequirements memoryRequirements;
@@ -64,8 +81,14 @@ namespace vkBasalt
         }
 
         VkMemoryAllocateInfo memoryAllocateInfo;
-        memoryAllocateInfo.sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        memoryAllocateInfo.pNext          = nullptr;
+        memoryAllocateInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        memoryAllocateInfo.pNext = nullptr;
+        if (count > 0 && memoryRequirements.size > (std::numeric_limits<VkDeviceSize>::max() / count))
+        {
+            Logger::err("fake swapchain allocation overflow");
+            cleanupCreatedImages();
+            return {};
+        }
         memoryAllocateInfo.allocationSize = memoryRequirements.size * count;
         memoryAllocateInfo.memoryTypeIndex =
             findMemoryTypeIndex(pLogicalDevice, memoryRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
@@ -80,4 +103,4 @@ namespace vkBasalt
         }
         return fakeImages;
     }
-} // namespace vkBasalt
+} // namespace vkShade

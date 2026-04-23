@@ -12,10 +12,12 @@
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
 
-namespace vkBasalt
+namespace vkShade
 {
     namespace
     {
+        constexpr const char* kEffectReorderPayload = "VKSHADE_EFFECT_REORDER";
+
         // Render a single preprocessor definition input, returns true if value changed
         void renderPreprocessorDef(PreprocessorDefinition& def, EffectRegistry* registry, const std::string& effectName)
         {
@@ -53,6 +55,41 @@ namespace vkBasalt
 
         // Get a mutable copy of selected effects for this frame
         std::vector<std::string> selectedEffects = pEffectRegistry->getSelectedEffects();
+        static bool reorderPreviewActive = false;
+        static std::string reorderPreviewName;
+        static std::string reorderPreviewTargetName;
+        static std::vector<std::string> reorderPreviewEffects;
+
+        auto applySwapByName = [](std::vector<std::string>& effects, const std::string& movingName, int targetIndex) {
+            if (targetIndex < 0 || targetIndex >= static_cast<int>(effects.size()))
+                return false;
+
+            auto sourceIt = std::find(effects.begin(), effects.end(), movingName);
+            if (sourceIt == effects.end())
+                return false;
+
+            int sourceIndex = static_cast<int>(std::distance(effects.begin(), sourceIt));
+            if (sourceIndex == targetIndex)
+                return false;
+
+            std::swap(effects[sourceIndex], effects[targetIndex]);
+            return true;
+        };
+
+        if (reorderPreviewActive)
+        {
+            auto currentIt = std::find(selectedEffects.begin(), selectedEffects.end(), reorderPreviewName);
+            auto previewIt = std::find(reorderPreviewEffects.begin(), reorderPreviewEffects.end(), reorderPreviewName);
+            if (currentIt == selectedEffects.end() || previewIt == reorderPreviewEffects.end())
+            {
+                reorderPreviewActive = false;
+                reorderPreviewName.clear();
+                reorderPreviewTargetName.clear();
+                reorderPreviewEffects.clear();
+            }
+        }
+
+        const std::vector<std::string>& displayedEffects = reorderPreviewActive ? reorderPreviewEffects : selectedEffects;
 
         // Normal mode - show profile and effect controls
 
@@ -207,7 +244,7 @@ namespace vkBasalt
                 ImGui::Spacing();
                 ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f),
                     "The layer becomes invisible to the application — it cannot detect\n"
-                    "vkBasalt via vkEnumerateInstanceLayerProperties or similar queries.\n"
+                    "vkShade via vkEnumerateInstanceLayerProperties or similar queries.\n"
                     "Only pixel colors are modified. Completely non-intrusive.");
                 ImGui::EndTooltip();
             }
@@ -252,6 +289,8 @@ namespace vkBasalt
             pEffectRegistry->clearSelectedEffects();
             paramsDirty = true;
             lastChangeTime = std::chrono::steady_clock::now();
+            applyRequested = true;
+            profileDirty = true;
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -262,27 +301,43 @@ namespace vkBasalt
 
         // Show selected effects with their parameters
         float itemHeight = ImGui::GetFrameHeightWithSpacing();
-
-        // Reset drag target each frame
-        dragTargetIndex = -1;
-
-        for (size_t i = 0; i < selectedEffects.size(); i++)
+        for (size_t i = 0; i < displayedEffects.size(); i++)
         {
-            const std::string& effectName = selectedEffects[i];
-            ImGui::PushID(static_cast<int>(i));
+            const std::string& effectName = displayedEffects[i];
+            ImGui::PushID(effectName.c_str());
 
-            // Highlight drop target
-            bool isDropTarget = isDragging && dragSourceIndex != static_cast<int>(i);
-            if (isDropTarget)
+            ImVec2 rowMin = ImGui::GetCursorScreenPos();
+            float rowWidth = ImGui::GetContentRegionAvail().x;
+
+            // Dedicated drag handle (left-most): three gray bars
+            const float handleSide = ImGui::GetFrameHeight();
+            ImGui::InvisibleButton("##drag_handle", ImVec2(handleSide, handleSide));
+            ImVec2 handleMin = ImGui::GetItemRectMin();
+            ImVec2 handleMax = ImGui::GetItemRectMax();
+            ImDrawList* drawList = ImGui::GetWindowDrawList();
+            const bool handleHovered = ImGui::IsItemHovered();
+            if (handleHovered)
+                ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+            ImU32 gripColor = handleHovered ? IM_COL32(200, 200, 200, 255) : IM_COL32(140, 140, 140, 220);
+            float cx = (handleMin.x + handleMax.x) * 0.5f;
+            float cy = (handleMin.y + handleMax.y) * 0.5f;
+            for (int bar = -1; bar <= 1; ++bar)
             {
-                ImVec2 rowMin = ImGui::GetCursorScreenPos();
-                ImVec2 rowMax = ImVec2(rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + itemHeight);
-                if (ImGui::IsMouseHoveringRect(rowMin, rowMax))
-                {
-                    dragTargetIndex = static_cast<int>(i);
-                    ImGui::GetWindowDrawList()->AddRectFilled(rowMin, rowMax, IM_COL32(100, 100, 255, 50));
-                }
+                float y = cy + bar * 3.0f;
+                drawList->AddLine(ImVec2(cx - 4.0f, y), ImVec2(cx + 4.0f, y), gripColor, 1.5f);
             }
+            if (ImGui::BeginDragDropSource(
+                    ImGuiDragDropFlags_SourceNoDisableHover |
+                    ImGuiDragDropFlags_SourceNoPreviewTooltip))
+            {
+                ImGui::SetDragDropPayload(
+                    kEffectReorderPayload,
+                    effectName.c_str(),
+                    effectName.size() + 1);
+                ImGui::EndDragDropSource();
+            }
+
+            ImGui::SameLine();
 
             // Check if effect failed to compile
             bool effectFailed = pEffectRegistry ? pEffectRegistry->hasEffectFailed(effectName) : false;
@@ -316,16 +371,6 @@ namespace vkBasalt
             if (effectFailed)
                 ImGui::PopStyleColor();
 
-            // Drag from tree node header for reordering
-            if (ImGui::IsItemActive() && ImGui::IsMouseDragging(0))
-            {
-                if (!isDragging)
-                {
-                    isDragging = true;
-                    dragSourceIndex = static_cast<int>(i);
-                }
-            }
-
             // Right-click context menu
             if (ImGui::BeginPopupContextItem("effect_context"))
             {
@@ -358,7 +403,10 @@ namespace vkBasalt
                 // Insert effects here
                 if (ImGui::MenuItem("Insert effects here..."))
                 {
-                    insertPosition = static_cast<int>(i);
+                    auto baseIt = std::find(selectedEffects.begin(), selectedEffects.end(), effectName);
+                    insertPosition = (baseIt != selectedEffects.end())
+                        ? static_cast<int>(std::distance(selectedEffects.begin(), baseIt))
+                        : static_cast<int>(i);
                     inSelectionMode = true;
                     pendingAddEffects.clear();
                 }
@@ -366,18 +414,85 @@ namespace vkBasalt
                 // Remove effect
                 if (ImGui::MenuItem("Remove"))
                 {
-                    std::string removedName = selectedEffects[i];
-                    selectedEffects.erase(selectedEffects.begin() + i);
+                    auto removeIt = std::find(selectedEffects.begin(), selectedEffects.end(), effectName);
+                    if (removeIt == selectedEffects.end())
+                    {
+                        ImGui::EndPopup();
+                        ImGui::PopID();
+                        break;
+                    }
+                    std::string removedName = *removeIt;
+                    selectedEffects.erase(removeIt);
                     pEffectRegistry->setSelectedEffects(selectedEffects);
                     pEffectRegistry->removeEffect(removedName);
                     paramsDirty = true;
                     lastChangeTime = std::chrono::steady_clock::now();
+                    applyRequested = true;
+                    profileDirty = true;
                     ImGui::EndPopup();
                     ImGui::PopID();
                     break;  // Iterator invalidated — exit loop safely
                 }
 
                 ImGui::EndPopup();
+            }
+
+            // Row drop target for reordering
+            ImRect rowDropRect(rowMin, ImVec2(rowMin.x + rowWidth, rowMin.y + itemHeight));
+            if (ImGui::BeginDragDropTargetCustom(rowDropRect, ImGui::GetID("##effect_row_drop_target")))
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
+                        kEffectReorderPayload,
+                        ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+                {
+                    const char* movingName = static_cast<const char*>(payload->Data);
+                    if (payload->IsPreview())
+                    {
+                        if (!reorderPreviewActive || reorderPreviewName != movingName)
+                        {
+                            reorderPreviewActive = true;
+                            reorderPreviewName = movingName;
+                            reorderPreviewTargetName.clear();
+                            reorderPreviewEffects = selectedEffects;
+                        }
+
+                        if (reorderPreviewTargetName != effectName)
+                        {
+                            auto targetIt = std::find(
+                                reorderPreviewEffects.begin(),
+                                reorderPreviewEffects.end(),
+                                effectName);
+                            if (targetIt != reorderPreviewEffects.end())
+                            {
+                                int targetIndex = static_cast<int>(
+                                    std::distance(reorderPreviewEffects.begin(), targetIt));
+                                if (applySwapByName(reorderPreviewEffects, movingName, targetIndex))
+                                    reorderPreviewTargetName = effectName;
+                            }
+                        }
+                    }
+
+                    if (payload->IsDelivery())
+                    {
+                        if (reorderPreviewActive && reorderPreviewName == movingName && !reorderPreviewEffects.empty())
+                        {
+                            if (selectedEffects != reorderPreviewEffects)
+                            {
+                                selectedEffects = reorderPreviewEffects;
+                                pEffectRegistry->setSelectedEffects(selectedEffects);
+                                paramsDirty = true;
+                                lastChangeTime = std::chrono::steady_clock::now();
+                                applyRequested = true;
+                                profileDirty = true;
+                            }
+                        }
+                        reorderPreviewActive = false;
+                        reorderPreviewName.clear();
+                        reorderPreviewTargetName.clear();
+                        reorderPreviewEffects.clear();
+                    }
+                }
+                ImGui::EndDragDropTarget();
             }
 
             ImGui::PopID();
@@ -449,29 +564,28 @@ namespace vkBasalt
             ImGui::TreePop();
         }
 
-        // Handle drag end and reorder
-        if (isDragging && dragSourceIndex >= 0 && dragSourceIndex < static_cast<int>(selectedEffects.size()))
+        const ImGuiPayload* activePayload = ImGui::GetDragDropPayload();
+        const bool dragActive = activePayload && activePayload->IsDataType(kEffectReorderPayload);
+        if (!dragActive)
         {
-            // Show floating tooltip with dragged effect name
-            ImGui::SetTooltip("Moving: %s", selectedEffects[dragSourceIndex].c_str());
-
-            // Check if mouse released
-            if (!ImGui::IsMouseDown(0))
+            // If drag ended outside a row target, still commit the last valid preview.
+            if (reorderPreviewActive && !reorderPreviewTargetName.empty() && !reorderPreviewEffects.empty())
             {
-                if (dragTargetIndex >= 0 && dragTargetIndex != dragSourceIndex)
+                if (selectedEffects != reorderPreviewEffects)
                 {
-                    // Move the effect from source to target
-                    std::string moving = selectedEffects[dragSourceIndex];
-                    selectedEffects.erase(selectedEffects.begin() + dragSourceIndex);
-                    selectedEffects.insert(selectedEffects.begin() + dragTargetIndex, moving);
+                    selectedEffects = reorderPreviewEffects;
                     pEffectRegistry->setSelectedEffects(selectedEffects);
                     paramsDirty = true;
                     lastChangeTime = std::chrono::steady_clock::now();
+                    applyRequested = true;
+                    profileDirty = true;
                 }
-                isDragging = false;
-                dragSourceIndex = -1;
-                dragTargetIndex = -1;
             }
+
+            reorderPreviewActive = false;
+            reorderPreviewName.clear();
+            reorderPreviewTargetName.clear();
+            reorderPreviewEffects.clear();
         }
 
         ImGui::EndChild();
@@ -496,4 +610,4 @@ namespace vkBasalt
         // Note: Auto-apply is handled globally in imgui_overlay.cpp
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

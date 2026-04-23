@@ -1,15 +1,15 @@
-# vkBasalt Config System
+# vkShade Config System
 
-This document explains how configuration loading and handling works in vkBasalt.
+This document explains how configuration loading and handling works in vkShade.
 
 ## Overview
 
-vkBasalt uses a two-config architecture:
+vkShade uses a two-config architecture:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                      pBaseConfig                            │
-│              (always vkBasalt.conf)                         │
+│              (always vkShade.conf)                         │
 │                                                             │
 │  Contains: reshadeIncludePath, reshadeTexturePath,          │
 │            effect definitions (*.fx mappings),              │
@@ -22,8 +22,8 @@ vkBasalt uses a two-config architecture:
 │                       pConfig                               │
 │              (current active config)                        │
 │                                                             │
-│  Can be: vkBasalt.conf (same as base)                       │
-│          OR a user config from ~/.config/vkBasalt/configs/  │
+│  Can be: vkShade.conf (same as base)                       │
+│          OR a user config from ~/.config/vkShade/configs/  │
 │                                                             │
 │  Contains: effects list, effect parameters                  │
 │  Falls back to pBaseConfig for missing options              │
@@ -37,18 +37,18 @@ The `Config` class represents a single configuration file.
 ### Constructors
 
 ```cpp
-Config();                        // Finds and loads vkBasalt.conf from standard paths
+Config();                        // Finds and loads vkShade.conf from standard paths
 Config(const std::string& path); // Loads a specific config file
 Config(const Config& other);     // Copy constructor
 ```
 
 ### Standard Config Paths (checked in order)
 
-1. `$XDG_CONFIG_HOME/vkBasalt/vkBasalt.conf`
-2. `$XDG_DATA_HOME/vkBasalt/vkBasalt.conf`
-3. `/etc/vkBasalt.conf`
-4. `/etc/vkBasalt/vkBasalt.conf`
-5. `/usr/share/vkBasalt/vkBasalt.conf`
+1. `$XDG_CONFIG_HOME/vkShade/vkShade.conf`
+2. `$XDG_DATA_HOME/vkShade/vkShade.conf`
+3. `/etc/vkShade.conf`
+4. `/etc/vkShade/vkShade.conf`
+5. `/usr/share/vkShade/vkShade.conf`
 
 ### Config File Format
 
@@ -95,12 +95,12 @@ When `getOption()` is called:
 4. Return default value
 ```
 
-## Initialization (`basalt.cpp`)
+## Initialization (`vkshade.cpp`)
 
 ### Global Config Pointers
 
 ```cpp
-std::shared_ptr<Config> pBaseConfig = nullptr;  // Always vkBasalt.conf
+std::shared_ptr<Config> pBaseConfig = nullptr;  // Always vkShade.conf
 std::shared_ptr<Config> pConfig = nullptr;      // Current active config
 ```
 
@@ -109,11 +109,11 @@ std::shared_ptr<Config> pConfig = nullptr;      // Current active config
 Called when the Vulkan layer initializes:
 
 ```
-1. Load pBaseConfig (vkBasalt.conf from standard paths)
+1. Load pBaseConfig (vkShade.conf from standard paths)
 
 2. Determine current config path:
-   a. Check VKBASALT_CONFIG_FILE environment variable
-   b. Check ~/.config/vkBasalt/default_config file
+   a. Check VKSHADE_CONFIG_FILE environment variable
+   b. Check ~/.config/vkShade/default_config file
    c. If neither, use pBaseConfig
 
 3. Load pConfig from determined path
@@ -150,14 +150,14 @@ SMAA = /path/to/SMAA.fx
 
 ### 2. Base Config Definitions
 
-Effects defined in vkBasalt.conf that aren't in the current config.
+Effects defined in vkShade.conf that aren't in the current config.
 
 ### 3. Auto-Discovery
 
 The overlay automatically scans `reshadeIncludePath` for .fx files:
 
 ```
-reshadeIncludePath = /home/user/.config/vkBasalt/reshade/Shaders
+reshadeIncludePath = /home/user/.config/vkShade/reshade/Shaders
 ```
 
 All .fx files in this directory are available as effects, using the filename (without .fx) as the effect name.
@@ -171,13 +171,13 @@ Effects already defined in config are not duplicated from auto-discovery.
 
 ## User Configs (`config_serializer.hpp` / `config_serializer.cpp`)
 
-User configs are stored in `~/.config/vkBasalt/configs/`.
+User configs are stored in `~/.config/vkShade/configs/`.
 
 ### ConfigSerializer Methods
 
 | Method | Description |
 |--------|-------------|
-| `getConfigsDir()` | Returns `~/.config/vkBasalt/configs` |
+| `getConfigsDir()` | Returns `~/.config/vkShade/configs` |
 | `listConfigs()` | Lists all .conf files in configs dir |
 | `saveConfig(name, effects, params)` | Saves a config file |
 | `deleteConfig(name)` | Deletes a config file |
@@ -206,17 +206,17 @@ disabledEffects = deband
 
 ### Default Config File
 
-The file `~/.config/vkBasalt/default_config` contains just the name of the default config (without .conf extension):
+The file `~/.config/vkShade/default_config` contains just the name of the default config (without .conf extension):
 
 ```
 tunic
 ```
 
-This config will be loaded automatically instead of vkBasalt.conf.
+This config will be loaded automatically instead of vkShade.conf.
 
 ## Caching
 
-To avoid parsing configs every frame, vkBasalt uses caching:
+To avoid parsing configs every frame, vkShade uses caching:
 
 ### Effects Cache (`cachedEffects`)
 
@@ -269,7 +269,7 @@ When "Save" is clicked, `ConfigSerializer::saveConfig()` writes the current effe
 
 ## Hot Reload
 
-vkBasalt supports hot-reloading configs:
+vkShade supports hot-reloading configs:
 
 1. Each frame, `pConfig->hasConfigChanged()` checks file modification time
 2. If changed, `pConfig->reload()` re-reads the file
@@ -284,9 +284,9 @@ Game Launch
     ▼
 initConfigs()
     │
-    ├─► Load pBaseConfig (vkBasalt.conf)
+    ├─► Load pBaseConfig (vkShade.conf)
     │
-    ├─► Check VKBASALT_CONFIG_FILE env var
+    ├─► Check VKSHADE_CONFIG_FILE env var
     │   OR check default_config file
     │
     ├─► Load pConfig (user config or base)
@@ -314,6 +314,6 @@ Each Frame (vkQueuePresentKHR)
 
 | Variable | Description |
 |----------|-------------|
-| `VKBASALT_CONFIG_FILE` | Override config file path |
-| `VKBASALT_LOG_LEVEL` | Set logging level |
-| `ENABLE_VKBASALT` | Enable/disable vkBasalt-overlay (0 or 1) |
+| `VKSHADE_CONFIG_FILE` | Override config file path |
+| `VKSHADE_LOG_LEVEL` | Set logging level |
+| `ENABLE_VKSHADE` | Enable/disable vkShade (0 or 1) |

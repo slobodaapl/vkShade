@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstring> // memcmp
 #include <algorithm> // std::find_if, std::max
+#include <cctype>
 #include <unordered_set>
 #include <stdexcept>
 
@@ -120,8 +121,12 @@ struct spirv_basic_block
 class codegen_spirv final : public codegen
 {
 public:
-	codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y)
-		: _invert_y(invert_y), _debug_info(debug_info), _vulkan_semantics(vulkan_semantics), _uniforms_to_spec_constants(uniforms_to_spec_constants)
+	codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y, bool use_local_size_id)
+		: _invert_y(invert_y),
+		  _debug_info(debug_info),
+		  _vulkan_semantics(vulkan_semantics),
+		  _uniforms_to_spec_constants(uniforms_to_spec_constants),
+		  _use_local_size_id(use_local_size_id)
 	{
 		_glsl_ext = make_id();
 	}
@@ -134,11 +139,16 @@ private:
 		uint32_t array_stride;
 		spv::StorageClass storage;
 
-		friend bool operator==(const type_lookup &lhs, const type_lookup &rhs)
-		{
-			return lhs.type == rhs.type && lhs.is_ptr == rhs.is_ptr && lhs.array_stride == rhs.array_stride && lhs.storage == rhs.storage;
-		}
-	};
+			friend bool operator==(const type_lookup &lhs, const type_lookup &rhs)
+			{
+				const bool require_qualifier_match = lhs.type.is_texture() || lhs.type.is_sampler() || rhs.type.is_texture() || rhs.type.is_sampler();
+				return lhs.type == rhs.type &&
+					(!require_qualifier_match || lhs.type.qualifiers == rhs.type.qualifiers) &&
+					lhs.is_ptr == rhs.is_ptr &&
+					lhs.array_stride == rhs.array_stride &&
+					lhs.storage == rhs.storage;
+			}
+		};
 	struct function_blocks
 	{
 		spirv_basic_block declaration;
@@ -166,7 +176,13 @@ private:
 	spirv_basic_block _types_and_constants;
 	spirv_basic_block _variables;
 
-	std::unordered_set<spv::Id> _spec_constants;
+		std::unordered_set<spv::Id> _spec_constants;
+
+		spv::Id _void_type_id = 0;
+		spv::Id _bool_type_id = 0;
+		spv::Id _int_type_id = 0;
+		spv::Id _uint_type_id = 0;
+		spv::Id _float_type_id = 0;
 	std::unordered_set<spv::Capability> _capabilities;
 	std::vector<std::pair<type_lookup, spv::Id>> _type_lookup;
 	std::vector<std::tuple<type, constant, spv::Id>> _constant_lookup;
@@ -183,6 +199,7 @@ private:
 	bool _debug_info = false;
 	bool _vulkan_semantics = false;
 	bool _uniforms_to_spec_constants = false;
+	bool _use_local_size_id = true;
 	id _glsl_ext = 0;
 	id _global_ubo_type = 0;
 	id _global_ubo_variable = 0;
@@ -327,15 +344,21 @@ private:
 	spv::Id convert_type(const type &info, bool is_ptr = false, spv::StorageClass storage = spv::StorageClassFunction, uint32_t array_stride = 0)
 	{
 		assert(array_stride == 0 || info.is_array());
+		type normalized_info = info;
+		if ((normalized_info.is_texture() || normalized_info.is_sampler()) &&
+			(normalized_info.definition < 1 || normalized_info.definition > 3))
+			normalized_info.definition = 2;
+		if (normalized_info.is_texture() || normalized_info.is_sampler())
+			normalized_info.qualifiers &= type::q_storage;
 
 		// The storage class is only relevant for pointers, so ignore it for other types during lookup
 		if (is_ptr == false)
 			storage = spv::StorageClassFunction;
 		// There cannot be function local sampler variables, so always assume uniform storage for them
-		if (info.is_texture() || info.is_sampler())
+		if (normalized_info.is_texture() || normalized_info.is_sampler())
 			storage = spv::StorageClassUniformConstant;
 
-		const type_lookup lookup = { info, is_ptr, array_stride, storage };
+		const type_lookup lookup = { normalized_info, is_ptr, array_stride, storage };
 		if (const auto it = std::find_if(_type_lookup.begin(), _type_lookup.end(),
 			[&lookup](const auto &lookup_it) { return lookup_it.first == lookup; }); it != _type_lookup.end())
 			return it->second;
@@ -399,51 +422,91 @@ private:
 		{
 			switch (info.base)
 			{
-			case type::t_void:
-				assert(info.rows == 0 && info.cols == 0);
-				type = add_instruction(spv::OpTypeVoid, 0, _types_and_constants).result;
-				break;
-			case type::t_bool:
-				assert(info.rows == 1 && info.cols == 1);
-				type = add_instruction(spv::OpTypeBool, 0, _types_and_constants).result;
-				break;
-			case type::t_int:
-				assert(info.rows == 1 && info.cols == 1);
-				type = add_instruction(spv::OpTypeInt, 0, _types_and_constants).add(32).add(1).result;
-				break;
-			case type::t_uint:
-				assert(info.rows == 1 && info.cols == 1);
-				type = add_instruction(spv::OpTypeInt, 0, _types_and_constants).add(32).add(0).result;
-				break;
-			case type::t_float:
-				assert(info.rows == 1 && info.cols == 1);
-				type = add_instruction( spv::OpTypeFloat, 0, _types_and_constants).add(32).result;
-				break;
+				case type::t_void:
+					assert(info.rows == 0 && info.cols == 0);
+					if (_void_type_id != 0)
+						type = _void_type_id;
+					else
+						type = _void_type_id = add_instruction(spv::OpTypeVoid, 0, _types_and_constants).result;
+					break;
+				case type::t_bool:
+					assert(info.rows == 1 && info.cols == 1);
+					if (_bool_type_id != 0)
+						type = _bool_type_id;
+					else
+						type = _bool_type_id = add_instruction(spv::OpTypeBool, 0, _types_and_constants).result;
+					break;
+				case type::t_int:
+					assert(info.rows == 1 && info.cols == 1);
+					if (_int_type_id != 0)
+						type = _int_type_id;
+					else
+						type = _int_type_id = add_instruction(spv::OpTypeInt, 0, _types_and_constants).add(32).add(1).result;
+					break;
+				case type::t_uint:
+					assert(info.rows == 1 && info.cols == 1);
+					if (_uint_type_id != 0)
+						type = _uint_type_id;
+					else
+						type = _uint_type_id = add_instruction(spv::OpTypeInt, 0, _types_and_constants).add(32).add(0).result;
+					break;
+				case type::t_float:
+					assert(info.rows == 1 && info.cols == 1);
+					if (_float_type_id != 0)
+						type = _float_type_id;
+					else
+						type = _float_type_id = add_instruction( spv::OpTypeFloat, 0, _types_and_constants).add(32).result;
+					break;
 			case type::t_struct:
 				if (info.definition == 0)
 					return 0; // Struct type not fully defined — skip gracefully
 				type = info.definition;
 				break;
-			case type::t_texture:
-				assert(info.rows == 0 && info.cols == 0);
-				type = convert_type({ type::t_float, 1, 1 });
-				type = add_instruction(spv::OpTypeImage, 0, _types_and_constants)
-					.add(type) // Sampled Type
-					.add(spv::Dim2D)
-					.add(0) // Not a depth image
-					.add(0) // Not an array
-					.add(0) // Not multi-sampled
-					.add(1) // Will be used with a sampler
-					.add(spv::ImageFormatUnknown).result;
-				break;
-			case type::t_sampler:
-				assert(info.rows == 0 && info.cols == 0);
-				type = convert_type({ type::t_texture, 0, 0, type::q_uniform });
-				type = add_instruction(spv::OpTypeSampledImage, 0, _types_and_constants).add(type).result;
-				break;
-			default:
-				return assert(false), 0;
-			}
+				case type::t_texture:
+					assert(info.rows == 0 && info.cols == 0);
+					{
+						const uint32_t dimensions = (info.definition >= 1 && info.definition <= 3) ? info.definition : 2;
+						const spv::Dim dim = (dimensions == 1) ? spv::Dim1D : ((dimensions == 3) ? spv::Dim3D : spv::Dim2D);
+
+					type = convert_type({ type::t_float, 1, 1 });
+						type = add_instruction(spv::OpTypeImage, 0, _types_and_constants)
+							.add(type) // Sampled Type
+							.add(dim)
+							.add(0) // Not a depth image
+							.add(0) // Not an array
+							.add(0) // Not multi-sampled
+							.add(1) // Sampled image type
+							.add(spv::ImageFormatUnknown).result;
+					}
+					break;
+				case type::t_sampler:
+					assert(info.rows == 0 && info.cols == 0);
+					if (info.has(type::q_storage))
+					{
+						const uint32_t dimensions = (info.definition >= 1 && info.definition <= 3) ? info.definition : 2;
+						const spv::Dim dim = (dimensions == 1) ? spv::Dim1D : ((dimensions == 3) ? spv::Dim3D : spv::Dim2D);
+
+						type = convert_type({ type::t_float, 1, 1 });
+						type = add_instruction(spv::OpTypeImage, 0, _types_and_constants)
+							.add(type) // Sampled Type
+							.add(dim)
+							.add(0) // Not a depth image
+							.add(0) // Not an array
+							.add(0) // Not multi-sampled
+							.add(2) // Storage image type
+							.add(spv::ImageFormatUnknown).result;
+					}
+					else
+					{
+						reshadefx::type texture_type = { type::t_texture, 0, 0, type::q_uniform };
+						texture_type.definition = info.definition;
+						type = convert_type(texture_type);
+						type = add_instruction(spv::OpTypeSampledImage, 0, _types_and_constants).add(type).result;
+					}
+					break;
+				default:
+					return assert(false), 0;
+				}
 		}
 
 		_type_lookup.push_back({ lookup, type });
@@ -570,8 +633,12 @@ private:
 		info.id = make_id();
 		info.binding = _module.num_sampler_bindings++;
 
-		define_variable(info.id, loc, { type::t_sampler, 0, 0, type::q_extern | type::q_uniform },
-			info.unique_name.c_str(), spv::StorageClassUniformConstant);
+		reshadefx::type sampler_type = { type::t_sampler, 0, 0, type::q_extern | type::q_uniform };
+		if (info.storage)
+			sampler_type.qualifiers |= type::q_storage;
+		sampler_type.definition = info.dimensions;
+
+		define_variable(info.id, loc, sampler_type, info.unique_name.c_str(), spv::StorageClassUniformConstant);
 
 		add_decoration(info.id, spv::DecorationDescriptorSet, { 1 });
 		add_decoration(info.id, spv::DecorationBinding, { info.binding });
@@ -726,7 +793,7 @@ private:
 	id   define_variable(const location &loc, const type &type, std::string name, bool global, id initializer_value) override
 	{
 		id res = make_id();
-		define_variable(res, loc, type, name.c_str(), global ? spv::StorageClassPrivate : spv::StorageClassFunction, initializer_value);
+		define_variable(res, loc, type, name.c_str(), !global ? spv::StorageClassFunction : type.has(type::q_group_shared) ? spv::StorageClassWorkgroup : spv::StorageClassPrivate, initializer_value);
 		return res;
 	}
 	void define_variable(id id, const location &loc, const type &type, const char *name, spv::StorageClass storage, spv::Id initializer_value = 0)
@@ -742,7 +809,7 @@ private:
 		inst.result = id;
 		inst.add(storage);
 
-		if (initializer_value != 0)
+		if (storage != spv::StorageClassWorkgroup && initializer_value != 0)
 		{
 			if (storage != spv::StorageClassFunction)
 			{
@@ -798,17 +865,240 @@ private:
 		return info.definition;
 	}
 
-	void define_entry_point(const function_info &func, bool is_ps) override
-	{
-		if (const auto it = std::find_if(_module.entry_points.begin(), _module.entry_points.end(),
-			[&func](const auto &ep) { return ep.name == func.unique_name; }); it != _module.entry_points.end())
-			return;
+		void define_entry_point(const function_info &func, entry_point_stage stage, uint32_t local_size_x, uint32_t local_size_y, uint32_t local_size_z) override
+		{
+			if (const auto it = std::find_if(_module.entry_points.begin(), _module.entry_points.end(),
+				[&func](const auto &ep) { return ep.name == func.unique_name; }); it != _module.entry_points.end())
+				return;
 
-		_module.entry_points.push_back({ func.unique_name, is_ps });
+			local_size_x = std::max(1u, local_size_x);
+			local_size_y = std::max(1u, local_size_y);
+			local_size_z = std::max(1u, local_size_z);
 
-		id position_variable = 0;
-		std::vector<uint32_t> inputs_and_outputs;
-		std::vector<expression> call_params;
+			_module.entry_points.push_back({ func.unique_name, stage, local_size_x, local_size_y, local_size_z });
+
+			if (stage == entry_point_stage::compute)
+			{
+				id local_size_x_id = 0;
+				id local_size_y_id = 0;
+				id local_size_z_id = 0;
+				if (_use_local_size_id)
+				{
+					const auto create_local_size_spec_constant = [this, &func](char axis, uint32_t default_value) -> id {
+						const std::string name = std::string("__vkshade_local_size_") + axis + "_" + func.unique_name;
+
+						reshadefx::constant constant_value = {};
+						constant_value.as_uint[0] = default_value;
+
+						const id result = emit_constant({ type::t_uint, 1, 1 }, constant_value, true);
+						add_name(result, name.c_str());
+						add_decoration(result, spv::DecorationSpecId, { static_cast<uint32_t>(_module.spec_constants.size()) });
+
+						uniform_info spec_info = {};
+						spec_info.name = name;
+						spec_info.type = { type::t_uint, 1, 1 };
+						spec_info.size = 4;
+						spec_info.has_initializer_value = true;
+						spec_info.initializer_value = constant_value;
+						_module.spec_constants.push_back(spec_info);
+
+						return result;
+					};
+
+					local_size_x_id = create_local_size_spec_constant('x', local_size_x);
+					local_size_y_id = create_local_size_spec_constant('y', local_size_y);
+					local_size_z_id = create_local_size_spec_constant('z', local_size_z);
+				}
+
+				std::vector<uint32_t> inputs_and_outputs;
+				std::vector<expression> call_params;
+
+				function_info entry_point;
+				entry_point.return_type = { type::t_void };
+
+				define_function({}, entry_point);
+				enter_block(create_block());
+
+				const auto normalize_compute_semantic = [](std::string semantic) {
+					std::transform(semantic.begin(), semantic.end(), semantic.begin(),
+						[](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+					return semantic;
+				};
+				const auto compute_semantic_to_builtin = [](const std::string &semantic, spv::BuiltIn &builtin) {
+					builtin = spv::BuiltInMax;
+					if (semantic == "SV_DISPATCHTHREADID")
+						builtin = spv::BuiltInGlobalInvocationId;
+					else if (semantic == "SV_GROUPTHREADID")
+						builtin = spv::BuiltInLocalInvocationId;
+					else if (semantic == "SV_GROUPID")
+						builtin = spv::BuiltInWorkgroupId;
+					return builtin != spv::BuiltInMax;
+				};
+				const type uint_type = { type::t_uint, 1, 1 };
+				const type uint3_type = { type::t_uint, 3, 1 };
+				id local_invocation_id_input = 0;
+				reshadefx::constant local_size_x_constant = {};
+				local_size_x_constant.as_uint[0] = local_size_x;
+				const id local_size_x_const_id = emit_constant(uint_type, local_size_x_constant, false);
+				reshadefx::constant local_size_xy_constant = {};
+				local_size_xy_constant.as_uint[0] = local_size_x * local_size_y;
+				const id local_size_xy_const_id = emit_constant(uint_type, local_size_xy_constant, false);
+
+				const auto get_local_invocation_id_input = [this, &inputs_and_outputs, &local_invocation_id_input, &uint3_type]() -> id {
+					if (local_invocation_id_input != 0)
+						return local_invocation_id_input;
+
+					local_invocation_id_input = make_id();
+					define_variable(local_invocation_id_input, {}, uint3_type, nullptr, spv::StorageClassInput);
+					add_builtin(local_invocation_id_input, spv::BuiltInLocalInvocationId);
+					inputs_and_outputs.push_back(local_invocation_id_input);
+					return local_invocation_id_input;
+				};
+				const auto create_compute_group_index = [this,
+						&get_local_invocation_id_input,
+						&uint_type,
+						&uint3_type,
+						local_size_x_const_id,
+						local_size_xy_const_id]() -> id {
+					const auto local_id_input = get_local_invocation_id_input();
+					const auto local_id = add_instruction(spv::OpLoad, convert_type(uint3_type))
+						.add(local_id_input).result;
+
+					const auto lx = add_instruction(spv::OpCompositeExtract, convert_type(uint_type))
+						.add(local_id)
+						.add(0u).result;
+					const auto ly = add_instruction(spv::OpCompositeExtract, convert_type(uint_type))
+						.add(local_id)
+						.add(1u).result;
+					const auto lz = add_instruction(spv::OpCompositeExtract, convert_type(uint_type))
+						.add(local_id)
+						.add(2u).result;
+
+					const auto y_term = add_instruction(spv::OpIMul, convert_type(uint_type))
+						.add(ly)
+						.add(local_size_x_const_id).result;
+					const auto xy_sum = add_instruction(spv::OpIAdd, convert_type(uint_type))
+						.add(lx)
+						.add(y_term).result;
+					const auto z_term = add_instruction(spv::OpIMul, convert_type(uint_type))
+						.add(lz)
+						.add(local_size_xy_const_id).result;
+					return add_instruction(spv::OpIAdd, convert_type(uint_type))
+						.add(xy_sum)
+						.add(z_term).result;
+				};
+				const auto create_compute_input = [this,
+						&inputs_and_outputs,
+						&compute_semantic_to_builtin,
+						&normalize_compute_semantic](const type &param_type, const std::string &semantic) {
+					const std::string normalized_semantic = normalize_compute_semantic(semantic);
+
+					spv::BuiltIn builtin = spv::BuiltInMax;
+					if (!compute_semantic_to_builtin(normalized_semantic, builtin))
+						throw std::runtime_error("unsupported compute parameter semantic: '" + semantic + '\'');
+
+					const auto input_var = make_id();
+					define_variable(input_var, {}, param_type, nullptr, spv::StorageClassInput);
+					add_builtin(input_var, builtin);
+					inputs_and_outputs.push_back(input_var);
+					return input_var;
+				};
+
+				for (const struct_member_info &param : func.parameter_list)
+				{
+					if (param.type.has(type::q_out))
+						throw std::runtime_error("compute entry point cannot use out parameters");
+
+					const auto local_var = make_id();
+					define_variable(local_var, {}, param.type, nullptr, spv::StorageClassFunction);
+
+					if (param.type.is_struct())
+					{
+						std::vector<uint32_t> elements;
+						for (const struct_member_info &member : find_struct(param.type.definition).member_list)
+						{
+							const std::string semantic = normalize_compute_semantic(member.semantic);
+							id value = 0;
+							if (semantic == "SV_GROUPINDEX" && member.type == uint_type)
+							{
+								value = create_compute_group_index();
+							}
+							else
+							{
+								const auto input_var = create_compute_input(member.type, member.semantic);
+								value = add_instruction(spv::OpLoad, convert_type(member.type))
+									.add(input_var).result;
+							}
+							elements.push_back(value);
+						}
+
+						const auto struct_value = add_instruction(spv::OpCompositeConstruct, convert_type(param.type))
+							.add(elements.begin(), elements.end()).result;
+						add_instruction_without_result(spv::OpStore)
+							.add(local_var)
+							.add(struct_value);
+					}
+					else
+					{
+						const std::string semantic = normalize_compute_semantic(param.semantic);
+						id value = 0;
+						if (semantic == "SV_GROUPINDEX" && param.type == uint_type)
+						{
+							value = create_compute_group_index();
+						}
+						else
+						{
+							const auto input_var = create_compute_input(param.type, param.semantic);
+							value = add_instruction(spv::OpLoad, convert_type(param.type))
+								.add(input_var).result;
+						}
+
+						add_instruction_without_result(spv::OpStore)
+							.add(local_var)
+							.add(value);
+					}
+
+					call_params.emplace_back().reset_to_lvalue({}, local_var, param.type);
+				}
+
+				(void) emit_call({}, func.definition, func.return_type, call_params);
+
+				leave_block_and_return(0);
+				leave_function();
+
+				assert(!func.unique_name.empty());
+				add_instruction_without_result(spv::OpEntryPoint, _entries)
+					.add(spv::ExecutionModelGLCompute)
+					.add(entry_point.definition)
+					.add_string(func.unique_name.c_str())
+					.add(inputs_and_outputs.begin(), inputs_and_outputs.end());
+
+				if (_use_local_size_id)
+				{
+					add_instruction_without_result(spv::OpExecutionModeId, _execution_modes)
+						.add(entry_point.definition)
+						.add(spv::ExecutionModeLocalSizeId)
+						.add(local_size_x_id)
+						.add(local_size_y_id)
+						.add(local_size_z_id);
+				}
+				else
+				{
+					add_instruction_without_result(spv::OpExecutionMode, _execution_modes)
+						.add(entry_point.definition)
+						.add(spv::ExecutionModeLocalSize)
+						.add(local_size_x)
+						.add(local_size_y)
+						.add(local_size_z);
+				}
+				return;
+			}
+
+			const bool is_ps = (stage == entry_point_stage::pixel);
+
+			id position_variable = 0;
+			std::vector<uint32_t> inputs_and_outputs;
+			std::vector<expression> call_params;
 
 		// Generate the glue entry point function
 		function_info entry_point;
@@ -1012,11 +1302,11 @@ private:
 		leave_function();
 
 		assert(!func.unique_name.empty());
-		add_instruction_without_result(spv::OpEntryPoint, _entries)
-			.add(is_ps ? spv::ExecutionModelFragment : spv::ExecutionModelVertex)
-			.add(entry_point.definition)
-			.add_string(func.unique_name.c_str())
-			.add(inputs_and_outputs.begin(), inputs_and_outputs.end());
+			add_instruction_without_result(spv::OpEntryPoint, _entries)
+				.add(is_ps ? spv::ExecutionModelFragment : spv::ExecutionModelVertex)
+				.add(entry_point.definition)
+				.add_string(func.unique_name.c_str())
+				.add(inputs_and_outputs.begin(), inputs_and_outputs.end());
 
 		if (is_ps)
 			add_instruction_without_result(spv::OpExecutionMode, _execution_modes)
@@ -1096,11 +1386,13 @@ private:
 
 				access_chain->type = convert_type(exp.chain[i - 1].to, true, storage); // Last type is the result
 				result = access_chain->result;
+				_storage_lookup[result] = storage;
 			}
 			else if (access_chain != nullptr)
 			{
 				access_chain->type = convert_type(base_type, true, storage, base_type.is_array() ? 16u : 0u);
 				result = access_chain->result;
+				_storage_lookup[result] = storage;
 			}
 
 			result = add_instruction(spv::OpLoad, convert_type(base_type))
@@ -1346,6 +1638,7 @@ private:
 
 			access_chain->type = convert_type(exp.chain[i - 1].to, true, storage); // Last type is the result
 			target = access_chain->result;
+			_storage_lookup[target] = storage;
 		}
 
 		// TODO: Complex access chains like float4x4[0].m00m10[0] = 0;
@@ -1567,33 +1860,94 @@ private:
 
 		return inst.result;
 	}
-	id   emit_binary_op(const location &loc, tokenid op, const type &res_type, const type &type, id lhs, id rhs) override
+	id   emit_binary_op(const location &loc, tokenid op, const type &res_type, const type &calc_type, const type &lhs_type, const type &rhs_type, id lhs, id rhs) override
 	{
+		type result_type = res_type;
+		type normalized_calc_type = calc_type;
+		type normalized_lhs_type = lhs_type;
+		type normalized_rhs_type = rhs_type;
+
+		const bool is_arithmetic_op =
+			op == tokenid::plus || op == tokenid::plus_plus || op == tokenid::plus_equal ||
+			op == tokenid::minus || op == tokenid::minus_minus || op == tokenid::minus_equal ||
+			op == tokenid::star || op == tokenid::star_equal ||
+			op == tokenid::slash || op == tokenid::slash_equal ||
+			op == tokenid::percent || op == tokenid::percent_equal;
+
+		// SPIR-V does not support arithmetic ops with boolean result/operand types.
+		// Normalize these operations to integer math and let later casts handle truthiness.
+		if (is_arithmetic_op && normalized_calc_type.is_boolean())
+		{
+			normalized_calc_type.base = type::t_int;
+			normalized_lhs_type.base = type::t_int;
+			normalized_rhs_type.base = type::t_int;
+
+			if (result_type.is_boolean())
+				result_type.base = type::t_int;
+
+			const type cast_type = { type::t_int, normalized_calc_type.rows, normalized_calc_type.cols };
+			lhs = add_instruction(spv::OpSelect, convert_type(cast_type))
+				.add(lhs)
+				.add(emit_constant(cast_type, 1))
+				.add(emit_constant(cast_type, 0))
+				.result;
+			rhs = add_instruction(spv::OpSelect, convert_type(cast_type))
+				.add(rhs)
+				.add(emit_constant(cast_type, 1))
+				.add(emit_constant(cast_type, 0))
+				.result;
+		}
+
 		spv::Op spv_op = spv::OpNop;
+		bool swap_operands = false;
 
 		switch (op)
 		{
 		case tokenid::plus:
 		case tokenid::plus_plus:
 		case tokenid::plus_equal:
-			spv_op = type.is_floating_point() ? spv::OpFAdd : spv::OpIAdd;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFAdd : spv::OpIAdd;
 			break;
 		case tokenid::minus:
 		case tokenid::minus_minus:
 		case tokenid::minus_equal:
-			spv_op = type.is_floating_point() ? spv::OpFSub : spv::OpISub;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFSub : spv::OpISub;
 			break;
 		case tokenid::star:
 		case tokenid::star_equal:
-			spv_op = type.is_floating_point() ? spv::OpFMul : spv::OpIMul;
+			if (normalized_calc_type.is_floating_point())
+			{
+				if (normalized_calc_type.is_matrix())
+				{
+					if (normalized_lhs_type.is_scalar() && !normalized_rhs_type.is_scalar())
+					{
+						spv_op = spv::OpMatrixTimesScalar;
+						swap_operands = true;
+					}
+					else if (normalized_rhs_type.is_scalar() && !normalized_lhs_type.is_scalar())
+					{
+						spv_op = spv::OpMatrixTimesScalar;
+					}
+					else
+					{
+						spv_op = spv::OpMatrixTimesMatrix;
+					}
+				}
+				else
+					spv_op = spv::OpFMul;
+			}
+			else
+			{
+				spv_op = spv::OpIMul;
+			}
 			break;
 		case tokenid::slash:
 		case tokenid::slash_equal:
-			spv_op = type.is_floating_point() ? spv::OpFDiv : type.is_signed() ? spv::OpSDiv : spv::OpUDiv;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFDiv : normalized_calc_type.is_signed() ? spv::OpSDiv : spv::OpUDiv;
 			break;
 		case tokenid::percent:
 		case tokenid::percent_equal:
-			spv_op = type.is_floating_point() ? spv::OpFRem : type.is_signed() ? spv::OpSRem : spv::OpUMod;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFRem : normalized_calc_type.is_signed() ? spv::OpSRem : spv::OpUMod;
 			break;
 		case tokenid::caret:
 		case tokenid::caret_equal:
@@ -1613,7 +1967,7 @@ private:
 			break;
 		case tokenid::greater_greater:
 		case tokenid::greater_greater_equal:
-			spv_op = type.is_signed() ? spv::OpShiftRightArithmetic : spv::OpShiftRightLogical;
+			spv_op = normalized_calc_type.is_signed() ? spv::OpShiftRightArithmetic : spv::OpShiftRightLogical;
 			break;
 		case tokenid::pipe_pipe:
 			spv_op = spv::OpLogicalOr;
@@ -1622,40 +1976,43 @@ private:
 			spv_op = spv::OpLogicalAnd;
 			break;
 		case tokenid::less:
-			spv_op = type.is_floating_point() ? spv::OpFOrdLessThan :
-				type.is_signed() ? spv::OpSLessThan : spv::OpULessThan;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdLessThan :
+				normalized_calc_type.is_signed() ? spv::OpSLessThan : spv::OpULessThan;
 			break;
 		case tokenid::less_equal:
-			spv_op = type.is_floating_point() ? spv::OpFOrdLessThanEqual :
-				type.is_signed() ? spv::OpSLessThanEqual : spv::OpULessThanEqual;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdLessThanEqual :
+				normalized_calc_type.is_signed() ? spv::OpSLessThanEqual : spv::OpULessThanEqual;
 			break;
 		case tokenid::greater:
-			spv_op = type.is_floating_point() ? spv::OpFOrdGreaterThan :
-				type.is_signed() ? spv::OpSGreaterThan : spv::OpUGreaterThan;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdGreaterThan :
+				normalized_calc_type.is_signed() ? spv::OpSGreaterThan : spv::OpUGreaterThan;
 			break;
 		case tokenid::greater_equal:
-			spv_op = type.is_floating_point() ? spv::OpFOrdGreaterThanEqual :
-				type.is_signed() ? spv::OpSGreaterThanEqual : spv::OpUGreaterThanEqual;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdGreaterThanEqual :
+				normalized_calc_type.is_signed() ? spv::OpSGreaterThanEqual : spv::OpUGreaterThanEqual;
 			break;
 		case tokenid::equal_equal:
-			spv_op = type.is_floating_point() ? spv::OpFOrdEqual :
-				type.is_boolean() ? spv::OpLogicalEqual : spv::OpIEqual;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdEqual :
+				normalized_calc_type.is_boolean() ? spv::OpLogicalEqual : spv::OpIEqual;
 			break;
 		case tokenid::exclaim_equal:
-			spv_op = type.is_floating_point() ? spv::OpFOrdNotEqual :
-				type.is_boolean() ? spv::OpLogicalNotEqual : spv::OpINotEqual;
+			spv_op = normalized_calc_type.is_floating_point() ? spv::OpFOrdNotEqual :
+				normalized_calc_type.is_boolean() ? spv::OpLogicalNotEqual : spv::OpINotEqual;
 			break;
 		default:
 			return assert(false), 0;
 		}
 
+		if (swap_operands)
+			std::swap(lhs, rhs);
+
 		add_location(loc, *_current_block_data);
 
-		spirv_instruction &inst = add_instruction(spv_op, convert_type(res_type));
+		spirv_instruction &inst = add_instruction(spv_op, convert_type(result_type));
 		inst.add(lhs); // Operand 1
 		inst.add(rhs); // Operand 2
 
-		if (res_type.has(type::q_precise))
+		if (result_type.has(type::q_precise))
 			add_decoration(inst.result, spv::DecorationNoContraction);
 
 		return inst.result;
@@ -1695,10 +2052,50 @@ private:
 	{
 #ifndef NDEBUG
 		for (const auto &arg : args)
-			assert(arg.chain.empty() && arg.base != 0);
+			assert(arg.base != 0);
 #endif
 
 		add_location(loc, *_current_block_data);
+
+		std::vector<expression> call_args(args);
+		for (expression &arg : call_args)
+		{
+			if (!arg.is_lvalue || arg.chain.empty())
+				continue;
+
+			if (!(arg.chain[0].op == expression::operation::op_member ||
+				arg.chain[0].op == expression::operation::op_dynamic_index ||
+				arg.chain[0].op == expression::operation::op_constant_index))
+				continue;
+
+			spv::StorageClass storage = spv::StorageClassFunction;
+			if (const auto it = _storage_lookup.find(arg.base);
+				it != _storage_lookup.end())
+				storage = it->second;
+
+			// Ensure that 'access_chain' cannot get invalidated by calls to 'emit_constant' or 'convert_type'
+			assert(_current_block_data != &_types_and_constants);
+
+			size_t i = 0;
+			spirv_instruction *access_chain = &add_instruction(spv::OpAccessChain).add(arg.base); // Base
+
+			// Ignore first index into 1xN matrices, since they were translated to a vector type in SPIR-V
+			if (arg.chain[0].from.rows == 1 && arg.chain[0].from.cols > 1)
+				i = 1;
+
+			do {
+				access_chain->add(arg.chain[i].op == expression::operation::op_dynamic_index ?
+					arg.chain[i].index :
+					emit_constant(arg.chain[i].index)); // Indexes
+			} while (++i < arg.chain.size() && (
+				arg.chain[i].op == expression::operation::op_member ||
+				arg.chain[i].op == expression::operation::op_dynamic_index ||
+				arg.chain[i].op == expression::operation::op_constant_index));
+
+			access_chain->type = convert_type(arg.chain[i - 1].to, true, storage); // Last type is the result
+			arg.reset_to_lvalue(arg.location, access_chain->result, arg.type);
+			_storage_lookup[access_chain->result] = storage;
+		}
 
 		enum
 		{
@@ -1706,12 +2103,16 @@ private:
 #include "effect_symbol_table_intrinsics.inl"
 		};
 
-		switch (intrinsic)
 		{
+			const std::vector<expression> &args = call_args;
+
+			switch (intrinsic)
+			{
 #define IMPLEMENT_INTRINSIC_SPIRV(name, i, code) case name##i: code
 #include "effect_symbol_table_intrinsics.inl"
-		default:
-			return assert(false), 0;
+			default:
+				return assert(false), 0;
+			}
 		}
 	}
 	id   emit_construct(const location &loc, const type &type, const std::vector<expression> &args) override
@@ -1727,24 +2128,25 @@ private:
 		ids.reserve(args.size());
 
 		// There must be exactly one constituent for each top-level component of the result
-		if (type.is_matrix())
-		{
-
-			auto vector_type = type;
-			vector_type.cols = 1;
-
-			// Turn the list of scalar arguments into a list of column vectors
-			for (size_t arg = 0; arg < args.size(); arg += type.rows)
+			if (type.is_matrix())
 			{
-				spirv_instruction &inst = add_instruction(spv::OpCompositeConstruct, convert_type(vector_type));
-				for (size_t row = 0; row < type.rows; ++row)
-					inst.add(args[arg + row].base);
 
-				ids.push_back(inst.result);
+				auto vector_type = type;
+				vector_type.rows = type.cols;
+				vector_type.cols = 1;
+
+				// Turn the list of scalar arguments into a list of column vectors
+				for (size_t arg = 0; arg < args.size(); arg += type.cols)
+				{
+					spirv_instruction &inst = add_instruction(spv::OpCompositeConstruct, convert_type(vector_type));
+					for (size_t row = 0; row < type.cols; ++row)
+						inst.add(args[arg + row].base);
+
+					ids.push_back(inst.result);
+				}
+
+				ids.erase(ids.begin() + type.rows, ids.end());
 			}
-
-			ids.erase(ids.begin() + type.cols, ids.end());
-		}
 		else
 		{
 			assert(type.is_vector() || type.is_array());
@@ -1988,7 +2390,7 @@ private:
 	}
 };
 
-codegen *reshadefx::create_codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y)
+codegen *reshadefx::create_codegen_spirv(bool vulkan_semantics, bool debug_info, bool uniforms_to_spec_constants, bool invert_y, bool use_local_size_id)
 {
-	return new codegen_spirv(vulkan_semantics, debug_info, uniforms_to_spec_constants, invert_y);
+	return new codegen_spirv(vulkan_semantics, debug_info, uniforms_to_spec_constants, invert_y, use_local_size_id);
 }

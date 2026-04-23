@@ -13,7 +13,7 @@
 
 #include "shader_sources.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     FxaaEffect::FxaaEffect(LogicalDevice*       pLogicalDevice,
                            VkFormat             format,
@@ -54,4 +54,4 @@ namespace vkBasalt
     FxaaEffect::~FxaaEffect()
     {
     }
-} // namespace vkBasalt
+} // namespace vkShade

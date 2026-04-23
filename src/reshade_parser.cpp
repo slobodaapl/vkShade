@@ -3,23 +3,34 @@
 #include <climits>
 #include <algorithm>
 #include <filesystem>
+#include <fstream>
 #include <queue>
 #include <set>
 #include <unordered_map>
+#include <cstdlib>
 #include <signal.h>
 #include <setjmp.h>
 
 #include "reshade/effect_parser.hpp"
 #include "reshade/effect_codegen.hpp"
 #include "reshade/effect_preprocessor.hpp"
+#include "reshade/reshade_depth_macros.hpp"
 
 #include "logger.hpp"
 #include "config_serializer.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
     namespace
     {
+        bool hasFatalCompilerDiagnostics(const std::string& diagnostics)
+        {
+            return diagnostics.find(" error ") != std::string::npos ||
+                   diagnostics.find(": error ") != std::string::npos ||
+                   diagnostics.find("error X") != std::string::npos ||
+                   diagnostics.find("preprocessor error:") != std::string::npos;
+        }
+
         // Helper to find annotation by name
         template<typename T>
         auto findAnnotation(const T& annotations, const std::string& name)
@@ -84,6 +95,7 @@ namespace vkBasalt
             pp.add_macro_definition("BUFFER_RCP_HEIGHT", "(1.0 / BUFFER_HEIGHT)");
             pp.add_macro_definition("BUFFER_COLOR_DEPTH", "8");
             pp.add_macro_definition("BUFFER_COLOR_BIT_DEPTH", "BUFFER_COLOR_DEPTH");
+            addReshadeDepthMacros(pp);
 
             // Component-specific texture gather shorthands (missing from this reshadefx version)
             // Must use append_string — raw macro structs lack parameter substitution markers
@@ -92,6 +104,34 @@ namespace vkBasalt
                 "#define tex2DgatherG(s, coords) tex2Dgather(s, coords, 1)\n"
                 "#define tex2DgatherB(s, coords) tex2Dgather(s, coords, 2)\n"
                 "#define tex2DgatherA(s, coords) tex2Dgather(s, coords, 3)\n"
+
+                // vkShade parser compatibility:
+                // - storage1D token is not recognized by this reshadefx snapshot
+                // - f32tof16/f16tof32 intrinsics are missing
+                "#define storage1D storage\n"
+                "#define f32tof16 _vkshade_f32tof16\n"
+                "#define f16tof32 _vkshade_f16tof32\n"
+                "uint _vkshade_f32tof16(float v) {\n"
+                "  uint x = asuint(v);\n"
+                "  uint sign = (x >> 16) & 0x8000u;\n"
+                "  int exp = int((x >> 23) & 0xFFu) - 112;\n"
+                "  uint mant = x & 0x7FFFFFu;\n"
+                "  if (exp <= 0) return sign;\n"
+                "  if (exp >= 31) return sign | 0x7C00u;\n"
+                "  return sign | (uint(exp) << 10) | ((mant + 0x1000u) >> 13);\n"
+                "}\n"
+                "uint2 _vkshade_f32tof16(float2 v) { return uint2(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y)); }\n"
+                "uint4 _vkshade_f32tof16(float4 v) { return uint4(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y), _vkshade_f32tof16(v.z), _vkshade_f32tof16(v.w)); }\n"
+                "float _vkshade_f16tof32(uint h) {\n"
+                "  uint sign = (h & 0x8000u) << 16;\n"
+                "  uint exp = (h >> 10) & 0x1Fu;\n"
+                "  uint mant = h & 0x3FFu;\n"
+                "  if (exp == 0u) return asfloat(sign);\n"
+                "  if (exp == 31u) return asfloat(sign | 0x7F800000u | (mant << 13));\n"
+                "  return asfloat(sign | ((exp + 112u) << 23) | (mant << 13));\n"
+                "}\n"
+                "float2 _vkshade_f16tof32(uint2 h) { return float2(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y)); }\n"
+                "float4 _vkshade_f16tof32(uint4 h) { return float4(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y), _vkshade_f16tof32(h.z), _vkshade_f16tof32(h.w)); }\n"
 
                 // Non-square matrix types — map to matrix<> template syntax
                 "#define float2x3 matrix<float, 2, 3>\n"
@@ -106,28 +146,6 @@ namespace vkBasalt
                 "#define ddy_fine(x) ddy(x)\n"
                 "#define ddx_coarse(x) ddx(x)\n"
                 "#define ddy_coarse(x) ddy(x)\n"
-
-                // Atomic operation stubs — no-op for fragment pipeline (compute shader feature)
-                "#define atomicAdd(d, v) (v)\n"
-                "#define atomicMax(d, v) (v)\n"
-                "#define atomicMin(d, v) (v)\n"
-                "#define atomicOr(d, v) (v)\n"
-                "#define atomicAnd(d, v) (v)\n"
-                "#define atomicXor(d, v) (v)\n"
-                "#define atomicExchange(d, v) (v)\n"
-                "#define atomicCompSwap(d, c, v) (v)\n"
-
-                // Compute shader stubs — expand to valid no-op expressions for fragment-only pipeline
-                "#define tex2Dstore(s, c, v) (0)\n"
-                "#define barrier() (0)\n"
-                "#define memoryBarrier() (0)\n"
-                "#define groupMemoryBarrier() (0)\n"
-                "#define DeviceMemoryBarrier() (0)\n"
-                "#define GroupMemoryBarrier() (0)\n"
-                "#define AllMemoryBarrier() (0)\n"
-                "#define DeviceMemoryBarrierWithGroupSync() (0)\n"
-                "#define GroupMemoryBarrierWithGroupSync() (0)\n"
-                "#define AllMemoryBarrierWithGroupSync() (0)\n"
             );
         }
 
@@ -379,6 +397,8 @@ namespace vkBasalt
         {
             if (spec.name.empty())
                 return true;
+            if (spec.name.rfind("__vkshade_", 0) == 0)
+                return true;
             if (hasAnnotation(spec.annotations, "source"))
                 return true;
             return false;
@@ -464,7 +484,15 @@ namespace vkBasalt
 
         errors = parser.errors();
         if (!errors.empty())
-            Logger::err("reshade_parser parse errors: " + errors);
+        {
+            if (hasFatalCompilerDiagnostics(errors))
+            {
+                Logger::err("reshade_parser parse errors: " + errors);
+                return params;
+            }
+
+            Logger::warn("reshade_parser parse warnings: " + errors);
+        }
 
         // Extract module and convert uniforms to parameters
         reshadefx::module module;
@@ -693,12 +721,28 @@ namespace vkBasalt
 
             // Check for parse warnings/errors
             std::string parseErrors = parser.errors();
+            if (!parseErrors.empty() && hasFatalCompilerDiagnostics(parseErrors))
+            {
+                result.success = false;
+                result.errorMessage = "Parse errors: " + parseErrors;
+                return result;
+            }
             if (!parseErrors.empty())
-                result.errorMessage = "Warnings: " + parseErrors;
+                Logger::warn("reshade_parser test warnings: " + parseErrors);
 
             // Try to generate code
             reshadefx::module module;
             codegen->write_result(module);
+
+            if (const char* dumpPath = std::getenv("VKSHADE_DUMP_SPIRV");
+                dumpPath != nullptr && *dumpPath != '\0' && !module.spirv.empty())
+            {
+                std::ofstream dump(dumpPath, std::ios::binary);
+                if (dump.is_open())
+                {
+                    dump.write(reinterpret_cast<const char*>(module.spirv.data()), static_cast<std::streamsize>(module.spirv.size() * sizeof(uint32_t)));
+                }
+            }
 
             // Check if shader actually uses the depth buffer at runtime.
             // ReShade.fxh always declares a DEPTH texture + "DepthBuffer" sampler +
@@ -871,18 +915,6 @@ namespace vkBasalt
         "__TIME__",
         "__VENDOR__",
         "__APPLICATION__",
-        "RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN",
-        "RESHADE_DEPTH_INPUT_IS_REVERSED",
-        "RESHADE_DEPTH_INPUT_IS_LOGARITHMIC",
-        "RESHADE_DEPTH_INPUT_X_SCALE",
-        "RESHADE_DEPTH_INPUT_Y_SCALE",
-        "RESHADE_DEPTH_INPUT_X_OFFSET",
-        "RESHADE_DEPTH_INPUT_Y_OFFSET",
-        "RESHADE_DEPTH_INPUT_X_PIXEL_OFFSET",
-        "RESHADE_DEPTH_INPUT_Y_PIXEL_OFFSET",
-        "RESHADE_DEPTH_LINEARIZATION_FAR_PLANE",
-        "RESHADE_DEPTH_MULTIPLIER",
-        "RESHADE_MIX_STAGE_DEPTH_MAP",
     };
 
     std::vector<PreprocessorDefinition> extractPreprocessorDefinitions(
@@ -944,4 +976,4 @@ namespace vkBasalt
         return defs;
     }
 
-} // namespace vkBasalt
+} // namespace vkShade

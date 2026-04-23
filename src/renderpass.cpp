@@ -1,8 +1,8 @@
 #include "renderpass.hpp"
 
-namespace vkBasalt
+namespace vkShade
 {
-    VkRenderPass createRenderPass(LogicalDevice* pLogicalDevice, VkFormat format)
+    VkRenderPass createRenderPass(LogicalDevice* pLogicalDevice, VkFormat format, VkImageLayout finalLayout)
     {
         VkRenderPass renderPass;
 
@@ -15,7 +15,7 @@ namespace vkBasalt
         attachmentDescription.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
         attachmentDescription.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
         attachmentDescription.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
-        attachmentDescription.finalLayout    = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachmentDescription.finalLayout    = finalLayout;
 
         VkAttachmentReference attachmentReference;
         attachmentReference.attachment = 0;
@@ -48,9 +48,13 @@ namespace vkBasalt
         subpassDependencies[1].srcSubpass      = 0;
         subpassDependencies[1].dstSubpass      = VK_SUBPASS_EXTERNAL;
         subpassDependencies[1].srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        subpassDependencies[1].dstStageMask    = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        subpassDependencies[1].dstStageMask    = (finalLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                                                      ? (VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT)
+                                                      : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         subpassDependencies[1].srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        subpassDependencies[1].dstAccessMask   = VK_ACCESS_MEMORY_READ_BIT;
+        subpassDependencies[1].dstAccessMask   = (finalLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                                                      ? VK_ACCESS_SHADER_READ_BIT
+                                                      : VK_ACCESS_MEMORY_READ_BIT;
         subpassDependencies[1].dependencyFlags = 0;
 
         VkRenderPassCreateInfo renderPassCreateInfo;
@@ -69,4 +73,4 @@ namespace vkBasalt
 
         return renderPass;
     }
-} // namespace vkBasalt
+} // namespace vkShade

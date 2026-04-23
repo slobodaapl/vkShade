@@ -3,7 +3,7 @@
 #include "../../../imgui/imgui_internal.h"
 #include <cmath>
 
-namespace vkBasalt
+namespace vkShade
 {
     class FloatVecFieldEditor : public FieldEditor
     {
@@ -54,4 +54,4 @@ namespace vkBasalt
 
     REGISTER_FIELD_EDITOR(ParamType::FloatVec, FloatVecFieldEditor)
 
-} // namespace vkBasalt
+} // namespace vkShade

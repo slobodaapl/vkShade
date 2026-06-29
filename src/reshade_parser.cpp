@@ -498,6 +498,22 @@ namespace vkShade
         reshadefx::module module;
         codegen->write_result(module);
 
+        // Stamp ReShade ui_category / ui_category_closed onto a built param so
+        // the overlay can group controls under collapsible headers. vkShade
+        // previously ignored ui_category and rendered every control in one flat
+        // list, which is unusable for big shaders like SuperDepth3D (~50 knobs).
+        auto stampUiCategory = [](EffectParam* p, const auto& annotations) {
+            if (!p) return;
+            auto catIt = findAnnotation(annotations, "ui_category");
+            if (catIt != annotations.end())
+                p->category = catIt->value.string_data;
+            auto closedIt = findAnnotation(annotations, "ui_category_closed");
+            if (closedIt != annotations.end())
+                p->categoryClosed = closedIt->type.is_integral()
+                    ? (closedIt->value.as_int[0] != 0)
+                    : (closedIt->value.as_float[0] != 0.0f);
+        };
+
         // Process spec_constants
         // Note: float2/float3/float4 are split into multiple scalar spec_constants with the same name
         // We need to detect and combine them
@@ -556,6 +572,7 @@ namespace vkShade
                     if (stepIt != spec.annotations.end())
                         p->step = getAnnotationFloat(*stepIt);
 
+                    stampUiCategory(p.get(), spec.annotations);
                     params.push_back(std::move(p));
                 }
                 else if (spec.type.is_integral() && spec.type.is_signed())
@@ -582,6 +599,7 @@ namespace vkShade
                     if (stepIt != spec.annotations.end())
                         p->step = getAnnotationFloat(*stepIt);
 
+                    stampUiCategory(p.get(), spec.annotations);
                     params.push_back(std::move(p));
                 }
                 else if (spec.type.is_integral() && !spec.type.is_signed())
@@ -608,6 +626,7 @@ namespace vkShade
                     if (stepIt != spec.annotations.end())
                         p->step = getAnnotationFloat(*stepIt);
 
+                    stampUiCategory(p.get(), spec.annotations);
                     params.push_back(std::move(p));
                 }
 
@@ -618,6 +637,7 @@ namespace vkShade
             {
                 // Regular scalar parameter
                 auto param = convertSpecConstant(spec, effectName, pConfig);
+                stampUiCategory(param.get(), spec.annotations);
                 if (param)
                     params.push_back(std::move(param));
             }
@@ -630,6 +650,7 @@ namespace vkShade
                 continue;
 
             auto param = convertSpecConstant(uniform, effectName, pConfig);
+            stampUiCategory(param.get(), uniform.annotations);
             if (param)
                 params.push_back(std::move(param));
         }
@@ -660,7 +681,8 @@ namespace vkShade
     ShaderTestResult testShaderCompilation(
         const std::string& effectName,
         const std::string& effectPath,
-        const std::vector<std::string>& includePaths)
+        const std::vector<std::string>& includePaths,
+        const std::vector<std::pair<std::string, std::string>>& extraDefines)
     {
         ShaderTestResult result;
         result.effectName = effectName;
@@ -683,6 +705,10 @@ namespace vkShade
             // Setup preprocessor with pre-cached include paths
             reshadefx::preprocessor preprocessor;
             setupPreprocessor(preprocessor, includePaths);
+
+            // Mimic runtime-injected custom preprocessor definitions
+            for (const auto& def : extraDefines)
+                preprocessor.add_macro_definition(def.first, def.second);
 
             // Try to load and preprocess the file
             if (!preprocessor.append_file(effectPath))

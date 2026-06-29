@@ -125,7 +125,15 @@ void reshadefx::preprocessor::add_include_path(const std::filesystem::path &path
 bool reshadefx::preprocessor::add_macro_definition(const std::string &name, const macro &macro)
 {
 	assert(!name.empty());
-	return _macros.emplace(name, macro).second;
+	const auto res = _macros.emplace(name, macro);
+	if (!res.second && res.first->second.is_predefined)
+	{
+		// Externally injected macros are defaults; the effect file's own
+		// #define wins without raising a redefinition error.
+		res.first->second = macro;
+		return true;
+	}
+	return res.second;
 }
 
 bool reshadefx::preprocessor::append_file(const std::filesystem::path &path)

@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 
 #include "effects/effect_config.hpp"
 #include "effects/params/effect_param.hpp"
@@ -39,7 +40,8 @@ namespace vkShade
     ShaderTestResult testShaderCompilation(
         const std::string& effectName,
         const std::string& effectPath,
-        const std::vector<std::string>& includePaths);
+        const std::vector<std::string>& includePaths,
+        const std::vector<std::pair<std::string, std::string>>& extraDefines = {});
 
     // Check if a compiled shader uses depth buffer (has DEPTH semantic textures).
     // Uses cached test results if available, otherwise compiles the shader.

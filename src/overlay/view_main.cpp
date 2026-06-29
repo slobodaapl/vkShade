@@ -548,18 +548,56 @@ namespace vkShade
                 }
             }
 
-            // Show parameters for this effect
+            // Show parameters for this effect, grouped under ui_category headers
+            // (declaration order preserved; a header spans its contiguous run of
+            // params, matching ReShade). Params with no category render directly.
             auto effectParams = pEffectRegistry->getParametersForEffect(effectName);
+            std::string activeCategory;   // category of the header currently open
+            bool haveCategory = false;    // currently inside a category header?
+            bool categoryVisible = true;  // is that header expanded?
             for (size_t paramIdx = 0; paramIdx < effectParams.size(); paramIdx++)
             {
+                EffectParam* param = effectParams[paramIdx];
+                const std::string& cat = param->category;
+
+                if (!(haveCategory && cat == activeCategory))
+                {
+                    // Category boundary: close the previous header's indent first.
+                    if (haveCategory && categoryVisible)
+                        ImGui::Unindent();
+
+                    haveCategory = !cat.empty();
+                    activeCategory = cat;
+
+                    if (haveCategory)
+                    {
+                        ImGuiTreeNodeFlags flags = param->categoryClosed
+                            ? 0 : ImGuiTreeNodeFlags_DefaultOpen;
+                        // ## suffix keeps the ImGui id unique across effects.
+                        std::string header = cat + "##cat_" + effectName;
+                        categoryVisible = ImGui::CollapsingHeader(header.c_str(), flags);
+                        if (categoryVisible)
+                            ImGui::Indent();
+                    }
+                    else
+                    {
+                        categoryVisible = true; // uncategorized params always show
+                    }
+                }
+
+                if (haveCategory && !categoryVisible)
+                    continue; // header collapsed: skip its controls
+
                 ImGui::PushID(static_cast<int>(paramIdx));
-                if (renderFieldEditor(*effectParams[paramIdx]))
+                if (renderFieldEditor(*param))
                 {
                     paramsDirty = true;
                     lastChangeTime = std::chrono::steady_clock::now();
                 }
                 ImGui::PopID();
             }
+            if (haveCategory && categoryVisible)
+                ImGui::Unindent(); // balance the final open category's indent
 
             ImGui::TreePop();
         }

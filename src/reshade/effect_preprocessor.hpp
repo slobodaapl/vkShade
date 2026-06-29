@@ -25,6 +25,10 @@ namespace reshadefx
 			std::vector<std::string> parameters;
 			bool is_variadic = false;
 			bool is_function_like = false;
+			// Set for macros injected via the external add_macro_definition API.
+			// Those act as defaults: an in-file #define overrides them silently
+			// (unguarded internal defines would otherwise be "redefinition" errors).
+			bool is_predefined = false;
 		};
 
 		// Define constructor explicitly because lexer class is not included here
@@ -50,7 +54,12 @@ namespace reshadefx
 		/// <param name="name">The name of the macro to define.</param>
 		/// <param name="value">The value to define that macro to.</param>
 		/// <returns></returns>
-		bool add_macro_definition(const std::string &name, std::string value = "1") { return add_macro_definition(name, macro { std::move(value), {} }); }
+		bool add_macro_definition(const std::string &name, std::string value = "1")
+		{
+			macro m { std::move(value), {} };
+			m.is_predefined = true;
+			return add_macro_definition(name, m);
+		}
 
 		/// <summary>
 		/// Open the specified file, parse its contents and append them to the output.

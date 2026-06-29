@@ -11,7 +11,7 @@ namespace
 {
     void printUsage(const char* argv0)
     {
-        std::cerr << "Usage: " << argv0 << " <shader.fx> [--effect-name NAME] [--include DIR ...]\n";
+        std::cerr << "Usage: " << argv0 << " <shader.fx> [--effect-name NAME] [--include DIR ...] [--define NAME=VALUE ...]\n";
     }
 }
 
@@ -26,6 +26,8 @@ int main(int argc, char** argv)
     std::string shaderPath;
     std::string effectName;
     std::vector<std::string> includePaths;
+    std::vector<std::pair<std::string, std::string>> extraDefines;
+    bool dumpDefines = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -52,6 +54,28 @@ int main(int argc, char** argv)
             continue;
         }
 
+        if (arg == "--dump-defines")
+        {
+            dumpDefines = true;
+            continue;
+        }
+
+        if (arg == "--define")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value for --define\n";
+                return 1;
+            }
+            std::string def = argv[++i];
+            const size_t eq = def.find('=');
+            if (eq == std::string::npos)
+                extraDefines.emplace_back(def, "1");
+            else
+                extraDefines.emplace_back(def.substr(0, eq), def.substr(eq + 1));
+            continue;
+        }
+
         if (shaderPath.empty())
         {
             shaderPath = arg;
@@ -72,14 +96,27 @@ int main(int argc, char** argv)
     if (effectName.empty())
         effectName = std::filesystem::path(shaderPath).stem().string();
 
+    if (dumpDefines)
+    {
+        const auto defs = vkShade::extractPreprocessorDefinitions(effectName, shaderPath);
+        for (const auto& def : defs)
+            std::cout << def.name << " = [" << def.defaultValue << "]\n";
+        return 0;
+    }
+
     vkShade::ShaderTestResult result;
-    if (includePaths.empty())
+    if (includePaths.empty() && extraDefines.empty())
     {
         result = vkShade::testShaderCompilation(effectName, shaderPath);
     }
     else
     {
-        result = vkShade::testShaderCompilation(effectName, shaderPath, includePaths);
+        if (includePaths.empty())
+        {
+            const auto smConfig = vkShade::ConfigSerializer::loadShaderManagerConfig();
+            includePaths = smConfig.discoveredShaderPaths;
+        }
+        result = vkShade::testShaderCompilation(effectName, shaderPath, includePaths, extraDefines);
     }
 
     std::cout << "effect: " << result.effectName << "\n";

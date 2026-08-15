@@ -828,8 +828,13 @@ namespace vkShade
             auto defsIt = defsByEffect.find(effectName);
             if (defsIt != defsByEffect.end())
             {
+                // Only persist user-changed definitions. Unchanged defaults must
+                // not round-trip through the config: the value parser strips
+                // spaces and quote characters, which corrupts string macros
+                // (e.g. SuperDepth3D's G_Note) a little more on every session.
                 for (const auto* def : defsIt->second)
-                    file << def->effectName << "@" << def->name << " = " << def->value << "\n";
+                    if (def->value != def->defaultValue)
+                        file << def->effectName << "@" << def->name << " = " << def->value << "\n";
             }
             file << "\n";
         }
@@ -844,7 +849,8 @@ namespace vkShade
             if (pathIt != effectPaths.end() && !pathIt->second.empty())
                 file << effectName << " = " << pathIt->second << "\n";
             for (const auto* def : effectDefs)
-                file << def->effectName << "@" << def->name << " = " << def->value << "\n";
+                if (def->value != def->defaultValue) // see comment above
+                    file << def->effectName << "@" << def->name << " = " << def->value << "\n";
             file << "\n";
         }
 

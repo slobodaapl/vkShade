@@ -686,8 +686,29 @@ namespace vkShade
 
         Logger::debug("created Pipeline layout");
 
+        // Flatten the passes of ALL techniques into one ordered chain, instead
+        // of rendering only techniques[0]. ReShade effects routinely split work
+        // across techniques where an earlier (often offscreen) technique feeds a
+        // later one through a shared named texture — e.g. SuperDepth3D's
+        // 'Information_SD' writes Info_Tex which the main 'SuperDepth3D'
+        // technique samples. Textures resolve globally by unique_name, so
+        // cross-technique reads just work. Single-technique effects (cas,
+        // DisplayDepth, …) are unaffected. Limitation: there is no per-technique
+        // enable UI yet, so every technique in the file runs in declaration
+        // order (correct for helper+main; could double-composite a file built
+        // from several independent full-screen techniques).
+        std::vector<reshadefx::pass_info> allPasses;
+        for (const auto& technique : module.techniques)
+        {
+            Logger::debug("technique: " + technique.name + " (" +
+                          std::to_string(technique.passes.size()) + " passes)");
+            allPasses.insert(allPasses.end(), technique.passes.begin(), technique.passes.end());
+        }
+        Logger::debug("total passes across " + std::to_string(module.techniques.size()) +
+                      " technique(s): " + std::to_string(allPasses.size()));
+
         // count the back buffer writes
-        for (const auto& pass : module.techniques[0].passes)
+        for (const auto& pass : allPasses)
         {
             if (pass.cs_entry_point.empty() && pass.render_target_names[0].empty())
             {
@@ -849,7 +870,7 @@ namespace vkShade
             return std::make_pair(std::move(specMapEntrys), std::move(specData));
         };
 
-        for (bool outputToBackBuffer = outputWrites % 2 == 0; auto& pass : module.techniques[0].passes)
+        for (bool outputToBackBuffer = outputWrites % 2 == 0; auto& pass : allPasses)
         {
             const bool isComputePass = !pass.cs_entry_point.empty();
             if (!isComputePass && (pass.vs_entry_point.empty() || pass.ps_entry_point.empty()))
@@ -1927,9 +1948,14 @@ namespace vkShade
             "#define ddx_coarse(x) ddx(x)\n"
             "#define ddy_coarse(x) ddy(x)\n");
 
-        // Add custom preprocessor definitions (user-configurable macros)
+        // Add custom preprocessor definitions (user-configurable macros).
+        // Unchanged defaults are skipped: the shader's own #define is the
+        // authoritative value, and stored defaults may be corrupted by the
+        // config parser's space/quote stripping (lossy round-trip).
         for (const auto& def : customPreprocessorDefs)
         {
+            if (def.value == def.defaultValue)
+                continue;
             preprocessor.add_macro_definition(def.name, def.value);
             Logger::debug("  custom macro: " + def.name + " = " + def.value);
         }
@@ -1968,7 +1994,11 @@ namespace vkShade
         if (shaderPath.empty() || !preprocessor.append_file(shaderPath))
         {
             Logger::err("failed to load shader file: " + shaderPath);
-            Logger::err("Does the filepath exist and does it not include spaces?");
+            const std::string ppErrors = preprocessor.errors();
+            if (!ppErrors.empty())
+                Logger::err("preprocessor errors:\n" + ppErrors);
+            else
+                Logger::err("Does the filepath exist and does it not include spaces?");
             throw std::runtime_error("failed to load shader: " + effectName);
         }
 

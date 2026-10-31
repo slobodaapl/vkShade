@@ -64,7 +64,9 @@ The diagnostics tab auto-detects your GPU vendor via PCI vendor ID and reads sta
 
 ### Depth Buffer
 
-The layer intercepts `vkCreateImage` to detect depth images and adds `VK_IMAGE_USAGE_SAMPLED_BIT` so shaders can sample them. ReShade effects with `semantic = "DEPTH"` textures receive the actual depth buffer, and the `bufready_depth` uniform correctly reports availability.
+Enable Depth Capture in Settings and restart the application. The Depth tab lists observed single-sample buffers that match the swapchain size. Select a buffer, use Automatic, or track a draw-call rank as the candidate list changes. A fixed selection follows the image during the session; its saved index can refer to a different image after restart.
+
+Candidates are tracked when command buffers are recorded, so buffers used only by replayed command buffers may be missing from the list. Depth effects sample a layer-owned copy. Clears, resource reuse, and game-specific rendering can still leave that copy empty or stale.
 
 ### Safe Anti-Cheat Mode
 
@@ -227,7 +229,7 @@ vkShade is a **read-only visual filter** — it applies post-processing shaders 
 
 - **On Linux/Proton**, EAC and BattlEye have limited kernel-level access compared to Windows. Vulkan implicit layers like vkShade and MangoHud generally work because the anti-cheat cannot deeply inspect the Vulkan layer chain. No confirmed bans from comparable post-processing layer usage are known.
 - **On Windows**, some games actively block ReShade and even NVIDIA Freestyle (e.g., Arc Raiders blocks both). vkShade falls in the same category as ReShade from an anti-cheat perspective — it is a third-party rendering layer, not a whitelisted vendor feature.
-- **Per-game policies**: Anti-cheat detection is configured per-game by the developer. A game that allows vkShade today could block it tomorrow. The original vkBasalt FAQ says: *"Will vkBasalt get me banned? Maybe. To my knowledge this hasn't happened yet but don't blame me if your frog dies."*
+- Anti-cheat detection is configured per game by the developer. A game that allows vkShade today could block it tomorrow.
 
 **No guarantee can be made** — use at your own discretion. vkShade only applies visual post-processing and provides zero competitive advantage, but anti-cheat systems don't always distinguish between cosmetic and malicious modifications.
 

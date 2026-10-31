@@ -1,4 +1,5 @@
 #include "imgui_overlay.hpp"
+#include "depth_selection.hpp"
 #include "effects/effect_registry.hpp"
 #include "settings_manager.hpp"
 #include "reshade_parser.hpp"
@@ -7,14 +8,18 @@
 #include "keyboard_input.hpp"
 #include "input_blocker.hpp"
 #include "config_serializer.hpp"
+#include "util.hpp"
 #include "wayland_display.hpp"
 #include "wayland_pointer_constraints.hpp"
 #include "wayland_input_common.hpp"
+#include "wayland_interpose.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <fstream>
+#include <numeric>
+#include <vector>
 
 #include "imgui/imgui.h"
 #include "imgui/imgui_internal.h"
@@ -214,6 +219,10 @@ namespace vkShade
 
     void ImGuiOverlay::updateState(OverlayState newState)
     {
+        {
+            std::lock_guard<std::mutex> lock(depthStateMutex);
+            depthState = std::move(newState.depth);
+        }
         state = std::move(newState);
 
         if (!pEffectRegistry)
@@ -372,6 +381,8 @@ namespace vkShade
 
         ProfileSettings profileSettings;
         profileSettings.safeAntiCheat = profileSafeAntiCheat;
+        profileSettings.depthSourceIndex = profileDepthSourceIndex;
+        profileSettings.hasDepthSourceIndex = profileDepthSourceIndexSet;
 
         if (ConfigSerializer::saveToPath(activeProfilePath, effects, disabledEffects, params, effectPaths, allDefs, profileSettings))
         {
@@ -397,6 +408,167 @@ namespace vkShade
             bool enabled = (disabledSet.find(effectName) == disabledSet.end());
             pEffectRegistry->setEffectEnabled(effectName, enabled);
         }
+    }
+
+    static const char* depthFormatName(VkFormat format)
+    {
+        switch (format)
+        {
+            case VK_FORMAT_D16_UNORM: return "D16";
+            case VK_FORMAT_X8_D24_UNORM_PACK32: return "D24";
+            case VK_FORMAT_D32_SFLOAT: return "D32";
+            case VK_FORMAT_D16_UNORM_S8_UINT: return "D16S8";
+            case VK_FORMAT_D24_UNORM_S8_UINT: return "D24S8";
+            case VK_FORMAT_D32_SFLOAT_S8_UINT: return "D32S8";
+            default: return "Unknown";
+        }
+    }
+
+    void ImGuiOverlay::renderDepthView()
+    {
+        DepthOverlayState depth;
+        {
+            std::lock_guard<std::mutex> lock(depthStateMutex);
+            depth = depthState;
+        }
+        if (profileSafeAntiCheat)
+        {
+            ImGui::TextWrapped("Depth capture is disabled by Safe Anti-Cheat for this profile.");
+            return;
+        }
+        if (!depth.captureEnabled)
+        {
+            ImGui::TextWrapped("Depth capture is off. Enable it in Settings and restart the application.");
+            return;
+        }
+
+        const auto& candidates = depth.candidates;
+        const int selectedIndex = depth.sourceIndex;
+        const auto selectedCandidate = resolveDepthSource(candidates, selectedIndex,
+            depth.sourceFromEnvironment ? DepthState{} : depth.pinnedSource,
+            !depth.sourceFromEnvironment && depth.pinnedSourceDestroyed);
+        bool trackDrawRank = selectedIndex <= DEPTH_SOURCE_DRAW_RANK_BASE;
+
+        auto select = [this](int index, const DepthState& source = DepthState{}) {
+            profileDepthSourceIndex = index;
+            profileDepthSourceIndexSet = true;
+            requestDepthSource(index, source);
+            profileDirty = true;
+        };
+
+        if (depth.sourceFromEnvironment)
+            ImGui::TextWrapped("Selection is controlled by VKSHADE_DEPTH_SOURCE_INDEX.");
+        ImGui::BeginDisabled(depth.sourceFromEnvironment);
+        if (ImGui::RadioButton("Automatic", selectedIndex == DEPTH_SOURCE_AUTO))
+            select(DEPTH_SOURCE_AUTO);
+
+        if (ImGui::Checkbox("Track draw rank", &trackDrawRank))
+        {
+            if (trackDrawRank)
+            {
+                const int rank = selectedCandidate ? static_cast<int>(depthSourceDrawRank(candidates, *selectedCandidate)) : 0;
+                select(DEPTH_SOURCE_DRAW_RANK_BASE - rank);
+            }
+            else if (selectedCandidate)
+                select(static_cast<int>(*selectedCandidate), candidates[*selectedCandidate].depthState);
+            else
+                select(DEPTH_SOURCE_AUTO);
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Follow a draw-call rank instead of a specific image. The image can change as the ranking changes.");
+
+        ImGui::Separator();
+        if (selectedIndex != DEPTH_SOURCE_AUTO && !selectedCandidate)
+        {
+            if (depth.pinnedSourceDestroyed && !depth.sourceFromEnvironment)
+                ImGui::TextWrapped("The selected depth image was destroyed. Select another image or choose Automatic.");
+            else
+                ImGui::TextWrapped("The selected depth source is not available in the current candidate list.");
+        }
+        if (candidates.empty())
+        {
+            ImGui::TextWrapped("No matching depth buffers observed. Only single-sample buffers matching the swapchain size are listed.");
+            ImGui::EndDisabled();
+            return;
+        }
+
+        ImGui::TextDisabled("Draw counts are collected when command buffers are recorded.");
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Reused command buffers may not appear in the current list.");
+        std::vector<size_t> order(candidates.size());
+        std::iota(order.begin(), order.end(), size_t{0});
+        std::sort(order.begin(), order.end(), [&candidates](size_t lhs, size_t rhs) {
+            const auto& left = candidates[lhs].depthState;
+            const auto& right = candidates[rhs].depthState;
+            if (left.extent.width != right.extent.width)
+                return left.extent.width > right.extent.width;
+            if (left.extent.height != right.extent.height)
+                return left.extent.height > right.extent.height;
+            if (left.sourceId != right.sourceId)
+                return left.sourceId < right.sourceId;
+            return lhs < rhs;
+        });
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
+                                     | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+        if (ImGui::BeginTable("DepthSourceTable", 7, tableFlags, ImVec2(0, 0)))
+        {
+            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 32.0f);
+            ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthFixed, 48.0f);
+            ImGui::TableSetupColumn("Image");
+            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90.0f);
+            ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, 70.0f);
+            ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthFixed, 80.0f);
+            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableHeadersRow();
+
+            for (size_t i : order)
+            {
+                const auto& candidate = candidates[i];
+                ImGui::TableNextRow();
+                ImGui::TableSetColumnIndex(0);
+                const std::string sourceId = std::to_string(candidate.depthState.sourceId) + ":"
+                    + convertToString(candidate.depthState.imageView) + ":"
+                    + std::to_string(static_cast<int>(candidate.depthState.observedLayout));
+                ImGui::PushID(sourceId.c_str());
+                if (ImGui::RadioButton("##select", selectedCandidate && *selectedCandidate == i))
+                {
+                    if (trackDrawRank)
+                        select(DEPTH_SOURCE_DRAW_RANK_BASE - static_cast<int>(depthSourceDrawRank(candidates, i)));
+                    else
+                        select(static_cast<int>(i), candidate.depthState);
+                }
+                if (ImGui::IsItemHovered() && !trackDrawRank)
+                    ImGui::SetTooltip("Follow this image for this session. The saved index may refer to another image after restart.");
+                ImGui::PopID();
+
+                ImGui::TableSetColumnIndex(1);
+                ImGui::Text("%zu", i);
+                ImGui::TableSetColumnIndex(2);
+                const std::string image = convertToString(candidate.depthState.image);
+                ImGui::TextUnformatted(image.c_str());
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("View: %s", convertToString(candidate.depthState.imageView).c_str());
+                ImGui::TableSetColumnIndex(3);
+                ImGui::Text("%ux%u", candidate.depthState.extent.width, candidate.depthState.extent.height);
+                ImGui::TableSetColumnIndex(4);
+                ImGui::TextUnformatted(depthFormatName(candidate.depthState.format));
+                ImGui::TableSetColumnIndex(5);
+                ImGui::Text("%llu", static_cast<unsigned long long>(candidate.stats.drawcalls)
+                                      + candidate.stats.drawcallsIndirect);
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Vertices: %llu\nDirect: %u\nIndirect: %u",
+                                      static_cast<unsigned long long>(candidate.stats.vertices),
+                                      candidate.stats.drawcalls, candidate.stats.drawcallsIndirect);
+                ImGui::TableSetColumnIndex(6);
+                const bool active = sameDepthSourceLayout(candidate.depthState, depth.activeSource);
+                const bool automatic = sameDepthSourceLayout(candidate.depthState, depth.automaticSource);
+                ImGui::TextUnformatted(active && automatic ? "Active / Candidate" : active ? "Active" : automatic ? "Candidate" : "");
+                if (ImGui::IsItemHovered())
+                    ImGui::SetTooltip("Active is the selected source. Candidate is the current automatic candidate.");
+            }
+            ImGui::EndTable();
+        }
+        ImGui::EndDisabled();
     }
 
     void ImGuiOverlay::initVulkanBackend(VkFormat swapchainFormat, uint32_t imageCount)
@@ -717,7 +889,7 @@ namespace vkShade
         io.MouseDown[1] = mouse.rightButton;
         io.MouseDown[2] = mouse.middleButton;
         io.MouseWheel = mouse.scrollDelta;
-        io.MouseDrawCursor = true;  // Draw software cursor (games often hide the OS cursor)
+        io.MouseDrawCursor = isWayland() && isWaylandGameCursorHidden();
 
         // Keyboard input for text fields
         // Keys are one-shot events, so we send press and release in same frame
@@ -793,6 +965,12 @@ namespace vkShade
             if (ImGui::BeginTabItem("Settings"))
             {
                 renderSettingsView(keyboard);
+                ImGui::EndTabItem();
+            }
+
+            if (ImGui::BeginTabItem("Depth"))
+            {
+                renderDepthView();
                 ImGui::EndTabItem();
             }
 

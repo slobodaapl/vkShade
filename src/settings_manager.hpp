@@ -54,10 +54,10 @@ namespace vkShade
         void setSafeAntiCheat(bool value) { safeAntiCheat = value; }
 
         // Get raw settings struct (for bulk operations)
-        const VkBasaltSettings& getSettings() const { return settings; }
+        const VkShadeSettings& getSettings() const { return settings; }
 
     private:
-        VkBasaltSettings settings;
+        VkShadeSettings settings;
         bool initialized = false;
         bool safeAntiCheat = false; // Runtime flag: layer hiding active
     };

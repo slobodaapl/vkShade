@@ -133,7 +133,8 @@ namespace vkShade
                                                                             VkDescriptorSetLayout                 descriptorSetLayout,
                                                                             std::vector<VkSampler>                samplers,
                                                                             std::vector<std::vector<VkImageView>> imageViewsVectors,
-                                                                            const std::vector<VkDescriptorType>&  bindingTypes)
+                                                                            const std::vector<VkDescriptorType>&  bindingTypes,
+                                                                            const std::vector<VkImageLayout>&     imageLayouts)
     {
         if (imageViewsVectors.empty() || imageViewsVectors[0].empty())
         {
@@ -143,6 +144,11 @@ namespace vkShade
         if (bindingTypes.size() != imageViewsVectors.size() || samplers.size() != imageViewsVectors.size())
         {
             Logger::err("allocateAndWriteImageSamplerDescriptorSets: binding/sampler/view count mismatch");
+            return {};
+        }
+        if (!imageLayouts.empty() && imageLayouts.size() != imageViewsVectors.size())
+        {
+            Logger::err("allocateAndWriteImageSamplerDescriptorSets: layout/view count mismatch");
             return {};
         }
         std::vector<VkDescriptorSet> descriptorSets(imageViewsVectors[0].size());
@@ -164,6 +170,7 @@ namespace vkShade
         imageInfo.imageView   = VK_NULL_HANDLE;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         std::vector<VkDescriptorImageInfo> imageInfos(imageViewsVectors.size(), imageInfo);
+        const bool hasExplicitImageLayouts = !imageLayouts.empty();
 
         VkWriteDescriptorSet writeDescriptorSet = {};
 
@@ -186,9 +193,9 @@ namespace vkShade
             {
                 imageInfos[j].sampler   = samplers[j];
                 imageInfos[j].imageView = imageViewsVectors[j][i];
-                imageInfos[j].imageLayout = (bindingTypes[j] == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE) ?
-                    VK_IMAGE_LAYOUT_GENERAL :
-                    VK_IMAGE_LAYOUT_GENERAL;
+                imageInfos[j].imageLayout = bindingTypes[j] == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+                    ? VK_IMAGE_LAYOUT_GENERAL
+                    : (hasExplicitImageLayouts ? imageLayouts[j] : VK_IMAGE_LAYOUT_GENERAL);
 
                 writeDescriptorSets[j].dstBinding = j;
                 writeDescriptorSets[j].descriptorType = bindingTypes[j];

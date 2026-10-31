@@ -7,6 +7,7 @@
 #include <chrono>
 #include <map>
 #include <set>
+#include <mutex>
 
 #include "vulkan_include.hpp"
 #include "logical_device.hpp"
@@ -20,6 +21,18 @@ namespace vkShade
     class Effect;
     class EffectRegistry;
 
+    struct DepthOverlayState
+    {
+        std::vector<LogicalDevice::DepthSourceCandidate> candidates;
+        DepthState activeSource;
+        DepthState automaticSource;
+        DepthState pinnedSource;
+        int sourceIndex = -1;
+        bool sourceFromEnvironment = false;
+        bool pinnedSourceDestroyed = false;
+        bool captureEnabled = false;
+    };
+
     struct OverlayState
     {
         std::vector<std::string> effectNames;           // Effects in current config
@@ -30,7 +43,14 @@ namespace vkShade
         std::string configPath;
         std::string configName;  // Just the filename (e.g., "tunic.conf")
         bool effectsEnabled = true;
+        DepthOverlayState depth;
         // Parameters now read directly from EffectRegistry
+    };
+
+    struct DepthSourceRequest
+    {
+        std::optional<int> index;
+        DepthState pinnedSource;
     };
 
     // UI preferences that persist across swapchain recreation
@@ -81,8 +101,21 @@ namespace vkShade
             {
                 ProfileSettings ps = ConfigSerializer::loadProfileSettings(profilePath);
                 profileSafeAntiCheat = ps.safeAntiCheat;
+                profileDepthSourceIndex = ps.depthSourceIndex;
+                profileDepthSourceIndexSet = ps.hasDepthSourceIndex;
                 settingsManager.setSafeAntiCheat(profileSafeAntiCheat);
+                if (pLogicalDevice)
+                    pLogicalDevice->depthSourceOverrideIndex = ps.hasDepthSourceIndex
+                        ? std::optional<int>(ps.depthSourceIndex) : std::nullopt;
             }
+        }
+
+        std::optional<DepthSourceRequest> takeDepthSourceRequest()
+        {
+            std::lock_guard<std::mutex> lock(depthStateMutex);
+            auto request = pendingDepthSourceRequest;
+            pendingDepthSourceRequest.reset();
+            return request;
         }
 
         // Trigger debounced reload (for config switch)
@@ -130,6 +163,7 @@ namespace vkShade
         void processShaderTest();        // Process one shader per frame (runs every frame)
         void renderMainView(const KeyboardState& keyboard);
         void renderDiagnosticsView();
+        void renderDepthView();
         void renderDebugWindow();  // Debug window with effect registry and log data
 
         LogicalDevice* pLogicalDevice;
@@ -147,6 +181,8 @@ namespace vkShade
         uint32_t framebufferWidth = 0;   // Dimensions used to create framebuffers
         uint32_t framebufferHeight = 0;
         OverlayState state;
+        DepthOverlayState depthState;
+        std::mutex depthStateMutex;
         std::vector<std::pair<std::string, std::string>> pendingAddEffects;  // {instanceName, effectType} to add
         bool inSelectionMode = false;
         int insertPosition = -1;  // Position to insert effects (-1 = append to end)
@@ -201,6 +237,15 @@ namespace vkShade
         std::string activeProfilePath;    // Full path to active profile file
         bool profileDirty = false;        // True when changes need saving
         bool profileSafeAntiCheat = false; // Per-profile: force-disable depth capture
+        int profileDepthSourceIndex = -1;
+        bool profileDepthSourceIndexSet = false;
+        std::optional<DepthSourceRequest> pendingDepthSourceRequest;
+
+        void requestDepthSource(std::optional<int> index, const DepthState& pinnedSource = {})
+        {
+            std::lock_guard<std::mutex> lock(depthStateMutex);
+            pendingDepthSourceRequest = DepthSourceRequest{index, pinnedSource};
+        }
 
         void disableDepthEffects();        // Disable effects that use depth buffer
         void autoSaveProfile();           // Save current state to active profile

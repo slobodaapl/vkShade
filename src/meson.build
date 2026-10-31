@@ -160,6 +160,14 @@ executable('vkshade-shader-check',
     dependencies : [reshade_dep],
     install : true)
 
+depth_selection_test = executable('depth-selection-test',
+    '../tests/depth_selection.cpp',
+    'config_serializer.cpp',
+    'logger.cpp',
+    include_directories : [vkShade_include_path, effects_inc, effects_params_inc])
+test('depth-selection', depth_selection_test,
+    args : [join_paths(meson.current_build_dir(), 'depth-selection-test.conf')])
+
 # LD_AUDIT library for Wine Wayland input interposition.
 # Redirects wl_proxy_add_listener bindings from dlopen(RTLD_LOCAL) scopes
 # (e.g. Wine's winewayland.so) to our wrapper in libvkshade.so.

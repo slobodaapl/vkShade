@@ -18,7 +18,7 @@ namespace vkShade
     };
 
     // Global vkShade settings (from vkShade.conf)
-    struct VkBasaltSettings
+    struct VkShadeSettings
     {
         int maxEffects = 10;
         bool overlayBlockInput = true;
@@ -36,6 +36,8 @@ namespace vkShade
     struct ProfileSettings
     {
         bool safeAntiCheat = false;  // Force-disable depth capture for anti-cheat safety
+        int depthSourceIndex = -1;
+        bool hasDepthSourceIndex = false;
     };
 
     // Shader Manager configuration (from shader_manager.conf)
@@ -81,8 +83,8 @@ namespace vkShade
         static std::string getDefaultConfigPath();
 
         // Global settings management (vkShade.conf)
-        static VkBasaltSettings loadSettings();
-        static bool saveSettings(const VkBasaltSettings& settings);
+        static VkShadeSettings loadSettings();
+        static bool saveSettings(const VkShadeSettings& settings);
 
         // Shader Manager config (shader_manager.conf)
         static ShaderManagerConfig loadShaderManagerConfig();

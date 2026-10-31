@@ -28,6 +28,7 @@ namespace vkShade { void mirrorButtonState(uint32_t button, bool pressed); }
 #include <string>
 #include <algorithm>
 #include <cstdlib>
+#include <atomic>
 
 namespace vkShade
 {
@@ -108,6 +109,7 @@ struct GameKeyboardDispatcherData
 
 static std::unordered_map<wl_proxy*, GamePointerDispatcherData> gamePointerDispatchers;
 static std::unordered_map<wl_proxy*, GameKeyboardDispatcherData> gameKeyboardDispatchers;
+static std::atomic<bool> gameCursorHidden{false};
 
 // ── Wrapper pointer listener ─────────────────────────────────────────────────
 
@@ -523,6 +525,11 @@ wl_proxy* wl_proxy_marshal_array_flags(struct wl_proxy* proxy,
     //   5: move
     //   6: resize
     const char* cls = wl_proxy_get_class(proxy);
+    if (cls && std::strcmp(cls, "wl_pointer") == 0 && opcode == 0 && !vkShade::isOverlayProxy(proxy))
+    {
+        gameCursorHidden.store(args[1].o == nullptr, std::memory_order_release);
+    }
+
     if (vkShade::isInputBlocked() && cls && std::strcmp(cls, "xdg_toplevel") == 0 &&
         (opcode == 4 || opcode == 5 || opcode == 6))
     {
@@ -628,6 +635,11 @@ int wl_proxy_add_dispatcher(struct wl_proxy* proxy,
 
 namespace vkShade
 {
+    bool isWaylandGameCursorHidden()
+    {
+        return gameCursorHidden.load(std::memory_order_acquire);
+    }
+
     void notifyGameKeyboardFocus(bool hasFocus)
     {
         std::lock_guard<std::mutex> lock(gameDataMutex);

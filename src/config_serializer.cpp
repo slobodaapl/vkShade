@@ -158,9 +158,9 @@ namespace vkShade
         return configName;
     }
 
-    VkBasaltSettings ConfigSerializer::loadSettings()
+    VkShadeSettings ConfigSerializer::loadSettings()
     {
-        VkBasaltSettings settings;
+        VkShadeSettings settings;
 
         // Check user config first, then fall back to system paths (same order as Config)
         std::string userConfig = getBaseConfigDir() + "/vkShade.conf";
@@ -265,7 +265,7 @@ namespace vkShade
         return settings;
     }
 
-    bool ConfigSerializer::saveSettings(const VkBasaltSettings& settings)
+    bool ConfigSerializer::saveSettings(const VkShadeSettings& settings)
     {
         std::string baseDir = getBaseConfigDir();
         if (baseDir.empty())
@@ -328,7 +328,7 @@ namespace vkShade
         if (stat(configPath.c_str(), &st) == 0)
             return;
 
-        VkBasaltSettings defaults;
+        VkShadeSettings defaults;
         saveSettings(defaults);
         Logger::info("Created default vkShade.conf");
     }
@@ -779,6 +779,15 @@ namespace vkShade
 
             if (key == "safeAntiCheat")
                 settings.safeAntiCheat = (value == "true" || value == "on" || value == "1");
+            else if (key == "depthSourceIndex")
+            {
+                try
+                {
+                    settings.depthSourceIndex = std::stoi(value);
+                    settings.hasDepthSourceIndex = true;
+                }
+                catch (...) { Logger::warn("invalid depthSourceIndex value: " + value); }
+            }
         }
 
         return settings;
@@ -805,6 +814,8 @@ namespace vkShade
         // Write per-profile settings
         if (profileSettings.safeAntiCheat)
             file << "safeAntiCheat = true\n\n";
+        if (profileSettings.hasDepthSourceIndex || profileSettings.depthSourceIndex != -1)
+            file << "depthSourceIndex = " << profileSettings.depthSourceIndex << "\n\n";
 
         // Group params by effect
         std::map<std::string, std::vector<const ConfigParam*>> paramsByEffect;

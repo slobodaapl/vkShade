@@ -563,7 +563,7 @@ namespace vkShade
         ImGui::Spacing();
         ImGui::TextDisabled("Build #%d (%s)", BUILD_NUMBER, BUILD_DATE);
         ImGui::TextDisabled("Report issues:");
-        ImGui::TextLinkOpenURL("github.com/Daaboulex/vkBasalt_overlay_wayland/issues", "https://github.com/Daaboulex/vkBasalt_overlay_wayland/issues");
+        ImGui::TextLinkOpenURL("github.com/slobodaapl/vkShade/issues", "https://github.com/slobodaapl/vkShade/issues");
 
         ImGui::EndChild();
     }

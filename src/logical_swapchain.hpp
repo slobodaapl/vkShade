@@ -44,6 +44,9 @@ namespace vkShade
         VkFormat                             depthResolveFormat = VK_FORMAT_UNDEFINED;
         VkExtent3D                           depthResolveExtent = {0, 0, 1};
         bool                                 depthResolveUsesShader = false;
+        VkImage                              depthResolveSourceImage = VK_NULL_HANDLE;
+        VkImageView                          depthResolveSourceImageView = VK_NULL_HANDLE;
+        uint64_t                             depthResolveSourceId = 0;
         VkSampler                            depthResolveSampler = VK_NULL_HANDLE;
         VkDescriptorSetLayout                depthResolveDescriptorSetLayout = VK_NULL_HANDLE;
         VkDescriptorPool                     depthResolveDescriptorPool = VK_NULL_HANDLE;

@@ -137,6 +137,10 @@ namespace vkShade
                             // Load per-profile settings for the new profile
                             ProfileSettings ps = ConfigSerializer::loadProfileSettings(activeProfilePath);
                             profileSafeAntiCheat = ps.safeAntiCheat;
+                            profileDepthSourceIndex = ps.depthSourceIndex;
+                            profileDepthSourceIndexSet = ps.hasDepthSourceIndex;
+                            requestDepthSource(ps.hasDepthSourceIndex
+                                ? std::optional<int>(ps.depthSourceIndex) : std::nullopt);
                             settingsManager.setSafeAntiCheat(profileSafeAntiCheat);
                             if (profileSafeAntiCheat)
                             {

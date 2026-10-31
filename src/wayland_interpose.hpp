@@ -14,4 +14,6 @@ namespace vkShade
     // all held keys (leave) or re-acquire focus (enter).
     // Only works when wl_proxy_add_listener interposition is active.
     void notifyGameKeyboardFocus(bool hasFocus);
+
+    bool isWaylandGameCursorHidden();
 }

@@ -31,6 +31,7 @@
     FORVKFUNC(CmdCopyImage) \
     FORVKFUNC(CmdExecuteCommands) \
     FORVKFUNC(CmdClearColorImage) \
+    FORVKFUNC(CmdClearDepthStencilImage) \
     FORVKFUNC(CmdDispatch) \
     FORVKFUNC(CmdDraw) \
     FORVKFUNC(CmdDrawIndexed) \

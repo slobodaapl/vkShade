@@ -2,12 +2,12 @@
 
 namespace vkShade
 {
-    std::vector<VkImageView> createImageViews(LogicalDevice*       pLogicalDevice,
-                                              VkFormat             format,
-                                              std::vector<VkImage> images,
-                                              VkImageViewType      viewType,
-                                              VkImageAspectFlags   aspectMask,
-                                              uint32_t             mipLevels)
+    std::vector<VkImageView> createImageViews(LogicalDevice*              pLogicalDevice,
+                                              VkFormat                    format,
+                                              const std::vector<VkImage>& images,
+                                              VkImageViewType             viewType,
+                                              VkImageAspectFlags          aspectMask,
+                                              uint32_t                    mipLevels)
     {
         std::vector<VkImageView> imageViews(images.size());
 

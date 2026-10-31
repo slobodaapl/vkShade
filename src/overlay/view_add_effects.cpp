@@ -17,7 +17,7 @@ namespace vkShade
     {
         if (!search || !search[0])
             return true;
-        std::string lowerText = text;
+        std::string lowerText   = text;
         std::string lowerSearch = search;
         std::transform(lowerText.begin(), lowerText.end(), lowerText.begin(), ::tolower);
         std::transform(lowerSearch.begin(), lowerSearch.end(), lowerSearch.begin(), ::tolower);
@@ -50,12 +50,12 @@ namespace vkShade
             for (int i = 0; i < io.InputQueueCharacters.Size; i++)
             {
                 ImWchar c = io.InputQueueCharacters[i];
-                if (c >= 32 && c < 127)  // Printable ASCII
+                if (c >= 32 && c < 127) // Printable ASCII
                 {
                     size_t len = strlen(addEffectsSearch);
                     if (len < sizeof(addEffectsSearch) - 1)
                     {
-                        addEffectsSearch[len] = static_cast<char>(c);
+                        addEffectsSearch[len]     = static_cast<char>(c);
                         addEffectsSearch[len + 1] = '\0';
                     }
                 }
@@ -78,17 +78,16 @@ namespace vkShade
         // Show shader pre-compilation progress when safe anti-cheat auto-triggered it
         if (shaderTestRunning && profileSafeAntiCheat)
         {
-            float progress = shaderTestQueue.empty() ? 1.0f :
-                static_cast<float>(shaderTestCurrentIndex) / static_cast<float>(shaderTestQueue.size());
-            ImGui::ProgressBar(progress, ImVec2(-1, 0),
-                ("Checking shaders " + std::to_string(shaderTestCurrentIndex) + "/" +
-                 std::to_string(shaderTestQueue.size())).c_str());
+            float progress = shaderTestQueue.empty() ? 1.0f : static_cast<float>(shaderTestCurrentIndex) / static_cast<float>(shaderTestQueue.size());
+            ImGui::ProgressBar(progress,
+                               ImVec2(-1, 0),
+                               ("Checking shaders " + std::to_string(shaderTestCurrentIndex) + "/" + std::to_string(shaderTestQueue.size())).c_str());
         }
         ImGui::Separator();
 
         size_t currentCount = selectedEffects.size();
         size_t pendingCount = pendingAddEffects.size();
-        size_t totalCount = currentCount + pendingCount;
+        size_t totalCount   = currentCount + pendingCount;
 
         // Built-in effects
         std::vector<std::string> builtinEffects = {"cas", "dls", "fxaa", "smaa", "deband", "lut"};
@@ -152,7 +151,7 @@ namespace vkShade
 
         // Helper to render add button for an effect
         auto renderAddButton = [&](const std::string& effectType, const std::string& tooltip = "") {
-            bool atLimit = totalCount >= maxEffectsLimit;
+            bool atLimit      = totalCount >= maxEffectsLimit;
             bool depthBlocked = profileSafeAntiCheat && isDepthEffect(effectType);
 
             if (atLimit || depthBlocked)
@@ -178,9 +177,9 @@ namespace vkShade
         };
 
         // Two column layout
-        float footerHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
+        float footerHeight  = ImGui::GetFrameHeightWithSpacing() + ImGui::GetStyle().ItemSpacing.y;
         float contentHeight = -footerHeight;
-        float columnWidth = ImGui::GetContentRegionAvail().x * 0.5f - ImGui::GetStyle().ItemSpacing.x * 0.5f;
+        float columnWidth   = ImGui::GetContentRegionAvail().x * 0.5f - ImGui::GetStyle().ItemSpacing.x * 0.5f;
 
         // Left column: Available effects
         ImGui::BeginChild("EffectList", ImVec2(columnWidth, contentHeight), true);
@@ -251,7 +250,7 @@ namespace vkShade
             {
                 if (!matchesSearch(effectType, addEffectsSearch))
                     continue;
-                auto it = state.effectPaths.find(effectType);
+                auto        it   = state.effectPaths.find(effectType);
                 std::string path = (it != state.effectPaths.end()) ? it->second : "";
                 renderAddButton(effectType, path);
             }
@@ -277,7 +276,7 @@ namespace vkShade
             {
                 if (!matchesSearch(effectType, addEffectsSearch))
                     continue;
-                auto it = state.effectPaths.find(effectType);
+                auto        it   = state.effectPaths.find(effectType);
                 std::string path = (it != state.effectPaths.end()) ? it->second : "";
                 renderAddButton(effectType, path);
             }
@@ -325,12 +324,12 @@ namespace vkShade
         if (ImGui::Button("Done"))
         {
             // Apply pending effects - insert at position or append
-            int pos = (insertPosition >= 0 && insertPosition <= static_cast<int>(selectedEffects.size()))
-                      ? insertPosition : static_cast<int>(selectedEffects.size());
+            int pos = (insertPosition >= 0 && insertPosition <= static_cast<int>(selectedEffects.size())) ? insertPosition
+                                                                                                          : static_cast<int>(selectedEffects.size());
             for (const auto& [instanceName, effectType] : pendingAddEffects)
             {
                 selectedEffects.insert(selectedEffects.begin() + pos, instanceName);
-                pos++;  // Insert subsequent effects after the previous one
+                pos++; // Insert subsequent effects after the previous one
                 pEffectRegistry->ensureEffect(instanceName, effectType);
                 pEffectRegistry->setEffectEnabled(instanceName, true);
             }
@@ -338,19 +337,19 @@ namespace vkShade
             {
                 pEffectRegistry->setSelectedEffects(selectedEffects);
                 applyRequested = true;
-                profileDirty = true;
+                profileDirty   = true;
             }
             pendingAddEffects.clear();
-            insertPosition = -1;
-            inSelectionMode = false;
+            insertPosition      = -1;
+            inSelectionMode     = false;
             addEffectsSearch[0] = '\0';
         }
         ImGui::SameLine();
         if (ImGui::Button("Cancel"))
         {
             pendingAddEffects.clear();
-            insertPosition = -1;
-            inSelectionMode = false;
+            insertPosition      = -1;
+            inSelectionMode     = false;
             addEffectsSearch[0] = '\0';
         }
     }

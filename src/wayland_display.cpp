@@ -7,10 +7,10 @@
 
 namespace vkShade
 {
-    static wl_display* waylandDisplay = nullptr;
-    static wl_surface* waylandSurface = nullptr;
-    static int waylandChecked = -1; // -1 = unchecked, 0 = no, 1 = yes
-    static bool nonWaylandSurface = false;
+    static wl_display* waylandDisplay    = nullptr;
+    static wl_surface* waylandSurface    = nullptr;
+    static int         waylandChecked    = -1; // -1 = unchecked, 0 = no, 1 = yes
+    static bool        nonWaylandSurface = false;
 
     void setWaylandDisplay(wl_display* display)
     {
@@ -80,9 +80,9 @@ namespace vkShade
             return;
 
         nonWaylandSurface = true;
-        waylandDisplay = nullptr;
-        waylandSurface = nullptr;
-        waylandChecked = 0;
+        waylandDisplay    = nullptr;
+        waylandSurface    = nullptr;
+        waylandChecked    = 0;
         if (source && *source)
             Logger::warn(std::string("unsupported non-Wayland Vulkan surface via ") + source + "; vkShade will pass through only");
         else

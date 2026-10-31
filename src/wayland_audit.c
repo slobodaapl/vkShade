@@ -30,16 +30,14 @@ static uintptr_t vkshade_cookie = 0;
 // Address of our wl_proxy_add_listener wrapper in libvkshade.so
 static uintptr_t wrapper_addr = 0;
 
-unsigned int
-la_version(unsigned int version)
+unsigned int la_version(unsigned int version)
 {
     return LAV_CURRENT;
 }
 
-unsigned int
-la_objopen(struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
+unsigned int la_objopen(struct link_map* map, Lmid_t lmid, uintptr_t* cookie)
 {
-    const char *name = map->l_name;
+    const char* name = map->l_name;
     if (!name || name[0] == '\0')
         return LA_FLG_BINDTO | LA_FLG_BINDFROM; // main executable
 
@@ -48,12 +46,12 @@ la_objopen(struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
     {
         vkshade_cookie = *cookie;
 
-        void *handle = dlopen(name, RTLD_NOLOAD | RTLD_NOW);
+        void* handle = dlopen(name, RTLD_NOLOAD | RTLD_NOW);
         if (handle)
         {
-            void *sym = dlsym(handle, "wl_proxy_add_listener");
+            void* sym = dlsym(handle, "wl_proxy_add_listener");
             if (sym)
-                wrapper_addr = (uintptr_t)sym;
+                wrapper_addr = (uintptr_t) sym;
             dlclose(handle);
         }
 
@@ -62,9 +60,7 @@ la_objopen(struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
 
     // Only audit libraries that might bind wl_proxy_add_listener:
     // wayland-client (defines it), wine modules (call it), game code
-    if (strstr(name, "wayland") ||
-        strstr(name, "wine") ||
-        strstr(name, "proton"))
+    if (strstr(name, "wayland") || strstr(name, "wine") || strstr(name, "proton"))
         return LA_FLG_BINDTO | LA_FLG_BINDFROM;
 
     // Skip everything else — no auditing overhead for unrelated libraries
@@ -72,10 +68,7 @@ la_objopen(struct link_map *map, Lmid_t lmid, uintptr_t *cookie)
 }
 
 #ifdef __LP64__
-uintptr_t
-la_symbind64(Elf64_Sym *sym, unsigned int ndx,
-             uintptr_t *refcook, uintptr_t *defcook,
-             unsigned int *flags, const char *symname)
+uintptr_t la_symbind64(Elf64_Sym* sym, unsigned int ndx, uintptr_t* refcook, uintptr_t* defcook, unsigned int* flags, const char* symname)
 {
     if (!wrapper_addr)
         return sym->st_value;
@@ -91,10 +84,7 @@ la_symbind64(Elf64_Sym *sym, unsigned int ndx,
     return wrapper_addr;
 }
 #else
-uintptr_t
-la_symbind32(Elf32_Sym *sym, unsigned int ndx,
-             uintptr_t *refcook, uintptr_t *defcook,
-             unsigned int *flags, const char *symname)
+uintptr_t la_symbind32(Elf32_Sym* sym, unsigned int ndx, uintptr_t* refcook, uintptr_t* defcook, unsigned int* flags, const char* symname)
 {
     if (!wrapper_addr)
         return sym->st_value;

@@ -8,7 +8,7 @@
 #include <algorithm>
 
 #ifdef __linux__
-#include <malloc.h>  // malloc_trim — reclaim fragmented heap memory
+#include <malloc.h> // malloc_trim — reclaim fragmented heap memory
 #endif
 
 #include "imgui/imgui.h"
@@ -24,30 +24,30 @@ namespace vkShade
         if (!shaderMgrInitialized)
         {
             ShaderManagerConfig config = ConfigSerializer::loadShaderManagerConfig();
-            shaderMgrParentDirs = config.parentDirectories;
-            shaderMgrShaderPaths = config.discoveredShaderPaths;
-            shaderMgrTexturePaths = config.discoveredTexturePaths;
-            shaderMgrInitialized = true;
+            shaderMgrParentDirs        = config.parentDirectories;
+            shaderMgrShaderPaths       = config.discoveredShaderPaths;
+            shaderMgrTexturePaths      = config.discoveredTexturePaths;
+            shaderMgrInitialized       = true;
         }
 
         // Build test queue from all .fx files in discovered shader paths
         shaderTestQueue.clear();
         shaderTestResults.clear();
-        shaderTestCurrentIndex = 0;
-        shaderTestComplete = false;
+        shaderTestCurrentIndex   = 0;
+        shaderTestComplete       = false;
         shaderTestDuplicateCount = 0;
 
         // Cache include paths once — avoids re-reading shader_manager.conf per shader
         ShaderManagerConfig smConfig = ConfigSerializer::loadShaderManagerConfig();
-        shaderTestIncludePaths = smConfig.discoveredShaderPaths;
+        shaderTestIncludePaths       = smConfig.discoveredShaderPaths;
 
         std::set<std::string> seenCanonicalPaths;
         for (const auto& shaderPath : shaderMgrShaderPaths)
         {
             try
             {
-                for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                         shaderPath, std::filesystem::directory_options::skip_permission_denied))
+                for (const auto& entry :
+                     std::filesystem::recursive_directory_iterator(shaderPath, std::filesystem::directory_options::skip_permission_denied))
                 {
                     if (!entry.is_regular_file())
                         continue;
@@ -58,10 +58,15 @@ namespace vkShade
 
                     // Deduplicate by canonical path — catches symlinks pointing
                     // to the same nix store file across shader packs
-                    std::string filePath = entry.path().string();
+                    std::string filePath  = entry.path().string();
                     std::string canonical = filePath;
-                    try { canonical = std::filesystem::canonical(entry.path()).string(); }
-                    catch (...) {}
+                    try
+                    {
+                        canonical = std::filesystem::canonical(entry.path()).string();
+                    }
+                    catch (...)
+                    {
+                    }
                     if (seenCanonicalPaths.count(canonical))
                     {
                         shaderTestDuplicateCount++;
@@ -94,9 +99,8 @@ namespace vkShade
         if (shaderTestCurrentIndex < shaderTestQueue.size())
         {
             const auto& [name, path] = shaderTestQueue[shaderTestCurrentIndex];
-            ShaderTestResult result = testShaderCompilation(name, path, shaderTestIncludePaths);
-            shaderTestResults.emplace_back(result.effectName, result.filePath,
-                result.success, result.errorMessage);
+            ShaderTestResult result  = testShaderCompilation(name, path, shaderTestIncludePaths);
+            shaderTestResults.emplace_back(result.effectName, result.filePath, result.success, result.errorMessage);
             if (result.usesDepth)
                 depthShaders.insert(result.effectName);
             shaderTestCurrentIndex++;
@@ -110,13 +114,12 @@ namespace vkShade
         }
         else
         {
-            shaderTestRunning = false;
+            shaderTestRunning  = false;
             shaderTestComplete = true;
 #ifdef __linux__
-            malloc_trim(0);  // Final cleanup after all tests
+            malloc_trim(0); // Final cleanup after all tests
 #endif
-            Logger::info("Shader test complete: tested " +
-                std::to_string(shaderTestResults.size()) + " shaders");
+            Logger::info("Shader test complete: tested " + std::to_string(shaderTestResults.size()) + " shaders");
         }
     }
 
@@ -127,11 +130,10 @@ namespace vkShade
         if (shaderTestRunning)
         {
             // Show progress while testing
-            float progress = shaderTestQueue.empty() ? 1.0f :
-                static_cast<float>(shaderTestCurrentIndex) / static_cast<float>(shaderTestQueue.size());
-            ImGui::ProgressBar(progress, ImVec2(-1, 0),
-                ("Testing " + std::to_string(shaderTestCurrentIndex) + "/" +
-                 std::to_string(shaderTestQueue.size())).c_str());
+            float progress = shaderTestQueue.empty() ? 1.0f : static_cast<float>(shaderTestCurrentIndex) / static_cast<float>(shaderTestQueue.size());
+            ImGui::ProgressBar(progress,
+                               ImVec2(-1, 0),
+                               ("Testing " + std::to_string(shaderTestCurrentIndex) + "/" + std::to_string(shaderTestQueue.size())).c_str());
         }
         else
         {
@@ -171,22 +173,22 @@ namespace vkShade
             {
                 ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "(%d duplicates skipped)", shaderTestDuplicateCount);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Identical files (symlinks or copies) found in multiple shader paths.\nEach unique file is tested exactly once.");
+                    ImGui::SetTooltip(
+                        "Identical files (symlinks or copies) found in multiple shader paths.\nEach unique file is tested exactly once.");
             }
         }
     }
 
     // Render detailed test results in collapsible sections
     // Call this separately after the main shader manager content
-    static void renderShaderTestResults(
-        const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
-        const std::set<std::string>& depthShaderNames)
+    static void renderShaderTestResults(const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
+                                        const std::set<std::string>&                                                depthShaderNames)
     {
         if (results.empty())
             return;
 
         // Count failures and depth shaders for headers
-        int failCount = 0;
+        int failCount  = 0;
         int depthCount = 0;
         for (const auto& [name, path, success, error] : results)
         {
@@ -300,10 +302,9 @@ namespace vkShade
 // Expose renderShaderTestResults for use by view_shader_manager.cpp
 namespace vkShade
 {
-    void renderShaderTestResultsUI(
-        const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
-        const std::set<std::string>& depthShaderNames)
+    void renderShaderTestResultsUI(const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
+                                   const std::set<std::string>&                                                depthShaderNames)
     {
         renderShaderTestResults(results, depthShaderNames);
     }
-}
+} // namespace vkShade

@@ -11,7 +11,7 @@ namespace vkShade
         if (initialized)
             return;
 
-        settings = ConfigSerializer::loadSettings();
+        settings    = ConfigSerializer::loadSettings();
         initialized = true;
         Logger::info("SettingsManager initialized");
     }

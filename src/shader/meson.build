@@ -6,6 +6,7 @@ shader_src = [
     'full_screen_triangle.vert.glsl',
     'fxaa.frag.glsl',
     'lut.frag.glsl',
+    'present_copy.frag.glsl',
     'smaa_blend.frag.glsl',
     'smaa_blend.vert.glsl',
     'smaa_edge_color.frag.glsl',
@@ -16,8 +17,10 @@ shader_src = [
 ]
 
 glsl_compiler = find_program('glslangValidator')
-glsl_generator = generator(glsl_compiler,
-    output    : [ '@BASENAME@.h' ],
-    arguments : [ '-V', '-x', '@INPUT@', '-o', '@OUTPUT@' ])
+glsl_generator = generator(
+    glsl_compiler,
+    output: ['@BASENAME@.h'],
+    arguments: ['-V', '-x', '@INPUT@', '-o', '@OUTPUT@'],
+)
 
 shader_include = glsl_generator.process(shader_src)

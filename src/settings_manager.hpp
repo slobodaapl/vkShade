@@ -22,44 +22,116 @@ namespace vkShade
         void initialize();
 
         // Check if already initialized
-        bool isInitialized() const { return initialized; }
+        bool isInitialized() const
+        {
+            return initialized;
+        }
 
         // Save current settings to vkShade.conf
         bool save();
 
         // Getters
-        int getMaxEffects() const { return std::clamp(settings.maxEffects, 1, 200); }
-        bool getOverlayBlockInput() const { return settings.overlayBlockInput; }
-        const std::string& getToggleKey() const { return settings.toggleKey; }
-        const std::string& getReloadKey() const { return settings.reloadKey; }
-        const std::string& getOverlayKey() const { return settings.overlayKey; }
-        bool getEnableOnLaunch() const { return settings.enableOnLaunch; }
-        bool getDepthCapture() const { return settings.depthCapture; }
-        bool getAutoApply() const { return settings.autoApply; }
-        int getAutoApplyDelay() const { return settings.autoApplyDelay; }
-        bool getShowDebugWindow() const { return settings.showDebugWindow; }
-        bool getSafeAntiCheat() const { return safeAntiCheat; }
+        int getMaxEffects() const
+        {
+            return std::clamp(settings.maxEffects, 1, 200);
+        }
+        bool getOverlayBlockInput() const
+        {
+            return settings.overlayBlockInput;
+        }
+        const std::string& getToggleKey() const
+        {
+            return settings.toggleKey;
+        }
+        const std::string& getReloadKey() const
+        {
+            return settings.reloadKey;
+        }
+        const std::string& getOverlayKey() const
+        {
+            return settings.overlayKey;
+        }
+        bool getEnableOnLaunch() const
+        {
+            return settings.enableOnLaunch;
+        }
+        bool getDepthCapture() const
+        {
+            return settings.depthCapture;
+        }
+        bool getAutoApply() const
+        {
+            return settings.autoApply;
+        }
+        int getAutoApplyDelay() const
+        {
+            return settings.autoApplyDelay;
+        }
+        bool getShowDebugWindow() const
+        {
+            return settings.showDebugWindow;
+        }
+        bool getSafeAntiCheat() const
+        {
+            return safeAntiCheat;
+        }
 
         // Setters (update in-memory state, call save() to persist)
-        void setMaxEffects(int value) { settings.maxEffects = std::clamp(value, 1, 200); }
-        void setOverlayBlockInput(bool value) { settings.overlayBlockInput = value; }
-        void setToggleKey(const std::string& value) { settings.toggleKey = value; }
-        void setReloadKey(const std::string& value) { settings.reloadKey = value; }
-        void setOverlayKey(const std::string& value) { settings.overlayKey = value; }
-        void setEnableOnLaunch(bool value) { settings.enableOnLaunch = value; }
-        void setDepthCapture(bool value) { settings.depthCapture = value; }
-        void setAutoApply(bool value) { settings.autoApply = value; }
-        void setAutoApplyDelay(int value) { settings.autoApplyDelay = value; }
-        void setShowDebugWindow(bool value) { settings.showDebugWindow = value; }
-        void setSafeAntiCheat(bool value) { safeAntiCheat = value; }
+        void setMaxEffects(int value)
+        {
+            settings.maxEffects = std::clamp(value, 1, 200);
+        }
+        void setOverlayBlockInput(bool value)
+        {
+            settings.overlayBlockInput = value;
+        }
+        void setToggleKey(const std::string& value)
+        {
+            settings.toggleKey = value;
+        }
+        void setReloadKey(const std::string& value)
+        {
+            settings.reloadKey = value;
+        }
+        void setOverlayKey(const std::string& value)
+        {
+            settings.overlayKey = value;
+        }
+        void setEnableOnLaunch(bool value)
+        {
+            settings.enableOnLaunch = value;
+        }
+        void setDepthCapture(bool value)
+        {
+            settings.depthCapture = value;
+        }
+        void setAutoApply(bool value)
+        {
+            settings.autoApply = value;
+        }
+        void setAutoApplyDelay(int value)
+        {
+            settings.autoApplyDelay = value;
+        }
+        void setShowDebugWindow(bool value)
+        {
+            settings.showDebugWindow = value;
+        }
+        void setSafeAntiCheat(bool value)
+        {
+            safeAntiCheat = value;
+        }
 
         // Get raw settings struct (for bulk operations)
-        const VkShadeSettings& getSettings() const { return settings; }
+        const VkShadeSettings& getSettings() const
+        {
+            return settings;
+        }
 
     private:
         VkShadeSettings settings;
-        bool initialized = false;
-        bool safeAntiCheat = false; // Runtime flag: layer hiding active
+        bool            initialized   = false;
+        bool            safeAntiCheat = false; // Runtime flag: layer hiding active
     };
 
     // Global settings manager instance (like effectRegistry)

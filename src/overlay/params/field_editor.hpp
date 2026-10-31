@@ -39,19 +39,18 @@ namespace vkShade
     private:
         FieldEditorFactory() = default;
         std::map<ParamType, std::unique_ptr<FieldEditor>> editors;
-        std::map<ParamType, CreatorFunc> creators;
+        std::map<ParamType, CreatorFunc>                  creators;
     };
 
-    // Helper macro for auto-registration
-    #define REGISTER_FIELD_EDITOR(ParamTypeValue, EditorClass) \
-        namespace { \
-            static bool _registered_##EditorClass = []() { \
-                FieldEditorFactory::instance().registerEditor( \
-                    ParamTypeValue, \
-                    []() { return std::make_unique<EditorClass>(); }); \
-                return true; \
-            }(); \
-        }
+// Helper macro for auto-registration
+#define REGISTER_FIELD_EDITOR(ParamTypeValue, EditorClass) \
+    namespace \
+    { \
+        static bool _registered_##EditorClass = []() { \
+            FieldEditorFactory::instance().registerEditor(ParamTypeValue, []() { return std::make_unique<EditorClass>(); }); \
+            return true; \
+        }(); \
+    }
 
     // Main entry point - renders the appropriate editor for a parameter
     bool renderFieldEditor(EffectParam& param);

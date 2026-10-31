@@ -19,31 +19,30 @@ namespace vkShade
     {
         std::string name;
         std::string label;
-        ParamType type;
-        float defaultFloat = 0.0f;
-        float minFloat = 0.0f;
-        float maxFloat = 1.0f;
-        int defaultInt = 0;
-        int minInt = 0;
-        int maxInt = 100;
+        ParamType   type         = ParamType::Float;
+        float       defaultFloat = 0.0f;
+        float       minFloat     = 0.0f;
+        float       maxFloat     = 1.0f;
+        int         defaultInt   = 0;
+        int         minInt       = 0;
+        int         maxInt       = 100;
     };
 
     // Factory function signature for creating effects
-    using EffectFactory = std::function<std::shared_ptr<Effect>(
-        LogicalDevice* pLogicalDevice,
-        VkFormat format,
-        VkExtent2D extent,
-        std::vector<VkImage> inputImages,
-        std::vector<VkImage> outputImages,
-        Config* pConfig)>;
+    using EffectFactory = std::function<std::shared_ptr<Effect>(LogicalDevice*              pLogicalDevice,
+                                                                VkFormat                    format,
+                                                                VkExtent2D                  extent,
+                                                                const std::vector<VkImage>& inputImages,
+                                                                const std::vector<VkImage>& outputImages,
+                                                                Config*                     pConfig)>;
 
     // Built-in effect definition
     struct BuiltInEffectDef
     {
-        std::string typeName;
-        bool usesSrgbFormat;
+        std::string           typeName;
+        bool                  usesSrgbFormat = false;
         std::vector<ParamDef> params;
-        EffectFactory factory;
+        EffectFactory         factory;
     };
 
     // Registry of all built-in effects

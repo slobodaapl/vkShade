@@ -80,57 +80,86 @@ wayland_scanner = find_program('wayland-scanner')
 
 # Generate pointer-constraints-unstable-v1 protocol code
 wl_protocols_dir = wayland_protocols_dep.get_variable('pkgdatadir')
-pointer_constraints_xml = join_paths(wl_protocols_dir, 'unstable', 'pointer-constraints', 'pointer-constraints-unstable-v1.xml')
+pointer_constraints_xml = join_paths(
+    wl_protocols_dir,
+    'unstable',
+    'pointer-constraints',
+    'pointer-constraints-unstable-v1.xml',
+)
 
-pointer_constraints_client_h = custom_target('pointer-constraints-client-header',
+pointer_constraints_client_h = custom_target(
+    'pointer-constraints-client-header',
     input: pointer_constraints_xml,
     output: 'pointer-constraints-unstable-v1-client-protocol.h',
-    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'])
+    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
 
-pointer_constraints_code = custom_target('pointer-constraints-code',
+pointer_constraints_code = custom_target(
+    'pointer-constraints-code',
     input: pointer_constraints_xml,
     output: 'pointer-constraints-unstable-v1-protocol.c',
-    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'])
+    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
 
 conf_paths = configuration_data()
-conf_paths.set_quoted('SYSCONFDIR', join_paths(get_option('prefix'), get_option('sysconfdir')))
-conf_paths.set_quoted('DATADIR', join_paths(get_option('prefix'), get_option('datadir')))
+conf_paths.set_quoted(
+    'SYSCONFDIR',
+    join_paths(get_option('prefix'), get_option('sysconfdir')),
+)
+conf_paths.set_quoted(
+    'DATADIR',
+    join_paths(get_option('prefix'), get_option('datadir')),
+)
 
-configure_file(output: 'config_paths.hpp',
-               configuration : conf_paths)
+configure_file(output: 'config_paths.hpp', configuration: conf_paths)
 
 # X11/X.h library contains many definitions (e.g. None)
 # which conflicts with the rest codebase with with Meson --unity=on option
-keyboard_input_x11_lib = static_library('keyboard_input_x11', 'keyboard_input_x11.cpp')
+keyboard_input_x11_lib = static_library(
+    'keyboard_input_x11',
+    'keyboard_input_x11.cpp',
+)
 mouse_input_lib = static_library('mouse_input', 'mouse_input.cpp')
 input_blocker_lib = static_library('input_blocker', 'input_blocker.cpp')
 
 # Wayland input backends — built as static libs to isolate wayland-client headers.
 # wayland_input_common provides a shared seat/queue used by both keyboard and mouse.
-wayland_input_common_lib = static_library('wayland_input_common',
-    'wayland_input_common.cpp', 'wayland_display.cpp',
-    dependencies: [wayland_client_dep])
-keyboard_input_wayland_lib = static_library('keyboard_input_wayland',
+wayland_input_common_lib = static_library(
+    'wayland_input_common',
+    'wayland_input_common.cpp',
+    'wayland_display.cpp',
+    dependencies: [wayland_client_dep],
+)
+keyboard_input_wayland_lib = static_library(
+    'keyboard_input_wayland',
     'keyboard_input_wayland.cpp',
     link_with: [wayland_input_common_lib],
-    dependencies: [wayland_client_dep, xkbcommon_dep])
-mouse_input_wayland_lib = static_library('mouse_input_wayland',
+    dependencies: [wayland_client_dep, xkbcommon_dep],
+)
+mouse_input_wayland_lib = static_library(
+    'mouse_input_wayland',
     'mouse_input_wayland.cpp',
     link_with: [wayland_input_common_lib],
-    dependencies: [wayland_client_dep])
-wayland_pointer_constraints_lib = static_library('wayland_pointer_constraints',
-    'wayland_pointer_constraints.cpp', pointer_constraints_code,
+    dependencies: [wayland_client_dep],
+)
+wayland_pointer_constraints_lib = static_library(
+    'wayland_pointer_constraints',
+    'wayland_pointer_constraints.cpp',
+    pointer_constraints_code,
     pointer_constraints_client_h,
     link_with: [wayland_input_common_lib],
-    dependencies: [wayland_client_dep])
+    dependencies: [wayland_client_dep],
+)
 # Wayland event interposition — wraps game's pointer/keyboard listeners to
 # suppress events when overlay has input blocked. Needs default visibility
 # for the wl_proxy_add_listener symbol override.
-wayland_interpose_lib = static_library('wayland_interpose',
+wayland_interpose_lib = static_library(
+    'wayland_interpose',
     'wayland_interpose.cpp',
     dependencies: [wayland_client_dep],
     c_args: ['-fvisibility=default'],
-    cpp_args: ['-fvisibility=default'])
+    cpp_args: ['-fvisibility=default'],
+)
 
 imgui_inc = include_directories('imgui')
 overlay_inc = include_directories('overlay')
@@ -138,49 +167,118 @@ effects_inc = include_directories('effects')
 effects_builtin_inc = include_directories('effects/builtin')
 effects_params_inc = include_directories('effects/params')
 
-shared_library('vkshade',
-    vkShade_src, overlay_src, imgui_src, shader_include,
-    link_with: [keyboard_input_x11_lib, mouse_input_lib, input_blocker_lib,
-                wayland_input_common_lib, keyboard_input_wayland_lib, mouse_input_wayland_lib,
-                wayland_pointer_constraints_lib, wayland_interpose_lib],
-    include_directories : [vkShade_include_path, imgui_inc, overlay_inc, effects_inc, effects_builtin_inc, effects_params_inc],
-    cpp_args : ['-DIMGUI_IMPL_VULKAN_NO_PROTOTYPES'],
-    dependencies : [x11_dep, xi_dep, wayland_client_dep, xkbcommon_dep, reshade_dep],
+shared_library(
+    'vkshade',
+    vkShade_src,
+    overlay_src,
+    imgui_src,
+    shader_include,
+    link_with: [
+        keyboard_input_x11_lib,
+        mouse_input_lib,
+        input_blocker_lib,
+        wayland_input_common_lib,
+        keyboard_input_wayland_lib,
+        mouse_input_wayland_lib,
+        wayland_pointer_constraints_lib,
+        wayland_interpose_lib,
+    ],
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_builtin_inc,
+        effects_params_inc,
+    ],
+    cpp_args: ['-DIMGUI_IMPL_VULKAN_NO_PROTOTYPES'],
+    dependencies: [
+        x11_dep,
+        xi_dep,
+        wayland_client_dep,
+        xkbcommon_dep,
+        reshade_dep,
+    ],
     gnu_symbol_visibility: 'hidden',
-    install : true,
-    install_dir : lib_dir)
+    install: true,
+    install_dir: lib_dir,
+)
 
-executable('vkshade-shader-check',
+executable(
+    'vkshade-shader-check',
     'shader_check.cpp',
     'reshade_parser.cpp',
     'config.cpp',
     'config_serializer.cpp',
     'logger.cpp',
-    include_directories : [vkShade_include_path, imgui_inc, overlay_inc, effects_inc, effects_builtin_inc, effects_params_inc],
-    dependencies : [reshade_dep],
-    install : true)
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_builtin_inc,
+        effects_params_inc,
+    ],
+    dependencies: [reshade_dep],
+    install: true,
+)
 
-depth_selection_test = executable('depth-selection-test',
+depth_selection_test = executable(
+    'depth-selection-test',
     '../tests/depth_selection.cpp',
     'config_serializer.cpp',
     'logger.cpp',
-    include_directories : [vkShade_include_path, effects_inc, effects_params_inc])
-test('depth-selection', depth_selection_test,
-    args : [join_paths(meson.current_build_dir(), 'depth-selection-test.conf')])
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+)
+swapchain_usage_test = executable(
+    'swapchain-usage-test',
+    '../tests/swapchain_usage.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('swapchain-usage', swapchain_usage_test)
+vulkan_helpers_test = executable(
+    'vulkan-helpers-test',
+    '../tests/vulkan_helpers.cpp',
+    'descriptor_set.cpp',
+    'shader.cpp',
+    'logger.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_params_inc,
+    ],
+)
+test('vulkan-helpers', vulkan_helpers_test, env: ['VKSHADE_LOG_LEVEL=none'])
+test('vkcube-launcher', find_program('../scripts/test-vkcube.sh'))
+test(
+    'depth-selection',
+    depth_selection_test,
+    args: [join_paths(meson.current_build_dir(), 'depth-selection-test.conf')],
+)
 
 # LD_AUDIT library for Wine Wayland input interposition.
 # Redirects wl_proxy_add_listener bindings from dlopen(RTLD_LOCAL) scopes
 # (e.g. Wine's winewayland.so) to our wrapper in libvkshade.so.
 dl_dep = cpp.find_library('dl')
-shared_library('vkshade-audit',
+shared_library(
+    'vkshade-audit',
     'wayland_audit.c',
     dependencies: [dl_dep],
-    install : true,
-    install_dir : lib_dir)
+    install: true,
+    install_dir: lib_dir,
+)
 
 vkshade_run_conf = configuration_data()
-vkshade_run_conf.set_quoted('VKSHADE_LIB', join_paths(get_option('prefix'), lib_dir, 'libvkshade.so'))
-vkshade_run_conf.set_quoted('VKSHADE_AUDIT_LIB', join_paths(get_option('prefix'), lib_dir, 'libvkshade-audit.so'))
+vkshade_run_conf.set_quoted(
+    'VKSHADE_LIB',
+    join_paths(get_option('prefix'), lib_dir, 'libvkshade.so'),
+)
+vkshade_run_conf.set_quoted(
+    'VKSHADE_AUDIT_LIB',
+    join_paths(get_option('prefix'), lib_dir, 'libvkshade-audit.so'),
+)
 
 vkshade_run = configure_file(
     input: '../scripts/vkshade-run.in',

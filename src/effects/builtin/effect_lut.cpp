@@ -20,12 +20,12 @@
 
 namespace vkShade
 {
-    LutEffect::LutEffect(LogicalDevice*       pLogicalDevice,
-                         VkFormat             format,
-                         VkExtent2D           imageExtent,
-                         std::vector<VkImage> inputImages,
-                         std::vector<VkImage> outputImages,
-                         Config*              pConfig)
+    LutEffect::LutEffect(LogicalDevice*              pLogicalDevice,
+                         VkFormat                    format,
+                         VkExtent2D                  imageExtent,
+                         const std::vector<VkImage>& inputImages,
+                         const std::vector<VkImage>& outputImages,
+                         Config*                     pConfig)
     {
         vertexCode   = full_screen_triangle_vert;
         fragmentCode = lut_frag;
@@ -39,8 +39,8 @@ namespace vkShade
 
         int      height = 0;
         LutCube  lutCube;
-        stbi_uc* pixels = nullptr;
-        int32_t  usingPNG = (int32_t)(lutFile.find(".cube") == std::string::npos && lutFile.find(".CUBE") == std::string::npos);
+        stbi_uc* pixels   = nullptr;
+        int32_t  usingPNG = (int32_t) (lutFile.find(".cube") == std::string::npos && lutFile.find(".CUBE") == std::string::npos);
         if (!usingPNG)
         {
             lutCube = LutCube(lutFile);
@@ -81,9 +81,6 @@ namespace vkShade
         fragmentSpecializationInfo.dataSize      = specMapEntrys.size() * sizeof(int32_t);
         fragmentSpecializationInfo.pData         = specData.data();
 
-        pVertexSpecInfo   = nullptr;
-        pFragmentSpecInfo = &fragmentSpecializationInfo;
-
         VkExtent3D lutImageExtent = {(uint32_t) height, (uint32_t) height, (uint32_t) height};
 
         lutImage = createImages(pLogicalDevice,
@@ -114,14 +111,15 @@ namespace vkShade
 
         lutDescriptorPool = createDescriptorPool(pLogicalDevice, poolSizes);
 
-        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig);
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, &fragmentSpecializationInfo);
 
-        lutDescriptorSet =
-            allocateAndWriteImageSamplerDescriptorSets(pLogicalDevice,
-                                                       lutDescriptorPool,
-                                                       lutDescriptorSetLayout,
-                                                       {sampler},
-                                                       std::vector<std::vector<VkImageView>>(1, std::vector<VkImageView>(1, lutImageView)))[0];
+        lutDescriptorSet = allocateAndWriteImageSamplerDescriptorSets(pLogicalDevice,
+                                                                      lutDescriptorPool,
+                                                                      lutDescriptorSetLayout,
+                                                                      {sampler},
+                                                                      {{lutImageView}},
+                                                                      {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+                                                                      {VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL})[0];
     }
     LutEffect::~LutEffect()
     {

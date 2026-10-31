@@ -36,8 +36,8 @@ namespace fs = std::filesystem;
 
 // --- Signal-safe crash recovery (mirrors reshade_parser.cpp) ---
 
-static thread_local sigjmp_buf s_jmpBuf;
-static thread_local volatile sig_atomic_t s_jmpActive = 0;
+static thread_local sigjmp_buf            s_jmpBuf;
+static thread_local volatile sig_atomic_t s_jmpActive    = 0;
 static thread_local volatile sig_atomic_t s_caughtSignal = 0;
 
 static void crashHandler(int sig)
@@ -57,8 +57,8 @@ static void installCrashHandlers()
     if (installed)
         return;
     struct sigaction sa = {};
-    sa.sa_handler = crashHandler;
-    sa.sa_flags = 0;
+    sa.sa_handler       = crashHandler;
+    sa.sa_flags         = 0;
     sigemptyset(&sa.sa_mask);
     sigaction(SIGFPE, &sa, nullptr);
     sigaction(SIGABRT, &sa, nullptr);
@@ -80,40 +80,38 @@ static void addStandardMacros(reshadefx::preprocessor& pp)
     pp.add_macro_definition("BUFFER_COLOR_BIT_DEPTH", "BUFFER_COLOR_DEPTH");
 
     // Function-like macros must use append_string (raw struct lacks parameter substitution markers)
-    pp.append_string(
-        "#define tex2DgatherR(s, coords) tex2Dgather(s, coords, 0)\n"
-        "#define tex2DgatherG(s, coords) tex2Dgather(s, coords, 1)\n"
-        "#define tex2DgatherB(s, coords) tex2Dgather(s, coords, 2)\n"
-        "#define tex2DgatherA(s, coords) tex2Dgather(s, coords, 3)\n"
-        "#define float2x3 matrix<float, 2, 3>\n"
-        "#define float2x4 matrix<float, 2, 4>\n"
-        "#define float3x2 matrix<float, 3, 2>\n"
-        "#define float3x4 matrix<float, 3, 4>\n"
-        "#define float4x2 matrix<float, 4, 2>\n"
-        "#define float4x3 matrix<float, 4, 3>\n"
-        "#define ddx_fine(x) ddx(x)\n"
-        "#define ddy_fine(x) ddy(x)\n"
-        "#define ddx_coarse(x) ddx(x)\n"
-        "#define ddy_coarse(x) ddy(x)\n"
-        "#define atomicAdd(d, v) (v)\n"
-        "#define atomicMax(d, v) (v)\n"
-        "#define atomicMin(d, v) (v)\n"
-        "#define atomicOr(d, v) (v)\n"
-        "#define atomicAnd(d, v) (v)\n"
-        "#define atomicXor(d, v) (v)\n"
-        "#define atomicExchange(d, v) (v)\n"
-        "#define atomicCompSwap(d, c, v) (v)\n"
-        "#define tex2Dstore(s, c, v) (0)\n"
-        "#define barrier() (0)\n"
-        "#define memoryBarrier() (0)\n"
-        "#define groupMemoryBarrier() (0)\n"
-        "#define DeviceMemoryBarrier() (0)\n"
-        "#define GroupMemoryBarrier() (0)\n"
-        "#define AllMemoryBarrier() (0)\n"
-        "#define DeviceMemoryBarrierWithGroupSync() (0)\n"
-        "#define GroupMemoryBarrierWithGroupSync() (0)\n"
-        "#define AllMemoryBarrierWithGroupSync() (0)\n"
-    );
+    pp.append_string("#define tex2DgatherR(s, coords) tex2Dgather(s, coords, 0)\n"
+                     "#define tex2DgatherG(s, coords) tex2Dgather(s, coords, 1)\n"
+                     "#define tex2DgatherB(s, coords) tex2Dgather(s, coords, 2)\n"
+                     "#define tex2DgatherA(s, coords) tex2Dgather(s, coords, 3)\n"
+                     "#define float2x3 matrix<float, 2, 3>\n"
+                     "#define float2x4 matrix<float, 2, 4>\n"
+                     "#define float3x2 matrix<float, 3, 2>\n"
+                     "#define float3x4 matrix<float, 3, 4>\n"
+                     "#define float4x2 matrix<float, 4, 2>\n"
+                     "#define float4x3 matrix<float, 4, 3>\n"
+                     "#define ddx_fine(x) ddx(x)\n"
+                     "#define ddy_fine(x) ddy(x)\n"
+                     "#define ddx_coarse(x) ddx(x)\n"
+                     "#define ddy_coarse(x) ddy(x)\n"
+                     "#define atomicAdd(d, v) (v)\n"
+                     "#define atomicMax(d, v) (v)\n"
+                     "#define atomicMin(d, v) (v)\n"
+                     "#define atomicOr(d, v) (v)\n"
+                     "#define atomicAnd(d, v) (v)\n"
+                     "#define atomicXor(d, v) (v)\n"
+                     "#define atomicExchange(d, v) (v)\n"
+                     "#define atomicCompSwap(d, c, v) (v)\n"
+                     "#define tex2Dstore(s, c, v) (0)\n"
+                     "#define barrier() (0)\n"
+                     "#define memoryBarrier() (0)\n"
+                     "#define groupMemoryBarrier() (0)\n"
+                     "#define DeviceMemoryBarrier() (0)\n"
+                     "#define GroupMemoryBarrier() (0)\n"
+                     "#define AllMemoryBarrier() (0)\n"
+                     "#define DeviceMemoryBarrierWithGroupSync() (0)\n"
+                     "#define GroupMemoryBarrierWithGroupSync() (0)\n"
+                     "#define AllMemoryBarrierWithGroupSync() (0)\n");
 }
 
 // --- shader_manager.conf parser (standalone, avoids ConfigSerializer dependency) ---
@@ -128,11 +126,11 @@ struct ShaderManagerConfig
 static ShaderManagerConfig loadShaderManagerConfig()
 {
     ShaderManagerConfig config;
-    const char* home = getenv("HOME");
+    const char*         home = getenv("HOME");
     if (!home)
         return config;
 
-    std::string configPath = std::string(home) + "/.config/vkShade/shader_manager.conf";
+    std::string   configPath = std::string(home) + "/.config/vkShade/shader_manager.conf";
     std::ifstream file(configPath);
     if (!file.is_open())
     {
@@ -151,13 +149,13 @@ static ShaderManagerConfig loadShaderManagerConfig()
         if (eq == std::string::npos)
             continue;
 
-        std::string key = line.substr(0, eq);
+        std::string key   = line.substr(0, eq);
         std::string value = line.substr(eq + 1);
 
         auto trim = [](std::string& s) {
             size_t a = s.find_first_not_of(" \t");
             size_t b = s.find_last_not_of(" \t");
-            s = (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
+            s        = (a == std::string::npos) ? "" : s.substr(a, b - a + 1);
         };
         trim(key);
         trim(value);
@@ -188,9 +186,9 @@ static const char* categoryName(ErrorCategory cat)
     switch (cat)
     {
         case ErrorCategory::Preprocessor: return "PREPROCESSOR";
-        case ErrorCategory::Parse:        return "PARSE";
-        case ErrorCategory::Signal:       return "SIGNAL";
-        case ErrorCategory::Exception:    return "EXCEPTION";
+        case ErrorCategory::Parse: return "PARSE";
+        case ErrorCategory::Signal: return "SIGNAL";
+        case ErrorCategory::Exception: return "EXCEPTION";
     }
     return "UNKNOWN";
 }
@@ -210,20 +208,17 @@ static ErrorCategory categorizeError(const std::string& msg)
 
 struct TestResult
 {
-    std::string name;
-    std::string path;
-    bool success = false;
-    bool usesDepth = false;
-    std::string errorMessage;
+    std::string   name;
+    std::string   path;
+    bool          success   = false;
+    bool          usesDepth = false;
+    std::string   errorMessage;
     ErrorCategory category = ErrorCategory::Parse;
 };
 
 // --- Core test function (mirrors testShaderCompilation) ---
 
-static TestResult testShader(
-    const std::string& effectName,
-    const std::string& effectPath,
-    const std::vector<std::string>& includePaths)
+static TestResult testShader(const std::string& effectName, const std::string& effectPath, const std::vector<std::string>& includePaths)
 {
     TestResult result;
     result.name = effectName;
@@ -232,11 +227,11 @@ static TestResult testShader(
     installCrashHandlers();
     if (sigsetjmp(s_jmpBuf, 1) != 0)
     {
-        s_jmpActive = 0;
+        s_jmpActive         = 0;
         std::string sigName = (s_caughtSignal == SIGFPE) ? "SIGFPE" : "SIGABRT";
-        result.success = false;
+        result.success      = false;
         result.errorMessage = sigName + " signal during shader compilation";
-        result.category = ErrorCategory::Signal;
+        result.category     = ErrorCategory::Signal;
         return result;
     }
     s_jmpActive = 1;
@@ -250,23 +245,23 @@ static TestResult testShader(
 
         if (!preprocessor.append_file(effectPath))
         {
-            result.success = false;
-            result.errorMessage = "Failed to load shader file";
+            result.success       = false;
+            result.errorMessage  = "Failed to load shader file";
             std::string ppErrors = preprocessor.errors();
             if (!ppErrors.empty())
                 result.errorMessage += ": " + ppErrors;
             result.category = ErrorCategory::Preprocessor;
-            s_jmpActive = 0;
+            s_jmpActive     = 0;
             return result;
         }
 
         std::string ppErrors = preprocessor.errors();
         if (!ppErrors.empty() && ppErrors.find("preprocessor error:") != std::string::npos)
         {
-            result.success = false;
+            result.success      = false;
             result.errorMessage = "Preprocessor errors: " + ppErrors;
-            result.category = ErrorCategory::Preprocessor;
-            s_jmpActive = 0;
+            result.category     = ErrorCategory::Preprocessor;
+            s_jmpActive         = 0;
             return result;
         }
 
@@ -274,15 +269,14 @@ static TestResult testShader(
         std::string ppOutput = preprocessor.output();
 
         reshadefx::parser parser;
-        auto codegen = std::unique_ptr<reshadefx::codegen>(
-            reshadefx::create_codegen_spirv(true, true, true, true));
+        auto              codegen = std::unique_ptr<reshadefx::codegen>(reshadefx::create_codegen_spirv(true, true, true, true));
 
         if (!parser.parse(preprocessor.output(), codegen.get()))
         {
-            result.success = false;
+            result.success      = false;
             result.errorMessage = "Parse errors: " + parser.errors();
-            result.category = ErrorCategory::Parse;
-            s_jmpActive = 0;
+            result.category     = ErrorCategory::Parse;
+            s_jmpActive         = 0;
             return result;
         }
 
@@ -320,28 +314,37 @@ static TestResult testShader(
                         return false;
 
                     std::set<uint32_t> entryFuncIds;
-                    size_t i = 5;
+                    size_t             i = 5;
                     while (i < code.size())
                     {
                         uint32_t wc = code[i] >> 16;
                         uint32_t op = code[i] & 0xFFFF;
-                        if (wc == 0) break;
+                        if (wc == 0)
+                            break;
                         if (op == 15 && wc >= 3 && (i + 2) < code.size())
                             entryFuncIds.insert(code[i + 2]);
                         i += wc;
                     }
 
-                    struct FuncInfo { bool loadsDepth = false; std::vector<uint32_t> callees; };
+                    struct FuncInfo
+                    {
+                        bool                  loadsDepth = false;
+                        std::vector<uint32_t> callees;
+                    };
                     std::unordered_map<uint32_t, FuncInfo> funcs;
-                    uint32_t curFunc = 0;
-                    i = 5;
+                    uint32_t                               curFunc = 0;
+                    i                                              = 5;
                     while (i < code.size())
                     {
                         uint32_t wc = code[i] >> 16;
                         uint32_t op = code[i] & 0xFFFF;
-                        if (wc == 0) break;
+                        if (wc == 0)
+                            break;
                         if (op == 54 && wc >= 3 && (i + 2) < code.size())
-                        { curFunc = code[i + 2]; funcs[curFunc]; }
+                        {
+                            curFunc = code[i + 2];
+                            funcs[curFunc];
+                        }
                         else if (op == 56)
                             curFunc = 0;
                         else if (curFunc != 0)
@@ -355,16 +358,24 @@ static TestResult testShader(
                     }
 
                     std::queue<uint32_t> q;
-                    std::set<uint32_t> visited;
-                    for (uint32_t ep : entryFuncIds) { q.push(ep); visited.insert(ep); }
+                    std::set<uint32_t>   visited;
+                    for (uint32_t ep : entryFuncIds)
+                    {
+                        q.push(ep);
+                        visited.insert(ep);
+                    }
                     while (!q.empty())
                     {
-                        uint32_t fid = q.front(); q.pop();
+                        uint32_t fid = q.front();
+                        q.pop();
                         auto it = funcs.find(fid);
-                        if (it == funcs.end()) continue;
-                        if (it->second.loadsDepth) return true;
+                        if (it == funcs.end())
+                            continue;
+                        if (it->second.loadsDepth)
+                            return true;
                         for (uint32_t c : it->second.callees)
-                            if (visited.insert(c).second) q.push(c);
+                            if (visited.insert(c).second)
+                                q.push(c);
                     }
                     return false;
                 };
@@ -385,15 +396,15 @@ static TestResult testShader(
     }
     catch (const std::exception& e)
     {
-        result.success = false;
+        result.success      = false;
         result.errorMessage = "Exception: " + std::string(e.what());
-        result.category = ErrorCategory::Exception;
+        result.category     = ErrorCategory::Exception;
     }
     catch (...)
     {
-        result.success = false;
+        result.success      = false;
         result.errorMessage = "Unknown exception during compilation";
-        result.category = ErrorCategory::Exception;
+        result.category     = ErrorCategory::Exception;
     }
 
     s_jmpActive = 0;
@@ -411,9 +422,8 @@ static std::vector<fs::path> collectFxFiles(const std::string& dir)
         return files;
     }
 
-    for (const auto& entry : fs::recursive_directory_iterator(dir,
-             fs::directory_options::follow_directory_symlink |
-             fs::directory_options::skip_permission_denied))
+    for (const auto& entry :
+         fs::recursive_directory_iterator(dir, fs::directory_options::follow_directory_symlink | fs::directory_options::skip_permission_denied))
     {
         if (!entry.is_regular_file())
             continue;
@@ -447,7 +457,7 @@ int main(int argc, char* argv[])
     else
     {
         // Read from shader_manager.conf
-        auto config = loadShaderManagerConfig();
+        auto config  = loadShaderManagerConfig();
         includePaths = config.discoveredShaderPaths;
 
         if (includePaths.empty())
@@ -485,8 +495,13 @@ int main(int argc, char* argv[])
     // Deduplicate by canonical path (resolves symlinks, e.g. /etc/... → /nix/store/...)
     for (auto& f : allFiles)
     {
-        try { f = fs::canonical(f); }
-        catch (...) {}
+        try
+        {
+            f = fs::canonical(f);
+        }
+        catch (...)
+        {
+        }
     }
     std::sort(allFiles.begin(), allFiles.end());
     allFiles.erase(std::unique(allFiles.begin(), allFiles.end()), allFiles.end());
@@ -500,10 +515,10 @@ int main(int argc, char* argv[])
     std::cout << "Testing " << allFiles.size() << " shader(s)...\n\n";
 
     // Run tests
-    int passCount = 0;
-    int failCount = 0;
-    int warnCount = 0;
-    int depthCount = 0;
+    int                     passCount  = 0;
+    int                     failCount  = 0;
+    int                     warnCount  = 0;
+    int                     depthCount = 0;
     std::vector<TestResult> failures;
     std::vector<TestResult> warnings;
 
@@ -562,10 +577,14 @@ int main(int argc, char* argv[])
     {
         // Group by category
         std::vector<std::pair<ErrorCategory, std::vector<const TestResult*>>> grouped;
-        auto addToGroup = [&](ErrorCategory cat, const TestResult* r) {
+        auto                                                                  addToGroup = [&](ErrorCategory cat, const TestResult* r) {
             for (auto& [gc, vec] : grouped)
             {
-                if (gc == cat) { vec.push_back(r); return; }
+                if (gc == cat)
+                {
+                    vec.push_back(r);
+                    return;
+                }
             }
             grouped.push_back({cat, {r}});
         };
@@ -584,13 +603,12 @@ int main(int argc, char* argv[])
                 // Truncate long error messages per line
                 std::string msg = r->errorMessage;
                 // Print each line of the error indented
-                size_t pos = 0;
-                bool first = true;
+                size_t pos   = 0;
+                bool   first = true;
                 while (pos < msg.size())
                 {
-                    size_t nl = msg.find('\n', pos);
-                    std::string line = (nl == std::string::npos)
-                        ? msg.substr(pos) : msg.substr(pos, nl - pos);
+                    size_t      nl   = msg.find('\n', pos);
+                    std::string line = (nl == std::string::npos) ? msg.substr(pos) : msg.substr(pos, nl - pos);
                     if (first)
                         std::cout << "    Error: " << line << "\n";
                     else
@@ -612,14 +630,13 @@ int main(int argc, char* argv[])
         for (const auto& w : warnings)
         {
             std::cout << "  " << w.name << "\n";
-            std::string msg = w.errorMessage;
-            size_t pos = 0;
-            bool first = true;
+            std::string msg   = w.errorMessage;
+            size_t      pos   = 0;
+            bool        first = true;
             while (pos < msg.size())
             {
-                size_t nl = msg.find('\n', pos);
-                std::string line = (nl == std::string::npos)
-                    ? msg.substr(pos) : msg.substr(pos, nl - pos);
+                size_t      nl   = msg.find('\n', pos);
+                std::string line = (nl == std::string::npos) ? msg.substr(pos) : msg.substr(pos, nl - pos);
                 if (first)
                     std::cout << "    " << line << "\n";
                 else

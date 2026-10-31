@@ -45,7 +45,7 @@ namespace vkShade
     std::vector<std::string> ConfigSerializer::listConfigs()
     {
         std::vector<std::string> configs;
-        std::string dir = getConfigsDir();
+        std::string              dir = getConfigsDir();
 
         DIR* d = opendir(dir.c_str());
         if (!d)
@@ -76,13 +76,12 @@ namespace vkShade
         return result;
     }
 
-    bool ConfigSerializer::saveConfig(
-        const std::string& configName,
-        const std::vector<std::string>& effects,
-        const std::vector<std::string>& disabledEffects,
-        const std::vector<ConfigParam>& params,
-        const std::map<std::string, std::string>& effectPaths,
-        const std::vector<PreprocessorDefinition>& preprocessorDefs)
+    bool ConfigSerializer::saveConfig(const std::string&                         configName,
+                                      const std::vector<std::string>&            effects,
+                                      const std::vector<std::string>&            disabledEffects,
+                                      const std::vector<ConfigParam>&            params,
+                                      const std::map<std::string, std::string>&  effectPaths,
+                                      const std::vector<PreprocessorDefinition>& preprocessorDefs)
     {
         std::string configsDir = getConfigsDir();
         if (configsDir.empty())
@@ -94,7 +93,7 @@ namespace vkShade
         mkdir(configsDir.c_str(), 0755);
 
         std::string filePath = configsDir + "/" + configName + ".conf";
-        bool result = saveToPath(filePath, effects, disabledEffects, params, effectPaths, preprocessorDefs);
+        bool        result   = saveToPath(filePath, effects, disabledEffects, params, effectPaths, preprocessorDefs);
         if (result)
             Logger::info("Saved config to: " + filePath);
         return result;
@@ -203,14 +202,14 @@ namespace vkShade
             if (eq == std::string::npos)
                 continue;
 
-            std::string key = line.substr(0, eq);
+            std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
 
             // Trim whitespace
             auto trimWs = [](std::string& s) {
                 size_t start = s.find_first_not_of(" \t");
-                size_t end = s.find_last_not_of(" \t");
-                s = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+                size_t end   = s.find_last_not_of(" \t");
+                s            = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
             };
             trimWs(key);
             trimWs(value);
@@ -229,8 +228,7 @@ namespace vkShade
                         settings.maxEffects = std::clamp(parsed, MIN_MAX_EFFECTS, MAX_MAX_EFFECTS);
                         if (settings.maxEffects != parsed)
                         {
-                            Logger::warn("clamped maxEffects from " + std::to_string(parsed) + " to "
-                                         + std::to_string(settings.maxEffects));
+                            Logger::warn("clamped maxEffects from " + std::to_string(parsed) + " to " + std::to_string(settings.maxEffects));
                         }
                     }
                 }
@@ -255,8 +253,14 @@ namespace vkShade
                 settings.autoApply = (value == "true" || value == "1");
             else if (key == "autoApplyDelay")
             {
-                try { settings.autoApplyDelay = std::stoi(value); }
-                catch (...) { Logger::err("invalid autoApplyDelay value: " + value); }
+                try
+                {
+                    settings.autoApplyDelay = std::stoi(value);
+                }
+                catch (...)
+                {
+                    Logger::err("invalid autoApplyDelay value: " + value);
+                }
             }
             else if (key == "showDebugWindow")
                 settings.showDebugWindow = (value == "true" || value == "1");
@@ -276,7 +280,7 @@ namespace vkShade
 
         mkdir(baseDir.c_str(), 0755);
 
-        std::string configPath = baseDir + "/vkShade.conf";
+        std::string   configPath = baseDir + "/vkShade.conf";
         std::ofstream file(configPath);
         if (!file.is_open())
         {
@@ -335,7 +339,7 @@ namespace vkShade
 
     std::string ConfigSerializer::detectGameName()
     {
-        char buf[PATH_MAX];
+        char    buf[PATH_MAX];
         ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
         if (len <= 0)
             return "";
@@ -377,23 +381,18 @@ namespace vkShade
             return false;
         for (size_t i = 0; i < a.size(); i++)
         {
-            if (std::tolower(static_cast<unsigned char>(a[i])) !=
-                std::tolower(static_cast<unsigned char>(b[i])))
+            if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
                 return false;
         }
         return true;
     }
 
     // Scan a directory recursively for Shaders/ and Textures/ subdirectories
-    static void scanDirectoryForShaders(
-        const std::string& dir,
-        std::vector<std::string>& shaderPaths,
-        std::vector<std::string>& texturePaths)
+    static void scanDirectoryForShaders(const std::string& dir, std::vector<std::string>& shaderPaths, std::vector<std::string>& texturePaths)
     {
         try
         {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                dir, std::filesystem::directory_options::skip_permission_denied))
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(dir, std::filesystem::directory_options::skip_permission_denied))
             {
                 if (!entry.is_directory())
                     continue;
@@ -414,7 +413,7 @@ namespace vkShade
     ShaderManagerConfig ConfigSerializer::loadShaderManagerConfig()
     {
         ShaderManagerConfig config;
-        std::string configPath = getBaseConfigDir() + "/shader_manager.conf";
+        std::string         configPath = getBaseConfigDir() + "/shader_manager.conf";
 
         std::ifstream file(configPath);
         if (!file.is_open())
@@ -430,8 +429,7 @@ namespace vkShade
             config.parentDirectories.push_back(defaultReshadeDir);
 
             // Auto-scan to discover paths
-            scanDirectoryForShaders(defaultReshadeDir,
-                config.discoveredShaderPaths, config.discoveredTexturePaths);
+            scanDirectoryForShaders(defaultReshadeDir, config.discoveredShaderPaths, config.discoveredTexturePaths);
 
             // Save the config so it persists
             saveShaderManagerConfig(config);
@@ -452,14 +450,14 @@ namespace vkShade
             if (eq == std::string::npos)
                 continue;
 
-            std::string key = line.substr(0, eq);
+            std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
 
             // Trim whitespace
             auto trimWs = [](std::string& s) {
                 size_t start = s.find_first_not_of(" \t");
-                size_t end = s.find_last_not_of(" \t");
-                s = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
+                size_t end   = s.find_last_not_of(" \t");
+                s            = (start == std::string::npos) ? "" : s.substr(start, end - start + 1);
             };
             trimWs(key);
             trimWs(value);
@@ -486,7 +484,7 @@ namespace vkShade
 
         mkdir(baseDir.c_str(), 0755);
 
-        std::string configPath = baseDir + "/shader_manager.conf";
+        std::string   configPath = baseDir + "/shader_manager.conf";
         std::ofstream file(configPath);
         if (!file.is_open())
         {
@@ -516,8 +514,7 @@ namespace vkShade
 
     // --- Per-app profile system ---
 
-    std::string ConfigSerializer::getProfilePath(const std::string& gameName,
-                                                  const std::string& profileName)
+    std::string ConfigSerializer::getProfilePath(const std::string& gameName, const std::string& profileName)
     {
         std::string configsDir = getConfigsDir();
         if (configsDir.empty() || gameName.empty())
@@ -588,7 +585,7 @@ namespace vkShade
 
         // Check for named profiles: <gameName>@<name>.conf
         std::string prefix = gameName + "@";
-        DIR* d = opendir(configsDir.c_str());
+        DIR*        d      = opendir(configsDir.c_str());
         if (!d)
             return profiles;
 
@@ -610,7 +607,8 @@ namespace vkShade
         }
         closedir(d);
 
-        std::sort(profiles.begin() + (profiles.empty() ? 0 : 1), profiles.end());
+        if (profiles.size() > 1)
+            std::sort(profiles.begin() + 1, profiles.end());
         return profiles;
     }
 
@@ -619,7 +617,7 @@ namespace vkShade
         if (gameName.empty())
             return "default";
 
-        std::string activePath = getConfigsDir() + "/.active_profiles";
+        std::string   activePath = getConfigsDir() + "/.active_profiles";
         std::ifstream file(activePath);
         if (!file.is_open())
             return "default";
@@ -638,8 +636,7 @@ namespace vkShade
         return "default";
     }
 
-    void ConfigSerializer::setActiveProfile(const std::string& gameName,
-                                             const std::string& profileName)
+    void ConfigSerializer::setActiveProfile(const std::string& gameName, const std::string& profileName)
     {
         if (gameName.empty())
             return;
@@ -665,7 +662,7 @@ namespace vkShade
         entries[gameName] = profileName;
 
         // Write back atomically
-        std::string tmpPath = activePath + ".tmp";
+        std::string   tmpPath = activePath + ".tmp";
         std::ofstream file(tmpPath);
         if (!file.is_open())
             return;
@@ -678,9 +675,7 @@ namespace vkShade
             std::rename(tmpPath.c_str(), activePath.c_str());
     }
 
-    bool ConfigSerializer::createProfile(const std::string& gameName,
-                                          const std::string& profileName,
-                                          const std::string& copyFromProfile)
+    bool ConfigSerializer::createProfile(const std::string& gameName, const std::string& profileName, const std::string& copyFromProfile)
     {
         if (gameName.empty() || profileName.empty() || profileName == "default")
             return false;
@@ -692,12 +687,12 @@ namespace vkShade
         // Check if already exists
         struct stat st;
         if (stat(newPath.c_str(), &st) == 0)
-            return false;  // Already exists
+            return false; // Already exists
 
         // Copy from source profile or create empty
         if (!copyFromProfile.empty())
         {
-            std::string srcPath = getProfilePath(gameName, copyFromProfile);
+            std::string   srcPath = getProfilePath(gameName, copyFromProfile);
             std::ifstream src(srcPath, std::ios::binary);
             if (src.is_open())
             {
@@ -721,8 +716,7 @@ namespace vkShade
         return true;
     }
 
-    bool ConfigSerializer::deleteProfile(const std::string& gameName,
-                                          const std::string& profileName)
+    bool ConfigSerializer::deleteProfile(const std::string& gameName, const std::string& profileName)
     {
         // Prevent deleting default profile
         if (profileName.empty() || profileName == "default")
@@ -749,7 +743,7 @@ namespace vkShade
     ProfileSettings ConfigSerializer::loadProfileSettings(const std::string& filePath)
     {
         ProfileSettings settings;
-        std::ifstream file(filePath);
+        std::ifstream   file(filePath);
         if (!file.is_open())
             return settings;
 
@@ -766,7 +760,7 @@ namespace vkShade
             if (eq == std::string::npos)
                 continue;
 
-            std::string key = line.substr(0, eq);
+            std::string key   = line.substr(0, eq);
             std::string value = line.substr(eq + 1);
 
             // Trim whitespace
@@ -783,27 +777,29 @@ namespace vkShade
             {
                 try
                 {
-                    settings.depthSourceIndex = std::stoi(value);
+                    settings.depthSourceIndex    = std::stoi(value);
                     settings.hasDepthSourceIndex = true;
                 }
-                catch (...) { Logger::warn("invalid depthSourceIndex value: " + value); }
+                catch (...)
+                {
+                    Logger::warn("invalid depthSourceIndex value: " + value);
+                }
             }
         }
 
         return settings;
     }
 
-    bool ConfigSerializer::saveToPath(
-        const std::string& filePath,
-        const std::vector<std::string>& effects,
-        const std::vector<std::string>& disabledEffects,
-        const std::vector<ConfigParam>& params,
-        const std::map<std::string, std::string>& effectPaths,
-        const std::vector<PreprocessorDefinition>& preprocessorDefs,
-        const ProfileSettings& profileSettings)
+    bool ConfigSerializer::saveToPath(const std::string&                         filePath,
+                                      const std::vector<std::string>&            effects,
+                                      const std::vector<std::string>&            disabledEffects,
+                                      const std::vector<ConfigParam>&            params,
+                                      const std::map<std::string, std::string>&  effectPaths,
+                                      const std::vector<PreprocessorDefinition>& preprocessorDefs,
+                                      const ProfileSettings&                     profileSettings)
     {
         // Atomic write: write to temp file then rename to prevent corruption
-        std::string tmpPath = filePath + ".tmp";
+        std::string   tmpPath = filePath + ".tmp";
         std::ofstream file(tmpPath);
         if (!file.is_open())
         {
@@ -868,9 +864,7 @@ namespace vkShade
         // Write paths for effects that have no params or defs
         for (const auto& [effectName, path] : effectPaths)
         {
-            if (!path.empty() &&
-                paramsByEffect.find(effectName) == paramsByEffect.end() &&
-                defsByEffect.find(effectName) == defsByEffect.end())
+            if (!path.empty() && paramsByEffect.find(effectName) == paramsByEffect.end() && defsByEffect.find(effectName) == defsByEffect.end())
             {
                 file << "# " << effectName << "\n";
                 file << effectName << " = " << path << "\n\n";

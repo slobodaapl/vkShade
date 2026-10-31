@@ -10,20 +10,14 @@ namespace vkShade
     public:
         bool render(EffectParam& param) override
         {
-            auto& p = static_cast<FloatVecParam&>(param);
-            bool changed = false;
+            auto& p       = static_cast<FloatVecParam&>(param);
+            bool  changed = false;
 
             switch (p.componentCount)
             {
-                case 2:
-                    changed = ImGui::SliderFloat2(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]);
-                    break;
-                case 3:
-                    changed = ImGui::SliderFloat3(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]);
-                    break;
-                case 4:
-                    changed = ImGui::SliderFloat4(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]);
-                    break;
+                case 2: changed = ImGui::SliderFloat2(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]); break;
+                case 3: changed = ImGui::SliderFloat3(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]); break;
+                case 4: changed = ImGui::SliderFloat4(p.label.c_str(), p.value, p.minValue[0], p.maxValue[0]); break;
             }
 
             if (changed && p.step > 0.0f)

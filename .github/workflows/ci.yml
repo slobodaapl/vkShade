@@ -38,7 +38,8 @@ jobs:
           if [ -n "$BINARY" ]; then
             ARGS=$(jq -r '.verify.args // "--version"' .github/update.json)
             echo "Verifying: result/bin/$BINARY $ARGS"
-            ./result/bin/"$BINARY" $ARGS
+            read -r -a args <<< "$ARGS"
+            ./result/bin/"$BINARY" "${args[@]}"
             # ldd check for ELF binaries
             if file ./result/bin/"$BINARY" | grep -q ELF; then
               MISSING=$(ldd ./result/bin/"$BINARY" 2>&1 | grep "not found" || true)

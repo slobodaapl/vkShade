@@ -12,32 +12,35 @@ namespace vkShade
 {
     enum class EffectType
     {
-        BuiltIn,  // cas, dls, fxaa, smaa, deband, lut
-        ReShade   // .fx files
+        BuiltIn, // cas, dls, fxaa, smaa, deband, lut
+        ReShade  // .fx files
     };
 
     // Preprocessor definition extracted from ReShade shader
     // These are user-configurable compile-time constants (#define macros)
     struct PreprocessorDefinition
     {
-        std::string name;           // Macro name, e.g., "ENABLE_SCANLINES"
-        std::string value;          // Current value (will be passed to compiler)
-        std::string defaultValue;   // Default from shader or "1"
-        std::string effectName;     // Which effect this belongs to
+        std::string name;         // Macro name, e.g., "ENABLE_SCANLINES"
+        std::string value;        // Current value (will be passed to compiler)
+        std::string defaultValue; // Default from shader or "1"
+        std::string effectName;   // Which effect this belongs to
     };
 
     struct EffectConfig
     {
-        std::string name;       // Instance name: "cas", "cas.2", "Clarity", etc.
-        std::string effectType; // Base type: "cas", "Clarity" (for finding shader/identifying built-in)
-        std::string filePath;   // For ReShade: path to .fx file, empty for built-in
-        EffectType type = EffectType::BuiltIn;
-        bool enabled = true;
+        std::string                               name;       // Instance name: "cas", "cas.2", "Clarity", etc.
+        std::string                               effectType; // Base type: "cas", "Clarity" (for finding shader/identifying built-in)
+        std::string                               filePath;   // For ReShade: path to .fx file, empty for built-in
+        EffectType                                type    = EffectType::BuiltIn;
+        bool                                      enabled = true;
         std::vector<std::unique_ptr<EffectParam>> parameters;
-        std::vector<PreprocessorDefinition> preprocessorDefs;  // ReShade: user-configurable macros
-        std::string compileError;  // Empty if compiled successfully, error message if failed
-        std::filesystem::file_time_type fileModTime{};  // Last modification time of .fx file when parsed
-        bool hasFailed() const { return !compileError.empty(); }
+        std::vector<PreprocessorDefinition>       preprocessorDefs; // ReShade: user-configurable macros
+        std::string                               compileError;     // Empty if compiled successfully, error message if failed
+        std::filesystem::file_time_type           fileModTime{};    // Last modification time of .fx file when parsed
+        bool                                      hasFailed() const
+        {
+            return !compileError.empty();
+        }
     };
 
 } // namespace vkShade

@@ -17,12 +17,15 @@ namespace vkShade
     class Config
     {
     public:
-        Config();  // Finds and loads vkShade.conf
-        Config(const std::string& path);  // Loads specific config file
+        Config();                        // Finds and loads vkShade.conf
+        Config(const std::string& path); // Loads specific config file
         Config(const Config& other);
 
         // Set a fallback config for options not found in this config
-        void setFallback(Config* fallback) { pFallback = fallback; }
+        void setFallback(Config* fallback)
+        {
+            pFallback = fallback;
+        }
 
         template<typename T>
         T getOption(const std::string& option, const T& defaultValue = {})
@@ -69,25 +72,31 @@ namespace vkShade
         // In-memory override support (does not modify config file)
         void setOverride(const std::string& option, const std::string& value);
         void clearOverrides();
-        bool hasOverrides() const { return !overrides.empty(); }
+        bool hasOverrides() const
+        {
+            return !overrides.empty();
+        }
 
         // Hot-reload support
-        bool        hasConfigChanged();
-        void        reload();
-        std::string getConfigFilePath() const { return configFilePath; }
+        bool               hasConfigChanged();
+        void               reload();
+        const std::string& getConfigFilePath() const
+        {
+            return configFilePath;
+        }
 
         // Get all effect definitions (keys whose values are .fx file paths)
         std::unordered_map<std::string, std::string> getEffectDefinitions() const;
 
     private:
         std::unordered_map<std::string, std::string> options;
-        std::unordered_map<std::string, std::string> overrides;  // In-memory overrides
+        std::unordered_map<std::string, std::string> overrides; // In-memory overrides
         std::string                                  configFilePath;
         time_t                                       lastModifiedTime = 0;
-        Config*                                      pFallback = nullptr;
-        std::chrono::steady_clock::time_point        lastConfigCheckTime{};  // Throttle stat() calls
+        Config*                                      pFallback        = nullptr;
+        std::chrono::steady_clock::time_point        lastConfigCheckTime{}; // Throttle stat() calls
 
-        void readConfigLine(std::string line);
+        void readConfigLine(const std::string& line);
         void readConfigFile(std::ifstream& stream);
         void updateLastModifiedTime();
         bool hasOptionKey(const std::string& option) const;

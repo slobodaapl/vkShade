@@ -16,4 +16,4 @@ namespace vkShade
     void notifyGameKeyboardFocus(bool hasFocus);
 
     bool isWaylandGameCursorHidden();
-}
+} // namespace vkShade

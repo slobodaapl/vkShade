@@ -8,8 +8,8 @@ namespace vkShade
     public:
         bool render(EffectParam& param) override
         {
-            auto& p = static_cast<BoolParam&>(param);
-            bool changed = false;
+            auto& p       = static_cast<BoolParam&>(param);
+            bool  changed = false;
 
             if (ImGui::Checkbox(p.label.c_str(), &p.value))
                 changed = true;

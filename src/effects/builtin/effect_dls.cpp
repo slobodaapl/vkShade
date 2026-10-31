@@ -15,12 +15,12 @@
 
 namespace vkShade
 {
-    DlsEffect::DlsEffect(LogicalDevice*       pLogicalDevice,
-                         VkFormat             format,
-                         VkExtent2D           imageExtent,
-                         std::vector<VkImage> inputImages,
-                         std::vector<VkImage> outputImages,
-                         Config*              pConfig)
+    DlsEffect::DlsEffect(LogicalDevice*              pLogicalDevice,
+                         VkFormat                    format,
+                         VkExtent2D                  imageExtent,
+                         const std::vector<VkImage>& inputImages,
+                         const std::vector<VkImage>& outputImages,
+                         Config*                     pConfig)
     {
         float sharpness = pConfig->getOption<float>("dlsSharpness", 0.5f);
         float denoise   = pConfig->getOption<float>("dlsDenoise", 0.17f);
@@ -44,10 +44,7 @@ namespace vkShade
         fragmentSpecializationInfo.dataSize      = sizeof(float) * 2;
         fragmentSpecializationInfo.pData         = specData;
 
-        pVertexSpecInfo   = nullptr;
-        pFragmentSpecInfo = &fragmentSpecializationInfo;
-
-        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig);
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, &fragmentSpecializationInfo);
     }
     DlsEffect::~DlsEffect()
     {

@@ -6,8 +6,8 @@
 
 namespace vkShade
 {
-    uint32_t convertToKeySymWayland(std::string key);
-    bool     isKeyPressedWayland(uint32_t ks);
+    uint32_t      convertToKeySymWayland(const std::string& key);
+    bool          isKeyPressedWayland(uint32_t ks);
     KeyboardState getKeyboardStateWayland();
 
     // Initialize Wayland keyboard from a captured wl_display

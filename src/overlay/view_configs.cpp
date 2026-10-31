@@ -14,12 +14,12 @@ namespace vkShade
         ImGui::Separator();
 
         // Refresh config list and get current default
-        configList = ConfigSerializer::listConfigs();
+        configList                 = ConfigSerializer::listConfigs();
         std::string currentDefault = ConfigSerializer::getDefaultConfig();
 
         // Calculate button group width once
-        float setDefaultWidth = ImGui::CalcTextSize("Set Default").x + ImGui::GetStyle().FramePadding.x * 2;
-        float deleteWidth = ImGui::CalcTextSize("Delete").x + ImGui::GetStyle().FramePadding.x * 2;
+        float setDefaultWidth  = ImGui::CalcTextSize("Set Default").x + ImGui::GetStyle().FramePadding.x * 2;
+        float deleteWidth      = ImGui::CalcTextSize("Delete").x + ImGui::GetStyle().FramePadding.x * 2;
         float buttonGroupWidth = setDefaultWidth + deleteWidth + ImGui::GetStyle().ItemSpacing.x;
 
         ImGui::BeginChild("ConfigList", ImVec2(0, -ImGui::GetFrameHeightWithSpacing()), false);
@@ -36,7 +36,7 @@ namespace vkShade
                 // Signal to vkshade.cpp to load this config
                 pendingConfigPath = ConfigSerializer::getConfigsDir() + "/" + cfg + ".conf";
                 strncpy(saveConfigName, cfg.c_str(), sizeof(saveConfigName) - 1);
-                applyRequested = true;
+                applyRequested     = true;
                 inConfigManageMode = false;
             }
             ImGui::SameLine(buttonGroupX);

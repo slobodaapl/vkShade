@@ -10,8 +10,8 @@ namespace vkShade
     public:
         bool render(EffectParam& param) override
         {
-            auto& p = static_cast<FloatParam&>(param);
-            bool changed = false;
+            auto& p       = static_cast<FloatParam&>(param);
+            bool  changed = false;
 
             if (ImGui::SliderFloat(p.label.c_str(), &p.value, p.minValue, p.maxValue))
             {

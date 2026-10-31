@@ -34,20 +34,20 @@ namespace vkShade
         imageFormatListCreateInfo.pViewFormats    = formats;
 
         VkImageCreateInfo imageCreateInfo;
-        imageCreateInfo.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-        imageCreateInfo.pNext         = (unormFormat == srgbFormat) ? nullptr : &imageFormatListCreateInfo;
-        imageCreateInfo.flags         = (unormFormat == srgbFormat) ? 0 : VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
-        imageCreateInfo.imageType     = VK_IMAGE_TYPE_2D;
-        imageCreateInfo.format        = swapchainCreateInfo.imageFormat;
-        imageCreateInfo.extent.width  = swapchainCreateInfo.imageExtent.width;
-        imageCreateInfo.extent.height = swapchainCreateInfo.imageExtent.height;
-        imageCreateInfo.extent.depth  = 1;
-        imageCreateInfo.mipLevels     = 1;
-        imageCreateInfo.arrayLayers   = swapchainCreateInfo.imageArrayLayers;
-        imageCreateInfo.samples       = VK_SAMPLE_COUNT_1_BIT;
-        imageCreateInfo.tiling        = VK_IMAGE_TILING_OPTIMAL;
-        imageCreateInfo.usage         = swapchainCreateInfo.imageUsage | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
-                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        imageCreateInfo.sType                 = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        imageCreateInfo.pNext                 = (unormFormat == srgbFormat) ? nullptr : &imageFormatListCreateInfo;
+        imageCreateInfo.flags                 = (unormFormat == srgbFormat) ? 0 : VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
+        imageCreateInfo.imageType             = VK_IMAGE_TYPE_2D;
+        imageCreateInfo.format                = swapchainCreateInfo.imageFormat;
+        imageCreateInfo.extent.width          = swapchainCreateInfo.imageExtent.width;
+        imageCreateInfo.extent.height         = swapchainCreateInfo.imageExtent.height;
+        imageCreateInfo.extent.depth          = 1;
+        imageCreateInfo.mipLevels             = 1;
+        imageCreateInfo.arrayLayers           = swapchainCreateInfo.imageArrayLayers;
+        imageCreateInfo.samples               = VK_SAMPLE_COUNT_1_BIT;
+        imageCreateInfo.tiling                = VK_IMAGE_TILING_OPTIMAL;
+        imageCreateInfo.usage                 = swapchainCreateInfo.imageUsage | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+                                                | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
         imageCreateInfo.sharingMode           = swapchainCreateInfo.imageSharingMode;
         imageCreateInfo.queueFamilyIndexCount = swapchainCreateInfo.queueFamilyIndexCount;
         imageCreateInfo.pQueueFamilyIndices   = swapchainCreateInfo.pQueueFamilyIndices;

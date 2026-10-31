@@ -33,30 +33,29 @@ namespace vkShade
         std::vector<VkDescriptorSet> imageDescriptorSets;
         std::vector<VkFramebuffer>   framebuffers;
         VkDescriptorSetLayout        imageSamplerDescriptorSetLayout = VK_NULL_HANDLE;
-        VkDescriptorPool             descriptorPool = VK_NULL_HANDLE;
-        VkShaderModule               vertexModule = VK_NULL_HANDLE;
-        VkShaderModule               fragmentModule = VK_NULL_HANDLE;
-        VkRenderPass                 renderPass = VK_NULL_HANDLE;
-        VkPipelineLayout             pipelineLayout = VK_NULL_HANDLE;
-        VkPipeline                   graphicsPipeline = VK_NULL_HANDLE;
-        VkExtent2D                   imageExtent = {};
-        VkFormat                     format = VK_FORMAT_UNDEFINED;
-        VkSampler                    sampler = VK_NULL_HANDLE;
-        Config*                      pConfig = nullptr;
+        VkDescriptorPool             descriptorPool                  = VK_NULL_HANDLE;
+        VkShaderModule               vertexModule                    = VK_NULL_HANDLE;
+        VkShaderModule               fragmentModule                  = VK_NULL_HANDLE;
+        VkRenderPass                 renderPass                      = VK_NULL_HANDLE;
+        VkPipelineLayout             pipelineLayout                  = VK_NULL_HANDLE;
+        VkPipeline                   graphicsPipeline                = VK_NULL_HANDLE;
+        VkExtent2D                   imageExtent                     = {};
+        VkFormat                     format                          = VK_FORMAT_UNDEFINED;
+        VkSampler                    sampler                         = VK_NULL_HANDLE;
+        Config*                      pConfig                         = nullptr;
         std::vector<uint32_t>        vertexCode;
         std::vector<uint32_t>        fragmentCode;
-        VkSpecializationInfo*        pVertexSpecInfo = nullptr;
-        VkSpecializationInfo*        pFragmentSpecInfo = nullptr;
 
         // subclasses can put DescriptorSets in here, but the first one will be the input image descriptorSet
         std::vector<VkDescriptorSetLayout> descriptorSetLayouts;
 
-        void init(LogicalDevice*       pLogicalDevice,
-                  VkFormat             format,
-                  VkExtent2D           imageExtent,
-                  std::vector<VkImage> inputImages,
-                  std::vector<VkImage> outputImages,
-                  Config*              pConfig);
+        void init(LogicalDevice*              pLogicalDevice,
+                  VkFormat                    format,
+                  VkExtent2D                  imageExtent,
+                  const std::vector<VkImage>& inputImages,
+                  const std::vector<VkImage>& outputImages,
+                  Config*                     pConfig,
+                  const VkSpecializationInfo* fragmentSpecializationInfo);
     };
 } // namespace vkShade
 

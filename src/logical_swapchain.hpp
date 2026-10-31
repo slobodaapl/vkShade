@@ -20,16 +20,18 @@ namespace vkShade
     // for each swapchain, we have the Images and the other stuff we need to execute the compute shader
     struct LogicalSwapchain
     {
-        LogicalDevice*                       pLogicalDevice;
+        LogicalDevice*                       pLogicalDevice = nullptr;
         VkSwapchainCreateInfoKHR             swapchainCreateInfo;
         VkExtent2D                           imageExtent;
         VkFormat                             format;
-        uint32_t                             imageCount;
-        bool                                 useMutableFormat = false;
+        uint32_t                             imageCount             = 0;
+        bool                                 useMutableFormat       = false;
+        bool                                 useTransferToSwapchain = false;
+        bool                                 passthrough            = false;
         std::vector<VkImage>                 images;
-        std::vector<VkImageView>             imageViews;  // for overlay rendering
+        std::vector<VkImageView>             imageViews; // for overlay rendering
         std::vector<VkImage>                 fakeImages;
-        size_t                               maxEffectSlots = 0;  // Max number of effects supported
+        size_t                               maxEffectSlots = 0; // Max number of effects supported
         std::vector<VkCommandBuffer>         commandBuffersEffect;
         std::vector<VkCommandBuffer>         commandBuffersNoEffect;
         std::vector<VkSemaphore>             semaphores;
@@ -41,19 +43,19 @@ namespace vkShade
         std::vector<VkImageView>             depthResolveImageViews;
         std::vector<VkDeviceMemory>          depthResolveMemories;
         std::vector<bool>                    depthResolveInitialized;
-        VkFormat                             depthResolveFormat = VK_FORMAT_UNDEFINED;
-        VkExtent3D                           depthResolveExtent = {0, 0, 1};
-        bool                                 depthResolveUsesShader = false;
-        VkImage                              depthResolveSourceImage = VK_NULL_HANDLE;
-        VkImageView                          depthResolveSourceImageView = VK_NULL_HANDLE;
-        uint64_t                             depthResolveSourceId = 0;
-        VkSampler                            depthResolveSampler = VK_NULL_HANDLE;
+        VkFormat                             depthResolveFormat              = VK_FORMAT_UNDEFINED;
+        VkExtent3D                           depthResolveExtent              = {0, 0, 1};
+        bool                                 depthResolveUsesShader          = false;
+        VkImage                              depthResolveSourceImage         = VK_NULL_HANDLE;
+        VkImageView                          depthResolveSourceImageView     = VK_NULL_HANDLE;
+        uint64_t                             depthResolveSourceId            = 0;
+        VkSampler                            depthResolveSampler             = VK_NULL_HANDLE;
         VkDescriptorSetLayout                depthResolveDescriptorSetLayout = VK_NULL_HANDLE;
-        VkDescriptorPool                     depthResolveDescriptorPool = VK_NULL_HANDLE;
+        VkDescriptorPool                     depthResolveDescriptorPool      = VK_NULL_HANDLE;
         std::vector<VkDescriptorSet>         depthResolveDescriptorSets;
-        VkRenderPass                         depthResolveRenderPass = VK_NULL_HANDLE;
+        VkRenderPass                         depthResolveRenderPass     = VK_NULL_HANDLE;
         VkPipelineLayout                     depthResolvePipelineLayout = VK_NULL_HANDLE;
-        VkPipeline                           depthResolvePipeline = VK_NULL_HANDLE;
+        VkPipeline                           depthResolvePipeline       = VK_NULL_HANDLE;
         std::vector<VkFramebuffer>           depthResolveFramebuffers;
 
         void destroy();

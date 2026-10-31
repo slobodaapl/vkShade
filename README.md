@@ -113,6 +113,22 @@ ninja -C build-release
 sudo ninja -C build-release install
 ```
 
+### Development checks
+
+Run `just check` for formatting, linting, static analysis, the build, and tests. Run `just format` to apply the supported formatters.
+
+Besides the build dependencies above, the checks need Git, just, jq, Meson, Ninja, clang-format, nixfmt, Actionlint, Node.js (with npx), and uv. The Nix development shell provides these tools:
+
+```bash
+nix develop
+just check
+```
+
+ShellCheck, shfmt, Cppcheck, and yq run through `uvx`; ESLint runs through `npx`. These commands download pinned versions on first use.
+CI also evaluates the Nix flake, which requires Nix.
+
+Run `scripts/vkcube.sh -- --validate` for a headless Wayland cube under Gamescope. It runs 120 frames by default; pass `--c` to change that. Environment assignments before `--` apply to the cube only.
+
 ### NixOS
 
 This project can be built with a nix-shell for development:

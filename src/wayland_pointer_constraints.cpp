@@ -10,10 +10,10 @@
 
 namespace vkShade
 {
-    static zwp_pointer_constraints_v1* constraints = nullptr;
-    static zwp_confined_pointer_v1* confinedPointer = nullptr;
-    static wl_pointer* pointer = nullptr;
-    static bool constraintsInitialized = false;
+    static zwp_pointer_constraints_v1* constraints            = nullptr;
+    static zwp_confined_pointer_v1*    confinedPointer        = nullptr;
+    static wl_pointer*                 pointer                = nullptr;
+    static bool                        constraintsInitialized = false;
 
     // Confined pointer listener
     static void confinedPointerConfined(void* /*data*/, zwp_confined_pointer_v1* /*cp*/)
@@ -27,22 +27,19 @@ namespace vkShade
     }
 
     static const zwp_confined_pointer_v1_listener confinedPointerListener = {
-        .confined = confinedPointerConfined,
+        .confined   = confinedPointerConfined,
         .unconfined = confinedPointerUnconfined,
     };
 
     // Registry listener to bind pointer constraints global
-    static void constraintsRegistryGlobal(void* /*data*/, wl_registry* reg,
-                                          uint32_t name, const char* interface, uint32_t version)
+    static void constraintsRegistryGlobal(void* /*data*/, wl_registry* reg, uint32_t name, const char* interface, uint32_t version)
     {
         if (std::strcmp(interface, zwp_pointer_constraints_v1_interface.name) != 0)
             return;
         if (constraints)
             return;
 
-        constraints = (zwp_pointer_constraints_v1*)wl_registry_bind(
-            reg, name, &zwp_pointer_constraints_v1_interface,
-            version < 1 ? version : 1);
+        constraints = (zwp_pointer_constraints_v1*) wl_registry_bind(reg, name, &zwp_pointer_constraints_v1_interface, version < 1 ? version : 1);
         Logger::debug("Wayland: pointer constraints bound");
     }
 
@@ -51,7 +48,7 @@ namespace vkShade
     }
 
     static const wl_registry_listener constraintsRegistryListener = {
-        .global = constraintsRegistryGlobal,
+        .global        = constraintsRegistryGlobal,
         .global_remove = constraintsRegistryGlobalRemove,
     };
 
@@ -73,7 +70,7 @@ namespace vkShade
         // We need our own registry query on the shared queue to find the
         // pointer constraints global. The shared input common registry
         // only looks for wl_seat.
-        wl_display* wrapper = (wl_display*)wl_proxy_create_wrapper(display);
+        wl_display* wrapper = (wl_display*) wl_proxy_create_wrapper(display);
         if (!wrapper)
             return false;
 
@@ -84,7 +81,7 @@ namespace vkShade
             return false;
         }
 
-        wl_proxy_set_queue((wl_proxy*)wrapper, q);
+        wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(wrapper), q);
 
         wl_registry* reg = wl_display_get_registry(wrapper);
         wl_registry_add_listener(reg, &constraintsRegistryListener, nullptr);
@@ -152,9 +149,8 @@ namespace vkShade
             Logger::debug("Wayland: obtained pointer from seat for confinement");
         }
 
-        confinedPointer = zwp_pointer_constraints_v1_confine_pointer(
-            constraints, surface, pointer, nullptr,
-            ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
+        confinedPointer =
+            zwp_pointer_constraints_v1_confine_pointer(constraints, surface, pointer, nullptr, ZWP_POINTER_CONSTRAINTS_V1_LIFETIME_PERSISTENT);
 
         if (!confinedPointer)
         {

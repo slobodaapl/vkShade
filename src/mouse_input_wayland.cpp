@@ -15,11 +15,11 @@ namespace vkShade
     static wl_pointer* wlPointer = nullptr;
 
     // Mouse state
-    static int pointerX = 0;
-    static int pointerY = 0;
-    static bool leftButton = false;
-    static bool rightButton = false;
-    static bool middleButton = false;
+    static int   pointerX          = 0;
+    static int   pointerY          = 0;
+    static bool  leftButton        = false;
+    static bool  rightButton       = false;
+    static bool  middleButton      = false;
     static float scrollAccumulator = 0.0f;
 
     // Per-frame flag: true when axis_discrete or axis_value120 fired for this
@@ -34,8 +34,8 @@ namespace vkShade
     static Clock::time_point leftPressTime{};
     static Clock::time_point rightPressTime{};
     static Clock::time_point middlePressTime{};
-    static constexpr int AUTO_RELEASE_AFTER_LEAVE_MS = 250;
-    static constexpr int AUTO_RELEASE_HARD_TIMEOUT_MS = 30000;
+    static constexpr int     AUTO_RELEASE_AFTER_LEAVE_MS  = 250;
+    static constexpr int     AUTO_RELEASE_HARD_TIMEOUT_MS = 30000;
 
     // Track whether motion occurred since last getMouseStateWayland() poll
     static bool motionSinceLastPoll = false;
@@ -47,14 +47,12 @@ namespace vkShade
     static bool mouseInitialized = false;
 
     // Pointer listener callbacks
-    static void pointerEnter(void* /*data*/, wl_pointer* /*pointer*/,
-                             uint32_t /*serial*/, wl_surface* /*surface*/,
-                             wl_fixed_t sx, wl_fixed_t sy)
+    static void pointerEnter(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*serial*/, wl_surface* /*surface*/, wl_fixed_t sx, wl_fixed_t sy)
     {
         pointerInsideSurface = true;
-        pointerX = wl_fixed_to_int(sx);
-        pointerY = wl_fixed_to_int(sy);
-        lastMotionTime = Clock::now();
+        pointerX             = wl_fixed_to_int(sx);
+        pointerY             = wl_fixed_to_int(sy);
+        lastMotionTime       = Clock::now();
 
         // Do NOT clear button state here. Surface reconfigurations (swapchain
         // resize) cause rapid leave/enter cycles while the user is dragging.
@@ -65,24 +63,20 @@ namespace vkShade
         Logger::trace("Wayland: pointer enter at " + std::to_string(pointerX) + "," + std::to_string(pointerY));
     }
 
-    static void pointerLeave(void* /*data*/, wl_pointer* /*pointer*/,
-                             uint32_t /*serial*/, wl_surface* /*surface*/)
+    static void pointerLeave(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*serial*/, wl_surface* /*surface*/)
     {
         pointerInsideSurface = false;
         Logger::trace("Wayland: pointer leave");
     }
 
-    static void pointerMotion(void* /*data*/, wl_pointer* /*pointer*/,
-                              uint32_t /*time*/, wl_fixed_t sx, wl_fixed_t sy)
+    static void pointerMotion(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*time*/, wl_fixed_t sx, wl_fixed_t sy)
     {
-        pointerX = wl_fixed_to_int(sx);
-        pointerY = wl_fixed_to_int(sy);
+        pointerX            = wl_fixed_to_int(sx);
+        pointerY            = wl_fixed_to_int(sy);
         motionSinceLastPoll = true;
     }
 
-    static void pointerButton(void* /*data*/, wl_pointer* /*pointer*/,
-                              uint32_t /*serial*/, uint32_t /*time*/,
-                              uint32_t button, uint32_t state)
+    static void pointerButton(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*serial*/, uint32_t /*time*/, uint32_t button, uint32_t state)
     {
         bool pressed = (state == WL_POINTER_BUTTON_STATE_PRESSED);
         Logger::trace("Wayland: pointer button " + std::to_string(button) + " " + (pressed ? "pressed" : "released"));
@@ -93,23 +87,25 @@ namespace vkShade
         {
             case 0x110:
                 leftButton = pressed;
-                if (pressed) leftPressTime = now;
+                if (pressed)
+                    leftPressTime = now;
                 break;
             case 0x111:
                 rightButton = pressed;
-                if (pressed) rightPressTime = now;
+                if (pressed)
+                    rightPressTime = now;
                 break;
             case 0x112:
                 middleButton = pressed;
-                if (pressed) middlePressTime = now;
+                if (pressed)
+                    middlePressTime = now;
                 break;
         }
         if (pressed)
             lastMotionTime = now;
     }
 
-    static void pointerAxis(void* /*data*/, wl_pointer* /*pointer*/,
-                            uint32_t /*time*/, uint32_t axis, wl_fixed_t value)
+    static void pointerAxis(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*time*/, uint32_t axis, wl_fixed_t value)
     {
         // Only use continuous axis as fallback when discrete events are not sent.
         // When both fire for the same pointer frame, discrete/value120 takes priority.
@@ -134,24 +130,21 @@ namespace vkShade
     {
     }
 
-    static void pointerAxisStop(void* /*data*/, wl_pointer* /*pointer*/,
-                                uint32_t /*time*/, uint32_t /*axis*/)
+    static void pointerAxisStop(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*time*/, uint32_t /*axis*/)
     {
     }
 
-    static void pointerAxisDiscrete(void* /*data*/, wl_pointer* /*pointer*/,
-                                    uint32_t axis, int32_t discrete)
+    static void pointerAxisDiscrete(void* /*data*/, wl_pointer* /*pointer*/, uint32_t axis, int32_t discrete)
     {
         // Discrete scroll events (wheel clicks) — preferred over continuous axis
         if (axis != 0)
             return;
 
         discreteScrollReceived = true;
-        scrollAccumulator -= (float)discrete; // Wayland: positive = scroll down, ImGui: positive = scroll up
+        scrollAccumulator -= (float) discrete; // Wayland: positive = scroll down, ImGui: positive = scroll up
     }
 
-    static void pointerAxisValue120(void* /*data*/, wl_pointer* /*pointer*/,
-                                    uint32_t axis, int32_t value120)
+    static void pointerAxisValue120(void* /*data*/, wl_pointer* /*pointer*/, uint32_t axis, int32_t value120)
     {
         // High-resolution scroll (wl_pointer v8+). 120 units = one wheel click.
         // Preferred over both axis and axis_discrete when available.
@@ -159,25 +152,24 @@ namespace vkShade
             return;
 
         discreteScrollReceived = true;
-        scrollAccumulator -= (float)value120 / 120.0f;
+        scrollAccumulator -= (float) value120 / 120.0f;
     }
 
-    static void pointerAxisRelativeDirection(void* /*data*/, wl_pointer* /*pointer*/,
-                                             uint32_t /*axis*/, uint32_t /*direction*/)
+    static void pointerAxisRelativeDirection(void* /*data*/, wl_pointer* /*pointer*/, uint32_t /*axis*/, uint32_t /*direction*/)
     {
     }
 
     static const wl_pointer_listener pointerListener = {
-        .enter = pointerEnter,
-        .leave = pointerLeave,
-        .motion = pointerMotion,
-        .button = pointerButton,
-        .axis = pointerAxis,
-        .frame = pointerFrame,
-        .axis_source = pointerAxisSource,
-        .axis_stop = pointerAxisStop,
-        .axis_discrete = pointerAxisDiscrete,
-        .axis_value120 = pointerAxisValue120,
+        .enter                   = pointerEnter,
+        .leave                   = pointerLeave,
+        .motion                  = pointerMotion,
+        .button                  = pointerButton,
+        .axis                    = pointerAxis,
+        .frame                   = pointerFrame,
+        .axis_source             = pointerAxisSource,
+        .axis_stop               = pointerAxisStop,
+        .axis_discrete           = pointerAxisDiscrete,
+        .axis_value120           = pointerAxisValue120,
         .axis_relative_direction = pointerAxisRelativeDirection,
     };
 
@@ -190,7 +182,7 @@ namespace vkShade
         wlPointer = wl_seat_get_pointer(seat);
         // Register as overlay proxy BEFORE add_listener so the interposition
         // layer passes this through without wrapping
-        registerOverlayProxy((wl_proxy*)wlPointer);
+        registerOverlayProxy(reinterpret_cast<wl_proxy*>(wlPointer));
         wl_pointer_add_listener(wlPointer, &pointerListener, nullptr);
         Logger::debug("Wayland: pointer bound from shared seat");
     }
@@ -222,7 +214,7 @@ namespace vkShade
     {
         if (wlPointer)
         {
-            unregisterOverlayProxy((wl_proxy*)wlPointer);
+            unregisterOverlayProxy(reinterpret_cast<wl_proxy*>(wlPointer));
             wl_pointer_destroy(wlPointer);
             wlPointer = nullptr;
         }
@@ -240,15 +232,18 @@ namespace vkShade
         {
             case 0x110:
                 leftButton = pressed;
-                if (pressed) leftPressTime = now;
+                if (pressed)
+                    leftPressTime = now;
                 break;
             case 0x111:
                 rightButton = pressed;
-                if (pressed) rightPressTime = now;
+                if (pressed)
+                    rightPressTime = now;
                 break;
             case 0x112:
                 middleButton = pressed;
-                if (pressed) middlePressTime = now;
+                if (pressed)
+                    middlePressTime = now;
                 break;
         }
         if (pressed)
@@ -271,40 +266,35 @@ namespace vkShade
         auto now = Clock::now();
         if (motionSinceLastPoll)
         {
-            lastMotionTime = now;
+            lastMotionTime      = now;
             motionSinceLastPoll = false;
         }
 
         auto idleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastMotionTime).count();
         if (leftButton || rightButton || middleButton)
         {
-            auto leftMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - leftPressTime).count();
-            auto rightMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - rightPressTime).count();
+            auto leftMs   = std::chrono::duration_cast<std::chrono::milliseconds>(now - leftPressTime).count();
+            auto rightMs  = std::chrono::duration_cast<std::chrono::milliseconds>(now - rightPressTime).count();
             auto middleMs = std::chrono::duration_cast<std::chrono::milliseconds>(now - middlePressTime).count();
 
-            const bool shouldReleaseAfterLeave =
-                !pointerInsideSurface && idleMs > AUTO_RELEASE_AFTER_LEAVE_MS;
-            const bool shouldReleaseHard =
-                idleMs > AUTO_RELEASE_HARD_TIMEOUT_MS;
+            const bool shouldReleaseAfterLeave = !pointerInsideSurface && idleMs > AUTO_RELEASE_AFTER_LEAVE_MS;
+            const bool shouldReleaseHard       = idleMs > AUTO_RELEASE_HARD_TIMEOUT_MS;
 
-            if (leftButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
-                leftMs > AUTO_RELEASE_AFTER_LEAVE_MS)
+            if (leftButton && (shouldReleaseAfterLeave || shouldReleaseHard) && leftMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 leftButton = false;
-            if (rightButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
-                rightMs > AUTO_RELEASE_AFTER_LEAVE_MS)
+            if (rightButton && (shouldReleaseAfterLeave || shouldReleaseHard) && rightMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 rightButton = false;
-            if (middleButton && (shouldReleaseAfterLeave || shouldReleaseHard) &&
-                middleMs > AUTO_RELEASE_AFTER_LEAVE_MS)
+            if (middleButton && (shouldReleaseAfterLeave || shouldReleaseHard) && middleMs > AUTO_RELEASE_AFTER_LEAVE_MS)
                 middleButton = false;
         }
 
-        state.x = pointerX;
-        state.y = pointerY;
-        state.leftButton = leftButton;
-        state.rightButton = rightButton;
+        state.x            = pointerX;
+        state.y            = pointerY;
+        state.leftButton   = leftButton;
+        state.rightButton  = rightButton;
         state.middleButton = middleButton;
-        state.scrollDelta = scrollAccumulator;
-        scrollAccumulator = 0.0f;
+        state.scrollDelta  = scrollAccumulator;
+        scrollAccumulator  = 0.0f;
 
         return state;
     }

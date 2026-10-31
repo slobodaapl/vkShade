@@ -29,15 +29,19 @@ namespace vkShade
 {
     // No-op dummy for Vulkan functions ImGui requests but vkShade doesn't intercept.
     // ImGui's LoadFunctions treats nullptr returns as failures, so we need a valid pointer.
-    static void VKAPI_CALL dummyVulkanFunc() {}
+    static void VKAPI_CALL dummyVulkanFunc()
+    {
+    }
 
     // Function loader using vkShade's dispatch tables
     static PFN_vkVoidFunction imguiVulkanLoaderDummy(const char* function_name, void* user_data)
     {
         LogicalDevice* device = static_cast<LogicalDevice*>(user_data);
 
-        // Device functions from vkShade's dispatch table
-        #define CHECK_FUNC(name) if (strcmp(function_name, "vk" #name) == 0) return (PFN_vkVoidFunction)device->vkd.name
+// Device functions from vkShade's dispatch table
+#define CHECK_FUNC(name) \
+    if (strcmp(function_name, "vk" #name) == 0) \
+    return (PFN_vkVoidFunction) device->vkd.name
 
         CHECK_FUNC(AllocateCommandBuffers);
         CHECK_FUNC(AllocateDescriptorSets);
@@ -105,34 +109,35 @@ namespace vkShade
         CHECK_FUNC(UpdateDescriptorSets);
         CHECK_FUNC(WaitForFences);
 
-        #undef CHECK_FUNC
+#undef CHECK_FUNC
 
-        // Instance functions from vkShade's dispatch
-        #define CHECK_IFUNC(name) if (strcmp(function_name, "vk" #name) == 0) return (PFN_vkVoidFunction)device->vki.name
+// Instance functions from vkShade's dispatch
+#define CHECK_IFUNC(name) \
+    if (strcmp(function_name, "vk" #name) == 0) \
+    return (PFN_vkVoidFunction) device->vki.name
         CHECK_IFUNC(GetPhysicalDeviceMemoryProperties);
         CHECK_IFUNC(GetPhysicalDeviceProperties);
         CHECK_IFUNC(GetPhysicalDeviceQueueFamilyProperties);
-        #undef CHECK_IFUNC
+#undef CHECK_IFUNC
 
         // Return a no-op dummy for unknown functions. ImGui's LoadFunctions treats
         // nullptr as a load failure, so we must return a valid function pointer.
         // These functions are never actually called by ImGui in our usage.
-        return (PFN_vkVoidFunction)dummyVulkanFunc;
+        return (PFN_vkVoidFunction) dummyVulkanFunc;
     }
 
-    ImGuiOverlay::ImGuiOverlay(LogicalDevice* device, VkFormat swapchainFormat, uint32_t imageCount, OverlayPersistentState* persistentState)
-        : pLogicalDevice(device), pPersistentState(persistentState)
+    ImGuiOverlay::ImGuiOverlay(LogicalDevice* device, VkFormat swapchainFormat, uint32_t imageCount, OverlayPersistentState* persistentState) :
+        pLogicalDevice(device), pPersistentState(persistentState)
     {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
-        ImGuiIO& io = ImGui::GetIO();
-        io.IniFilename = nullptr;
+        ImGuiIO& io                          = ImGui::GetIO();
+        io.IniFilename                       = nullptr;
         io.ConfigWindowsMoveFromTitleBarOnly = true;
 
-        std::string iniPath = ConfigSerializer::getBaseConfigDir() + "/imgui.ini";
+        std::string   iniPath = ConfigSerializer::getBaseConfigDir() + "/imgui.ini";
         std::ifstream iniFile(iniPath);
-        std::string iniContent((std::istreambuf_iterator<char>(iniFile)),
-                                std::istreambuf_iterator<char>());
+        std::string   iniContent((std::istreambuf_iterator<char>(iniFile)), std::istreambuf_iterator<char>());
 
         if (!iniContent.empty())
             ImGui::LoadIniSettingsFromDisk(iniPath.c_str());
@@ -140,8 +145,8 @@ namespace vkShade
         ImGui::StyleColorsDark();
 
         // Make it semi-transparent
-        ImGuiStyle& style = ImGui::GetStyle();
-        style.Alpha = 0.9f;
+        ImGuiStyle& style    = ImGui::GetStyle();
+        style.Alpha          = 0.9f;
         style.WindowRounding = 5.0f;
 
         initVulkanBackend(swapchainFormat, imageCount);
@@ -157,7 +162,8 @@ namespace vkShade
 
     ImGuiOverlay::~ImGuiOverlay()
     {
-        if (!initialized) return;
+        if (!initialized)
+            return;
 
         // Auto-save profile on shutdown (before GPU cleanup)
         if (profileDirty && !activeProfilePath.empty())
@@ -248,8 +254,8 @@ namespace vkShade
         if (!pEffectRegistry)
             return;
 
-        ShaderManagerConfig smConfig = ConfigSerializer::loadShaderManagerConfig();
-        const auto& selectedEffects = pEffectRegistry->getSelectedEffects();
+        ShaderManagerConfig smConfig        = ConfigSerializer::loadShaderManagerConfig();
+        const auto&         selectedEffects = pEffectRegistry->getSelectedEffects();
 
         for (const auto& effectName : selectedEffects)
         {
@@ -301,12 +307,11 @@ namespace vkShade
         return pEffectRegistry ? pEffectRegistry->getSelectedEffects() : empty;
     }
 
-    void ImGuiOverlay::collectSaveData(
-        std::vector<std::string>& effects,
-        std::vector<std::string>& disabledEffects,
-        std::vector<ConfigParam>& params,
-        std::map<std::string, std::string>& effectPaths,
-        std::vector<PreprocessorDefinition>& allDefs)
+    void ImGuiOverlay::collectSaveData(std::vector<std::string>&            effects,
+                                       std::vector<std::string>&            disabledEffects,
+                                       std::vector<ConfigParam>&            params,
+                                       std::map<std::string, std::string>&  effectPaths,
+                                       std::vector<PreprocessorDefinition>& allDefs)
     {
         if (!pEffectRegistry)
             return;
@@ -325,8 +330,8 @@ namespace vkShade
                 {
                     ConfigParam cp;
                     cp.effectName = p->effectName;
-                    cp.paramName = suffix.empty() ? p->name : suffix;
-                    cp.value = value;
+                    cp.paramName  = suffix.empty() ? p->name : suffix;
+                    cp.value      = value;
                     params.push_back(cp);
                 }
             }
@@ -358,9 +363,9 @@ namespace vkShade
         if (!pEffectRegistry)
             return;
 
-        std::vector<std::string> effects, disabledEffects;
-        std::vector<ConfigParam> params;
-        std::map<std::string, std::string> effectPaths;
+        std::vector<std::string>            effects, disabledEffects;
+        std::vector<ConfigParam>            params;
+        std::map<std::string, std::string>  effectPaths;
         std::vector<PreprocessorDefinition> allDefs;
         collectSaveData(effects, disabledEffects, params, effectPaths, allDefs);
 
@@ -373,15 +378,15 @@ namespace vkShade
         if (!pEffectRegistry || activeProfilePath.empty())
             return;
 
-        std::vector<std::string> effects, disabledEffects;
-        std::vector<ConfigParam> params;
-        std::map<std::string, std::string> effectPaths;
+        std::vector<std::string>            effects, disabledEffects;
+        std::vector<ConfigParam>            params;
+        std::map<std::string, std::string>  effectPaths;
         std::vector<PreprocessorDefinition> allDefs;
         collectSaveData(effects, disabledEffects, params, effectPaths, allDefs);
 
         ProfileSettings profileSettings;
-        profileSettings.safeAntiCheat = profileSafeAntiCheat;
-        profileSettings.depthSourceIndex = profileDepthSourceIndex;
+        profileSettings.safeAntiCheat       = profileSafeAntiCheat;
+        profileSettings.depthSourceIndex    = profileDepthSourceIndex;
         profileSettings.hasDepthSourceIndex = profileDepthSourceIndexSet;
 
         if (ConfigSerializer::saveToPath(activeProfilePath, effects, disabledEffects, params, effectPaths, allDefs, profileSettings))
@@ -391,8 +396,7 @@ namespace vkShade
         }
     }
 
-    void ImGuiOverlay::setSelectedEffects(const std::vector<std::string>& effects,
-                                          const std::vector<std::string>& disabledEffects)
+    void ImGuiOverlay::setSelectedEffects(const std::vector<std::string>& effects, const std::vector<std::string>& disabledEffects)
     {
         if (!pEffectRegistry)
             return;
@@ -442,15 +446,16 @@ namespace vkShade
             return;
         }
 
-        const auto& candidates = depth.candidates;
-        const int selectedIndex = depth.sourceIndex;
-        const auto selectedCandidate = resolveDepthSource(candidates, selectedIndex,
-            depth.sourceFromEnvironment ? DepthState{} : depth.pinnedSource,
-            !depth.sourceFromEnvironment && depth.pinnedSourceDestroyed);
-        bool trackDrawRank = selectedIndex <= DEPTH_SOURCE_DRAW_RANK_BASE;
+        const auto& candidates        = depth.candidates;
+        const int   selectedIndex     = depth.sourceIndex;
+        const auto  selectedCandidate = resolveDepthSource(candidates,
+                                                           selectedIndex,
+                                                           depth.sourceFromEnvironment ? DepthState{} : depth.pinnedSource,
+                                                           !depth.sourceFromEnvironment && depth.pinnedSourceDestroyed);
+        bool        trackDrawRank     = selectedIndex <= DEPTH_SOURCE_DRAW_RANK_BASE;
 
         auto select = [this](int index, const DepthState& source = DepthState{}) {
-            profileDepthSourceIndex = index;
+            profileDepthSourceIndex    = index;
             profileDepthSourceIndexSet = true;
             requestDepthSource(index, source);
             profileDirty = true;
@@ -498,7 +503,7 @@ namespace vkShade
         std::vector<size_t> order(candidates.size());
         std::iota(order.begin(), order.end(), size_t{0});
         std::sort(order.begin(), order.end(), [&candidates](size_t lhs, size_t rhs) {
-            const auto& left = candidates[lhs].depthState;
+            const auto& left  = candidates[lhs].depthState;
             const auto& right = candidates[rhs].depthState;
             if (left.extent.width != right.extent.width)
                 return left.extent.width > right.extent.width;
@@ -508,8 +513,7 @@ namespace vkShade
                 return left.sourceId < right.sourceId;
             return lhs < rhs;
         });
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
-                                     | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+        ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
         if (ImGui::BeginTable("DepthSourceTable", 7, tableFlags, ImVec2(0, 0)))
         {
             ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 32.0f);
@@ -526,9 +530,8 @@ namespace vkShade
                 const auto& candidate = candidates[i];
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                const std::string sourceId = std::to_string(candidate.depthState.sourceId) + ":"
-                    + convertToString(candidate.depthState.imageView) + ":"
-                    + std::to_string(static_cast<int>(candidate.depthState.observedLayout));
+                const std::string sourceId = std::to_string(candidate.depthState.sourceId) + ":" + convertToString(candidate.depthState.imageView)
+                                             + ":" + std::to_string(static_cast<int>(candidate.depthState.observedLayout));
                 ImGui::PushID(sourceId.c_str());
                 if (ImGui::RadioButton("##select", selectedCandidate && *selectedCandidate == i))
                 {
@@ -553,14 +556,14 @@ namespace vkShade
                 ImGui::TableSetColumnIndex(4);
                 ImGui::TextUnformatted(depthFormatName(candidate.depthState.format));
                 ImGui::TableSetColumnIndex(5);
-                ImGui::Text("%llu", static_cast<unsigned long long>(candidate.stats.drawcalls)
-                                      + candidate.stats.drawcallsIndirect);
+                ImGui::Text("%llu", static_cast<unsigned long long>(candidate.stats.drawcalls) + candidate.stats.drawcallsIndirect);
                 if (ImGui::IsItemHovered())
                     ImGui::SetTooltip("Vertices: %llu\nDirect: %u\nIndirect: %u",
                                       static_cast<unsigned long long>(candidate.stats.vertices),
-                                      candidate.stats.drawcalls, candidate.stats.drawcallsIndirect);
+                                      candidate.stats.drawcalls,
+                                      candidate.stats.drawcallsIndirect);
                 ImGui::TableSetColumnIndex(6);
-                const bool active = sameDepthSourceLayout(candidate.depthState, depth.activeSource);
+                const bool active    = sameDepthSourceLayout(candidate.depthState, depth.activeSource);
                 const bool automatic = sameDepthSourceLayout(candidate.depthState, depth.automaticSource);
                 ImGui::TextUnformatted(active && automatic ? "Active / Candidate" : active ? "Active" : automatic ? "Candidate" : "");
                 if (ImGui::IsItemHovered())
@@ -583,16 +586,14 @@ namespace vkShade
         Logger::debug("ImGui Vulkan functions loaded");
 
         // Create descriptor pool for ImGui
-        VkDescriptorPoolSize poolSizes[] = {
-            { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100 }
-        };
+        VkDescriptorPoolSize poolSizes[] = {{VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100}};
 
         VkDescriptorPoolCreateInfo poolInfo = {};
-        poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-        poolInfo.maxSets = 100;
-        poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = poolSizes;
+        poolInfo.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        poolInfo.flags                      = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+        poolInfo.maxSets                    = 100;
+        poolInfo.poolSizeCount              = 1;
+        poolInfo.pPoolSizes                 = poolSizes;
 
         VkResult vr = pLogicalDevice->vkd.CreateDescriptorPool(pLogicalDevice->device, &poolInfo, nullptr, &descriptorPool);
         if (vr != VK_SUCCESS)
@@ -603,52 +604,52 @@ namespace vkShade
 
         // Create render pass for ImGui
         VkAttachmentDescription attachment = {};
-        attachment.format = swapchainFormat;
-        attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
-        attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        attachment.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachment.format                  = swapchainFormat;
+        attachment.samples                 = VK_SAMPLE_COUNT_1_BIT;
+        attachment.loadOp                  = VK_ATTACHMENT_LOAD_OP_LOAD;
+        attachment.storeOp                 = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment.stencilLoadOp           = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        attachment.stencilStoreOp          = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        attachment.initialLayout           = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        attachment.finalLayout             = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
         VkAttachmentReference colorRef = {};
-        colorRef.attachment = 0;
-        colorRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        colorRef.attachment            = 0;
+        colorRef.layout                = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
         VkSubpassDescription subpass = {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
         subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &colorRef;
+        subpass.pColorAttachments    = &colorRef;
 
         // Dependency for incoming: wait for prior color writes before overlay renders
         VkSubpassDependency dependencies[2] = {};
-        dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[0].dstSubpass = 0;
-        dependencies[0].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[0].srcAccessMask = 0;
-        dependencies[0].dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependencies[0].srcSubpass          = VK_SUBPASS_EXTERNAL;
+        dependencies[0].dstSubpass          = 0;
+        dependencies[0].srcStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependencies[0].dstStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependencies[0].srcAccessMask       = 0;
+        dependencies[0].dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
         // Dependency for outgoing: ensure overlay writes + layout transition complete
         // and are VISIBLE to presentation engine and DMA-BUF screen capture readers.
         // VK_ACCESS_MEMORY_READ_BIT is critical — without it, GPU caches may not be
         // flushed before PipeWire/compositor reads the image via DMA-BUF.
-        dependencies[1].srcSubpass = 0;
-        dependencies[1].dstSubpass = VK_SUBPASS_EXTERNAL;
-        dependencies[1].srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependencies[1].dstStageMask = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+        dependencies[1].srcSubpass    = 0;
+        dependencies[1].dstSubpass    = VK_SUBPASS_EXTERNAL;
+        dependencies[1].srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependencies[1].dstStageMask  = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
         dependencies[1].srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
         dependencies[1].dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
 
         VkRenderPassCreateInfo renderPassInfo = {};
-        renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        renderPassInfo.attachmentCount = 1;
-        renderPassInfo.pAttachments = &attachment;
-        renderPassInfo.subpassCount = 1;
-        renderPassInfo.pSubpasses = &subpass;
-        renderPassInfo.dependencyCount = 2;
-        renderPassInfo.pDependencies = dependencies;
+        renderPassInfo.sType                  = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        renderPassInfo.attachmentCount        = 1;
+        renderPassInfo.pAttachments           = &attachment;
+        renderPassInfo.subpassCount           = 1;
+        renderPassInfo.pSubpasses             = &subpass;
+        renderPassInfo.dependencyCount        = 2;
+        renderPassInfo.pDependencies          = dependencies;
 
         vr = pLogicalDevice->vkd.CreateRenderPass(pLogicalDevice->device, &renderPassInfo, nullptr, &renderPass);
         if (vr != VK_SUCCESS)
@@ -658,22 +659,22 @@ namespace vkShade
         }
 
         // Initialize ImGui Vulkan backend
-        ImGui_ImplVulkan_InitInfo initInfo = {};
-        initInfo.ApiVersion = VK_API_VERSION_1_3;
-        initInfo.Instance = pLogicalDevice->instance;
-        initInfo.PhysicalDevice = pLogicalDevice->physicalDevice;
-        initInfo.Device = pLogicalDevice->device;
-        initInfo.QueueFamily = pLogicalDevice->queueFamilyIndex;
-        initInfo.Queue = pLogicalDevice->queue;
-        initInfo.DescriptorPool = descriptorPool;
-        initInfo.MinImageCount = 2;
-        initInfo.ImageCount = 2;
+        ImGui_ImplVulkan_InitInfo initInfo   = {};
+        initInfo.ApiVersion                  = VK_API_VERSION_1_3;
+        initInfo.Instance                    = pLogicalDevice->instance;
+        initInfo.PhysicalDevice              = pLogicalDevice->physicalDevice;
+        initInfo.Device                      = pLogicalDevice->device;
+        initInfo.QueueFamily                 = pLogicalDevice->queueFamilyIndex;
+        initInfo.Queue                       = pLogicalDevice->queue;
+        initInfo.DescriptorPool              = descriptorPool;
+        initInfo.MinImageCount               = 2;
+        initInfo.ImageCount                  = 2;
         initInfo.PipelineInfoMain.RenderPass = renderPass;
 
         ImGui_ImplVulkan_Init(&initInfo);
 
-        this->swapchainFormat = swapchainFormat;
-        this->imageCount = imageCount;
+        this->swapchainFormat        = swapchainFormat;
+        this->imageCount             = imageCount;
         bool commandBuffersAllocated = false;
 
         auto rollbackBackendInit = [&]() {
@@ -721,9 +722,9 @@ namespace vkShade
 
         // Create command pool
         VkCommandPoolCreateInfo poolCreateInfo = {};
-        poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-        poolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        poolCreateInfo.queueFamilyIndex = pLogicalDevice->queueFamilyIndex;
+        poolCreateInfo.sType                   = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        poolCreateInfo.flags                   = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+        poolCreateInfo.queueFamilyIndex        = pLogicalDevice->queueFamilyIndex;
         vr = pLogicalDevice->vkd.CreateCommandPool(pLogicalDevice->device, &poolCreateInfo, nullptr, &commandPool);
         if (vr != VK_SUCCESS)
         {
@@ -735,11 +736,11 @@ namespace vkShade
         // Allocate command buffers
         commandBuffers.resize(imageCount);
         VkCommandBufferAllocateInfo allocInfo = {};
-        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocInfo.commandPool = commandPool;
-        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        allocInfo.commandBufferCount = imageCount;
-        vr = pLogicalDevice->vkd.AllocateCommandBuffers(pLogicalDevice->device, &allocInfo, commandBuffers.data());
+        allocInfo.sType                       = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool                 = commandPool;
+        allocInfo.level                       = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount          = imageCount;
+        vr                                    = pLogicalDevice->vkd.AllocateCommandBuffers(pLogicalDevice->device, &allocInfo, commandBuffers.data());
         if (vr != VK_SUCCESS)
         {
             Logger::err("Failed to allocate ImGui command buffers: " + std::to_string(vr));
@@ -751,8 +752,8 @@ namespace vkShade
         // Create fences for command buffer synchronization (signaled initially so first frame doesn't wait)
         commandBufferFences.resize(imageCount);
         VkFenceCreateInfo fenceInfo = {};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+        fenceInfo.sType             = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags             = VK_FENCE_CREATE_SIGNALED_BIT;
         for (uint32_t i = 0; i < imageCount; i++)
         {
             vr = pLogicalDevice->vkd.CreateFence(pLogicalDevice->device, &fenceInfo, nullptr, &commandBufferFences[i]);
@@ -777,18 +778,17 @@ namespace vkShade
         setInputBlocked(blockOverlayInput);
 
         // Store current resolution for VRAM estimates in settings
-        currentWidth = width;
+        currentWidth  = width;
         currentHeight = height;
 
         // Wait for previous use of this command buffer to complete.
         // Adaptive timeout: 4x the measured frame time (generous margin for GPU
         // scheduling jitter), clamped to [2ms, 50ms].  With triple buffering the
         // fence was submitted 2-3 frames ago and is almost always already signaled.
-        static float avgFrameTimeMs = 8.0f;  // Seed at ~120 FPS
-        VkFence fence = commandBufferFences[imageIndex];
-        uint64_t timeoutNs = static_cast<uint64_t>(
-            std::clamp(avgFrameTimeMs * 4.0f, 2.0f, 50.0f) * 1'000'000.0f);
-        VkResult fenceResult = pLogicalDevice->vkd.WaitForFences(pLogicalDevice->device, 1, &fence, VK_TRUE, timeoutNs);
+        static float avgFrameTimeMs = 8.0f; // Seed at ~120 FPS
+        VkFence      fence          = commandBufferFences[imageIndex];
+        uint64_t     timeoutNs      = static_cast<uint64_t>(std::clamp(avgFrameTimeMs * 4.0f, 2.0f, 50.0f) * 1'000'000.0f);
+        VkResult     fenceResult    = pLogicalDevice->vkd.WaitForFences(pLogicalDevice->device, 1, &fence, VK_TRUE, timeoutNs);
         if (fenceResult == VK_TIMEOUT)
         {
             Logger::warn("ImGui fence wait timed out for image " + std::to_string(imageIndex));
@@ -810,9 +810,9 @@ namespace vkShade
 
         // Begin command buffer
         VkCommandBufferBeginInfo beginInfo = {};
-        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        VkResult vr = pLogicalDevice->vkd.BeginCommandBuffer(cmd, &beginInfo);
+        beginInfo.sType                    = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags                    = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        VkResult vr                        = pLogicalDevice->vkd.BeginCommandBuffer(cmd, &beginInfo);
         if (vr != VK_SUCCESS)
         {
             Logger::err("Failed to begin ImGui command buffer: " + std::to_string(vr));
@@ -827,9 +827,8 @@ namespace vkShade
             framebufferImageViews.resize(imageIndex + 1, VK_NULL_HANDLE);
         }
 
-        bool needRecreate = (framebuffers[imageIndex] == VK_NULL_HANDLE) ||
-                            (framebufferImageViews[imageIndex] != imageView) ||
-                            (framebufferWidth != width) || (framebufferHeight != height);
+        bool needRecreate = (framebuffers[imageIndex] == VK_NULL_HANDLE) || (framebufferImageViews[imageIndex] != imageView)
+                            || (framebufferWidth != width) || (framebufferHeight != height);
 
         if (needRecreate)
         {
@@ -837,13 +836,13 @@ namespace vkShade
                 pLogicalDevice->vkd.DestroyFramebuffer(pLogicalDevice->device, framebuffers[imageIndex], nullptr);
 
             VkFramebufferCreateInfo fbInfo = {};
-            fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            fbInfo.renderPass = renderPass;
-            fbInfo.attachmentCount = 1;
-            fbInfo.pAttachments = &imageView;
-            fbInfo.width = width;
-            fbInfo.height = height;
-            fbInfo.layers = 1;
+            fbInfo.sType                   = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            fbInfo.renderPass              = renderPass;
+            fbInfo.attachmentCount         = 1;
+            fbInfo.pAttachments            = &imageView;
+            fbInfo.width                   = width;
+            fbInfo.height                  = height;
+            fbInfo.layers                  = 1;
             vr = pLogicalDevice->vkd.CreateFramebuffer(pLogicalDevice->device, &fbInfo, nullptr, &framebuffers[imageIndex]);
             if (vr != VK_SUCCESS)
             {
@@ -852,27 +851,27 @@ namespace vkShade
                 return VK_NULL_HANDLE;
             }
             framebufferImageViews[imageIndex] = imageView;
-            framebufferWidth = width;
-            framebufferHeight = height;
+            framebufferWidth                  = width;
+            framebufferHeight                 = height;
         }
 
         VkFramebuffer framebuffer = framebuffers[imageIndex];
 
         // Set display size and frame timing BEFORE NewFrame
-        ImGuiIO& io = ImGui::GetIO();
-        io.DisplaySize = ImVec2((float)width, (float)height);
+        ImGuiIO& io    = ImGui::GetIO();
+        io.DisplaySize = ImVec2((float) width, (float) height);
 
         // DeltaTime for ImGui's internal timing (drag thresholds, animations).
         // Uses last known good value as fallback instead of hardcoded 1/60.
-        static auto lastFrameTime = std::chrono::steady_clock::now();
-        static float lastGoodDt = 0.008f;  // Seed at ~120 FPS
-        auto now = std::chrono::steady_clock::now();
-        float dt = std::chrono::duration<float>(now - lastFrameTime).count();
-        lastFrameTime = now;
+        static auto  lastFrameTime = std::chrono::steady_clock::now();
+        static float lastGoodDt    = 0.008f; // Seed at ~120 FPS
+        auto         now           = std::chrono::steady_clock::now();
+        float        dt            = std::chrono::duration<float>(now - lastFrameTime).count();
+        lastFrameTime              = now;
         if (dt > 0.0f && dt < 1.0f)
         {
             io.DeltaTime = dt;
-            lastGoodDt = dt;
+            lastGoodDt   = dt;
             // Update adaptive fence timeout with exponential moving average
             avgFrameTimeMs = avgFrameTimeMs * 0.9f + (dt * 1000.0f) * 0.1f;
         }
@@ -883,12 +882,12 @@ namespace vkShade
 
         // Mouse input for interactivity
         MouseState mouse = getMouseState();
-        io.MousePos = ImVec2((float)mouse.x, (float)mouse.y);
+        io.MousePos      = ImVec2((float) mouse.x, (float) mouse.y);
 
-        io.MouseDown[0] = mouse.leftButton;
-        io.MouseDown[1] = mouse.rightButton;
-        io.MouseDown[2] = mouse.middleButton;
-        io.MouseWheel = mouse.scrollDelta;
+        io.MouseDown[0]    = mouse.leftButton;
+        io.MouseDown[1]    = mouse.rightButton;
+        io.MouseDown[2]    = mouse.middleButton;
+        io.MouseWheel      = mouse.scrollDelta;
         io.MouseDrawCursor = isWayland() && isWaylandGameCursorHidden();
 
         // Keyboard input for text fields
@@ -896,22 +895,50 @@ namespace vkShade
         KeyboardState keyboard = getKeyboardState();
         for (char c : keyboard.typedChars)
             io.AddInputCharacter(c);
-        if (keyboard.backspace) { io.AddKeyEvent(ImGuiKey_Backspace, true); io.AddKeyEvent(ImGuiKey_Backspace, false); }
-        if (keyboard.del) { io.AddKeyEvent(ImGuiKey_Delete, true); io.AddKeyEvent(ImGuiKey_Delete, false); }
-        if (keyboard.enter) { io.AddKeyEvent(ImGuiKey_Enter, true); io.AddKeyEvent(ImGuiKey_Enter, false); }
-        if (keyboard.left) { io.AddKeyEvent(ImGuiKey_LeftArrow, true); io.AddKeyEvent(ImGuiKey_LeftArrow, false); }
-        if (keyboard.right) { io.AddKeyEvent(ImGuiKey_RightArrow, true); io.AddKeyEvent(ImGuiKey_RightArrow, false); }
-        if (keyboard.home) { io.AddKeyEvent(ImGuiKey_Home, true); io.AddKeyEvent(ImGuiKey_Home, false); }
-        if (keyboard.end) { io.AddKeyEvent(ImGuiKey_End, true); io.AddKeyEvent(ImGuiKey_End, false); }
+        if (keyboard.backspace)
+        {
+            io.AddKeyEvent(ImGuiKey_Backspace, true);
+            io.AddKeyEvent(ImGuiKey_Backspace, false);
+        }
+        if (keyboard.del)
+        {
+            io.AddKeyEvent(ImGuiKey_Delete, true);
+            io.AddKeyEvent(ImGuiKey_Delete, false);
+        }
+        if (keyboard.enter)
+        {
+            io.AddKeyEvent(ImGuiKey_Enter, true);
+            io.AddKeyEvent(ImGuiKey_Enter, false);
+        }
+        if (keyboard.left)
+        {
+            io.AddKeyEvent(ImGuiKey_LeftArrow, true);
+            io.AddKeyEvent(ImGuiKey_LeftArrow, false);
+        }
+        if (keyboard.right)
+        {
+            io.AddKeyEvent(ImGuiKey_RightArrow, true);
+            io.AddKeyEvent(ImGuiKey_RightArrow, false);
+        }
+        if (keyboard.home)
+        {
+            io.AddKeyEvent(ImGuiKey_Home, true);
+            io.AddKeyEvent(ImGuiKey_Home, false);
+        }
+        if (keyboard.end)
+        {
+            io.AddKeyEvent(ImGuiKey_End, true);
+            io.AddKeyEvent(ImGuiKey_End, false);
+        }
 
         // ImGui frame
         ImGui_ImplVulkan_NewFrame();
         ImGui::NewFrame();
 
         // Clamp overlay window to screen bounds so it can never go offscreen
-        ImGuiViewport* viewport = ImGui::GetMainViewport();
-        ImVec2 screenMin = viewport->WorkPos;
-        ImVec2 screenMax = ImVec2(screenMin.x + viewport->WorkSize.x, screenMin.y + viewport->WorkSize.y);
+        ImGuiViewport* viewport  = ImGui::GetMainViewport();
+        ImVec2         screenMin = viewport->WorkPos;
+        ImVec2         screenMax = ImVec2(screenMin.x + viewport->WorkSize.x, screenMin.y + viewport->WorkSize.y);
 
         // Set default size/position on first appearance
         ImGui::SetNextWindowSizeConstraints(ImVec2(300, 200), ImVec2(screenMax.x - screenMin.x, screenMax.y - screenMin.y));
@@ -930,13 +957,29 @@ namespace vkShade
         ImGui::Begin("vkShade Overlay", nullptr, ImGuiWindowFlags_NoCollapse);
 
         // Clamp position after the window is created (prevents dragging offscreen)
-        ImVec2 winPos = ImGui::GetWindowPos();
+        ImVec2 winPos  = ImGui::GetWindowPos();
         ImVec2 winSize = ImGui::GetWindowSize();
-        bool clamped = false;
-        if (winPos.x + winSize.x < screenMin.x + 50) { winPos.x = screenMin.x; clamped = true; }
-        if (winPos.y < screenMin.y)                   { winPos.y = screenMin.y; clamped = true; }
-        if (winPos.x > screenMax.x - 50)              { winPos.x = screenMax.x - 50; clamped = true; }
-        if (winPos.y > screenMax.y - 30)              { winPos.y = screenMax.y - 30; clamped = true; }
+        bool   clamped = false;
+        if (winPos.x + winSize.x < screenMin.x + 50)
+        {
+            winPos.x = screenMin.x;
+            clamped  = true;
+        }
+        if (winPos.y < screenMin.y)
+        {
+            winPos.y = screenMin.y;
+            clamped  = true;
+        }
+        if (winPos.x > screenMax.x - 50)
+        {
+            winPos.x = screenMax.x - 50;
+            clamped  = true;
+        }
+        if (winPos.y > screenMax.y - 30)
+        {
+            winPos.y = screenMax.y - 30;
+            clamped  = true;
+        }
         if (clamped)
             ImGui::SetWindowPos(winPos);
 
@@ -983,7 +1026,7 @@ namespace vkShade
             ImGui::EndTabBar();
         }
 
-        ImGui::End();  // vkShade Overlay
+        ImGui::End(); // vkShade Overlay
 
         // Debug window (separate, controlled by setting)
         renderDebugWindow();
@@ -991,8 +1034,8 @@ namespace vkShade
         // Global auto-apply check (runs regardless of which tab is active)
         if (settingsManager.getAutoApply() && paramsDirty)
         {
-            auto now = std::chrono::steady_clock::now();
-            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastChangeTime).count();
+            auto       now           = std::chrono::steady_clock::now();
+            auto       elapsed       = std::chrono::duration_cast<std::chrono::milliseconds>(now - lastChangeTime).count();
             const bool leftMouseDown = ImGui::GetIO().MouseDown[0];
 
             // Defer auto-apply while left mouse is held (dragging/resizing/sliders).
@@ -1000,8 +1043,8 @@ namespace vkShade
             if (elapsed >= settingsManager.getAutoApplyDelay() && !leftMouseDown)
             {
                 applyRequested = true;
-                paramsDirty = false;
-                profileDirty = true;  // Mark for auto-save to profile
+                paramsDirty    = false;
+                profileDirty   = true; // Mark for auto-save to profile
             }
         }
 
@@ -1020,11 +1063,11 @@ namespace vkShade
         ImGui::Render();
 
         // Begin render pass
-        VkRenderPassBeginInfo rpBegin = {};
-        rpBegin.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        rpBegin.renderPass = renderPass;
-        rpBegin.framebuffer = framebuffer;
-        rpBegin.renderArea.extent.width = width;
+        VkRenderPassBeginInfo rpBegin    = {};
+        rpBegin.sType                    = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpBegin.renderPass               = renderPass;
+        rpBegin.framebuffer              = framebuffer;
+        rpBegin.renderArea.extent.width  = width;
         rpBegin.renderArea.extent.height = height;
 
         pLogicalDevice->vkd.CmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);

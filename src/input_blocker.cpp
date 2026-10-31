@@ -74,4 +74,4 @@ namespace vkShade
     {
         return blocked.load(std::memory_order_acquire);
     }
-}
+} // namespace vkShade

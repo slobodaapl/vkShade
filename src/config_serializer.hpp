@@ -20,32 +20,32 @@ namespace vkShade
     // Global vkShade settings (from vkShade.conf)
     struct VkShadeSettings
     {
-        int maxEffects = 10;
-        bool overlayBlockInput = true;
-        std::string toggleKey = "End";
-        std::string reloadKey = "F10";
-        std::string overlayKey = "Home";
-        bool enableOnLaunch = true;
-        bool depthCapture = false;
-        bool autoApply = true;  // Auto-apply changes without clicking Apply
-        int autoApplyDelay = 200;  // ms delay before auto-applying changes
-        bool showDebugWindow = false;  // Show debug window with raw effect registry data
+        int         maxEffects        = 10;
+        bool        overlayBlockInput = true;
+        std::string toggleKey         = "End";
+        std::string reloadKey         = "F10";
+        std::string overlayKey        = "Home";
+        bool        enableOnLaunch    = true;
+        bool        depthCapture      = false;
+        bool        autoApply         = true;  // Auto-apply changes without clicking Apply
+        int         autoApplyDelay    = 200;   // ms delay before auto-applying changes
+        bool        showDebugWindow   = false; // Show debug window with raw effect registry data
     };
 
     // Per-profile settings (stored in per-game .conf files)
     struct ProfileSettings
     {
-        bool safeAntiCheat = false;  // Force-disable depth capture for anti-cheat safety
-        int depthSourceIndex = -1;
+        bool safeAntiCheat       = false; // Force-disable depth capture for anti-cheat safety
+        int  depthSourceIndex    = -1;
         bool hasDepthSourceIndex = false;
     };
 
     // Shader Manager configuration (from shader_manager.conf)
     struct ShaderManagerConfig
     {
-        std::vector<std::string> parentDirectories;       // User-added parent dirs to scan
-        std::vector<std::string> discoveredShaderPaths;   // Auto-discovered Shaders/ dirs
-        std::vector<std::string> discoveredTexturePaths;  // Auto-discovered Textures/ dirs
+        std::vector<std::string> parentDirectories;      // User-added parent dirs to scan
+        std::vector<std::string> discoveredShaderPaths;  // Auto-discovered Shaders/ dirs
+        std::vector<std::string> discoveredTexturePaths; // Auto-discovered Textures/ dirs
     };
 
     class ConfigSerializer
@@ -57,13 +57,12 @@ namespace vkShade
         // params: all effect parameters
         // effectPaths: map of effect name to shader file path (for ReShade effects with custom names)
         // preprocessorDefs: preprocessor definitions to save (format: effectName#MACRO = value)
-        static bool saveConfig(
-            const std::string& configName,
-            const std::vector<std::string>& effects,
-            const std::vector<std::string>& disabledEffects,
-            const std::vector<ConfigParam>& params,
-            const std::map<std::string, std::string>& effectPaths = {},
-            const std::vector<PreprocessorDefinition>& preprocessorDefs = {});
+        static bool saveConfig(const std::string&                         configName,
+                               const std::vector<std::string>&            effects,
+                               const std::vector<std::string>&            disabledEffects,
+                               const std::vector<ConfigParam>&            params,
+                               const std::map<std::string, std::string>&  effectPaths      = {},
+                               const std::vector<PreprocessorDefinition>& preprocessorDefs = {});
 
         // Get the base config directory path (~/.config/vkShade/)
         static std::string getBaseConfigDir();
@@ -78,17 +77,17 @@ namespace vkShade
         static bool deleteConfig(const std::string& configName);
 
         // Default config management
-        static bool setDefaultConfig(const std::string& configName);
+        static bool        setDefaultConfig(const std::string& configName);
         static std::string getDefaultConfig();
         static std::string getDefaultConfigPath();
 
         // Global settings management (vkShade.conf)
         static VkShadeSettings loadSettings();
-        static bool saveSettings(const VkShadeSettings& settings);
+        static bool            saveSettings(const VkShadeSettings& settings);
 
         // Shader Manager config (shader_manager.conf)
         static ShaderManagerConfig loadShaderManagerConfig();
-        static bool saveShaderManagerConfig(const ShaderManagerConfig& config);
+        static bool                saveShaderManagerConfig(const ShaderManagerConfig& config);
 
         // Ensure vkShade.conf exists with defaults (call early at startup)
         static void ensureConfigExists();
@@ -105,8 +104,7 @@ namespace vkShade
         // Get the full path for a game profile.
         // profileName "default" or "" → configs/<gameName>.conf
         // profileName "foo"           → configs/<gameName>@foo.conf
-        static std::string getProfilePath(const std::string& gameName,
-                                          const std::string& profileName = "");
+        static std::string getProfilePath(const std::string& gameName, const std::string& profileName = "");
 
         // Ensure the default profile for a game exists (creates with empty
         // effects list if missing). Returns the profile path.
@@ -117,30 +115,25 @@ namespace vkShade
 
         // Get/set the active profile name for a game (persisted in .active_profiles)
         static std::string getActiveProfile(const std::string& gameName);
-        static void setActiveProfile(const std::string& gameName,
-                                     const std::string& profileName);
+        static void        setActiveProfile(const std::string& gameName, const std::string& profileName);
 
         // Create a new named profile for a game (copies from source or empty)
-        static bool createProfile(const std::string& gameName,
-                                  const std::string& profileName,
-                                  const std::string& copyFromProfile = "");
+        static bool createProfile(const std::string& gameName, const std::string& profileName, const std::string& copyFromProfile = "");
 
         // Delete a named profile (cannot delete "default")
-        static bool deleteProfile(const std::string& gameName,
-                                  const std::string& profileName);
+        static bool deleteProfile(const std::string& gameName, const std::string& profileName);
 
         // Load per-profile settings from a config file
         static ProfileSettings loadProfileSettings(const std::string& filePath);
 
         // Save directly to a profile path (bypasses config name lookup)
-        static bool saveToPath(
-            const std::string& filePath,
-            const std::vector<std::string>& effects,
-            const std::vector<std::string>& disabledEffects,
-            const std::vector<ConfigParam>& params,
-            const std::map<std::string, std::string>& effectPaths = {},
-            const std::vector<PreprocessorDefinition>& preprocessorDefs = {},
-            const ProfileSettings& profileSettings = {});
+        static bool saveToPath(const std::string&                         filePath,
+                               const std::vector<std::string>&            effects,
+                               const std::vector<std::string>&            disabledEffects,
+                               const std::vector<ConfigParam>&            params,
+                               const std::map<std::string, std::string>&  effectPaths      = {},
+                               const std::vector<PreprocessorDefinition>& preprocessorDefs = {},
+                               const ProfileSettings&                     profileSettings  = {});
     };
 
 } // namespace vkShade

@@ -14,7 +14,7 @@ namespace vkShade
 
     // Callbacks for device binding — set by keyboard/mouse modules before init
     using KeyboardBindCallback = void (*)(wl_seat* seat);
-    using PointerBindCallback = void (*)(wl_seat* seat);
+    using PointerBindCallback  = void (*)(wl_seat* seat);
 
     void setKeyboardBindCallback(KeyboardBindCallback cb);
     void setPointerBindCallback(PointerBindCallback cb);

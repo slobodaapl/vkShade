@@ -19,9 +19,7 @@ namespace vkShade
     {
         for (auto& uniform : module.uniforms)
         {
-            auto it = std::find_if(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) {
-                          return a.name == "source";
-                      });
+            auto it = std::find_if(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) { return a.name == "source"; });
             if (it == uniform.annotations.end())
             {
                 Logger::debug("uniform without source annotation (offset: " + std::to_string(uniform.offset) + ")");
@@ -38,9 +36,7 @@ namespace vkShade
         std::vector<std::shared_ptr<ReshadeUniform>> uniforms;
         for (auto& uniform : module.uniforms)
         {
-            auto it = std::find_if(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) {
-                           return a.name == "source";
-                       });
+            auto it = std::find_if(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) { return a.name == "source"; });
             if (it == uniform.annotations.end())
                 continue;
             auto source = it->value.string_data;
@@ -152,8 +148,8 @@ namespace vkShade
         // Date only changes once per second — cache the result and only
         // recompute when the second changes. Saves ~234 localtime_r calls/sec
         // at 235 FPS.
-        static thread_local std::time_t lastSecond = 0;
-        static thread_local float cachedDate[4] = {};
+        static thread_local std::time_t lastSecond    = 0;
+        static thread_local float       cachedDate[4] = {};
 
         auto        now  = std::chrono::system_clock::now();
         std::time_t nowC = std::chrono::system_clock::to_time_t(now);
@@ -298,9 +294,10 @@ namespace vkShade
     }
     void RandomUniform::update(void* mapedBuffer)
     {
-        if (min > max) std::swap(min, max);
+        if (min > max)
+            std::swap(min, max);
         std::uniform_int_distribution<int32_t> dist(min, max);
-        int32_t value = dist(tlRng);
+        int32_t                                value = dist(tlRng);
         std::memcpy((uint8_t*) mapedBuffer + offset, &(value), sizeof(int32_t));
     }
     RandomUniform::~RandomUniform()

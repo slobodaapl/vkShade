@@ -17,7 +17,7 @@ namespace vkShade
         stringVector.push_back(addString);
     }
 
-    void outputInColor(std::string output, Color foreground, Color background)
+    void outputInColor(const std::string& output, Color foreground, Color background)
     {
         std::vector<std::string> magicNumbers;
         switch (foreground)

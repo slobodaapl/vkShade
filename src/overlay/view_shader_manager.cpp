@@ -13,19 +13,15 @@
 namespace vkShade
 {
     // Defined in view_shader_test.cpp
-    void renderShaderTestResultsUI(
-        const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
-        const std::set<std::string>& depthShaderNames);
-}
+    void renderShaderTestResultsUI(const std::vector<std::tuple<std::string, std::string, bool, std::string>>& results,
+                                   const std::set<std::string>&                                                depthShaderNames);
+} // namespace vkShade
 
 namespace vkShade
 {
     // Static file browser for adding directories
-    static ImGui::FileBrowser dirBrowser(
-        ImGuiFileBrowserFlags_SelectDirectory |
-        ImGuiFileBrowserFlags_HideRegularFiles |
-        ImGuiFileBrowserFlags_CloseOnEsc |
-        ImGuiFileBrowserFlags_CreateNewDir);
+    static ImGui::FileBrowser dirBrowser(ImGuiFileBrowserFlags_SelectDirectory | ImGuiFileBrowserFlags_HideRegularFiles
+                                         | ImGuiFileBrowserFlags_CloseOnEsc | ImGuiFileBrowserFlags_CreateNewDir);
 
     // Case-insensitive string comparison
     static bool equalsIgnoreCase(const std::string& a, const std::string& b)
@@ -34,23 +30,18 @@ namespace vkShade
             return false;
         for (size_t i = 0; i < a.size(); i++)
         {
-            if (std::tolower(static_cast<unsigned char>(a[i])) !=
-                std::tolower(static_cast<unsigned char>(b[i])))
+            if (std::tolower(static_cast<unsigned char>(a[i])) != std::tolower(static_cast<unsigned char>(b[i])))
                 return false;
         }
         return true;
     }
 
     // Recursively scan directory for Shaders/ and Textures/ subdirectories
-    static void scanDirectory(
-        const std::filesystem::path& dir,
-        std::set<std::string>& shaderPaths,
-        std::set<std::string>& texturePaths)
+    static void scanDirectory(const std::filesystem::path& dir, std::set<std::string>& shaderPaths, std::set<std::string>& texturePaths)
     {
         try
         {
-            for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                dir, std::filesystem::directory_options::skip_permission_denied))
+            for (const auto& entry : std::filesystem::recursive_directory_iterator(dir, std::filesystem::directory_options::skip_permission_denied))
             {
                 if (!entry.is_directory())
                     continue;
@@ -74,17 +65,17 @@ namespace vkShade
         if (!shaderMgrInitialized)
         {
             ShaderManagerConfig config = ConfigSerializer::loadShaderManagerConfig();
-            shaderMgrParentDirs = config.parentDirectories;
-            shaderMgrShaderPaths = config.discoveredShaderPaths;
-            shaderMgrTexturePaths = config.discoveredTexturePaths;
-            shaderMgrInitialized = true;
+            shaderMgrParentDirs        = config.parentDirectories;
+            shaderMgrShaderPaths       = config.discoveredShaderPaths;
+            shaderMgrTexturePaths      = config.discoveredTexturePaths;
+            shaderMgrInitialized       = true;
         }
 
         // Helper to save config (auto-save on any change)
         auto saveConfig = [&]() {
             ShaderManagerConfig config;
-            config.parentDirectories = shaderMgrParentDirs;
-            config.discoveredShaderPaths = shaderMgrShaderPaths;
+            config.parentDirectories      = shaderMgrParentDirs;
+            config.discoveredShaderPaths  = shaderMgrShaderPaths;
             config.discoveredTexturePaths = shaderMgrTexturePaths;
             ConfigSerializer::saveShaderManagerConfig(config);
             shaderPathsChanged = true;
@@ -139,13 +130,12 @@ namespace vkShade
             }
             shaderMgrShaderPaths.assign(shaderSet.begin(), shaderSet.end());
             shaderMgrTexturePaths.assign(textureSet.begin(), textureSet.end());
-            Logger::info("Shader Manager: Found " + std::to_string(shaderMgrShaderPaths.size()) +
-                " shader paths, " + std::to_string(shaderMgrTexturePaths.size()) + " texture paths");
+            Logger::info("Shader Manager: Found " + std::to_string(shaderMgrShaderPaths.size()) + " shader paths, "
+                         + std::to_string(shaderMgrTexturePaths.size()) + " texture paths");
             saveConfig();
         }
         ImGui::SameLine();
-        ImGui::TextDisabled("(%zu shader paths, %zu texture paths)",
-            shaderMgrShaderPaths.size(), shaderMgrTexturePaths.size());
+        ImGui::TextDisabled("(%zu shader paths, %zu texture paths)", shaderMgrShaderPaths.size(), shaderMgrTexturePaths.size());
 
         // Shader test button and progress (implemented in view_shader_test.cpp)
         renderShaderTestSection();
@@ -188,7 +178,7 @@ namespace vkShade
                 int removeTextureIdx = -1;
                 for (size_t i = 0; i < shaderMgrTexturePaths.size(); i++)
                 {
-                    ImGui::PushID(static_cast<int>(i) + 1000);  // Offset to avoid ID collision
+                    ImGui::PushID(static_cast<int>(i) + 1000); // Offset to avoid ID collision
                     if (ImGui::SmallButton("X"))
                         removeTextureIdx = static_cast<int>(i);
                     ImGui::SameLine();
@@ -232,7 +222,6 @@ namespace vkShade
             }
             dirBrowser.ClearSelected();
         }
-
     }
 
 } // namespace vkShade

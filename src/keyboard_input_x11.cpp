@@ -18,21 +18,21 @@
 
 namespace vkShade
 {
-    static Display* kbDisplay = nullptr;
-    static int xiOpcode = 0;
-    static bool xiInitialized = false;
-    static std::string typedCharsAccumulator;
-    static std::string lastKeyNameAccumulator;
-    static bool backspacePressed = false;
-    static bool deletePressed = false;
-    static bool enterPressed = false;
-    static bool leftPressed = false;
-    static bool rightPressed = false;
-    static bool homePressed = false;
-    static bool endPressed = false;
-    static uint64_t keymapFrameId = 0;
-    static uint64_t lastQueriedKeymapFrame = std::numeric_limits<uint64_t>::max();
-    static char cachedKeymap[32] = {};
+    static Display*                              kbDisplay     = nullptr;
+    static int                                   xiOpcode      = 0;
+    static bool                                  xiInitialized = false;
+    static std::string                           typedCharsAccumulator;
+    static std::string                           lastKeyNameAccumulator;
+    static bool                                  backspacePressed       = false;
+    static bool                                  deletePressed          = false;
+    static bool                                  enterPressed           = false;
+    static bool                                  leftPressed            = false;
+    static bool                                  rightPressed           = false;
+    static bool                                  homePressed            = false;
+    static bool                                  endPressed             = false;
+    static uint64_t                              keymapFrameId          = 0;
+    static uint64_t                              lastQueriedKeymapFrame = std::numeric_limits<uint64_t>::max();
+    static char                                  cachedKeymap[32]       = {};
     static std::unordered_map<uint32_t, KeyCode> keysymToKeycodeCache;
 
     void beginKeyboardInputFrameX11()
@@ -69,7 +69,7 @@ namespace vkShade
         }
     }
 
-    uint32_t convertToKeySymX11(std::string key)
+    uint32_t convertToKeySymX11(const std::string& key)
     {
         // TODO what if X11 isn't loaded?
         uint32_t result = (uint32_t) XStringToKeysym(key.c_str());
@@ -117,7 +117,7 @@ namespace vkShade
         }
 
         KeyCode keycode = 0;
-        auto cached = keysymToKeycodeCache.find(ks);
+        auto    cached  = keysymToKeycodeCache.find(ks);
         if (cached != keysymToKeycodeCache.end())
         {
             keycode = cached->second;
@@ -140,10 +140,8 @@ namespace vkShade
         KeySym keysym = XkbKeycodeToKeysym(kbDisplay, keycode, 0, 0);
 
         // Capture key name for keybind editor (skip modifier keys)
-        if (keysym != XK_Shift_L && keysym != XK_Shift_R &&
-            keysym != XK_Control_L && keysym != XK_Control_R &&
-            keysym != XK_Alt_L && keysym != XK_Alt_R &&
-            keysym != XK_Super_L && keysym != XK_Super_R)
+        if (keysym != XK_Shift_L && keysym != XK_Shift_R && keysym != XK_Control_L && keysym != XK_Control_R && keysym != XK_Alt_L
+            && keysym != XK_Alt_R && keysym != XK_Super_L && keysym != XK_Super_R)
         {
             const char* keyName = XKeysymToString(keysym);
             if (keyName)
@@ -151,13 +149,20 @@ namespace vkShade
         }
 
         // Handle special keys
-        if (keysym == XK_BackSpace) backspacePressed = true;
-        else if (keysym == XK_Delete) deletePressed = true;
-        else if (keysym == XK_Return || keysym == XK_KP_Enter) enterPressed = true;
-        else if (keysym == XK_Left) leftPressed = true;
-        else if (keysym == XK_Right) rightPressed = true;
-        else if (keysym == XK_Home) homePressed = true;
-        else if (keysym == XK_End) endPressed = true;
+        if (keysym == XK_BackSpace)
+            backspacePressed = true;
+        else if (keysym == XK_Delete)
+            deletePressed = true;
+        else if (keysym == XK_Return || keysym == XK_KP_Enter)
+            enterPressed = true;
+        else if (keysym == XK_Left)
+            leftPressed = true;
+        else if (keysym == XK_Right)
+            rightPressed = true;
+        else if (keysym == XK_Home)
+            homePressed = true;
+        else if (keysym == XK_End)
+            endPressed = true;
         else
         {
             // Check shifted state (from event state or keyboard query)
@@ -166,14 +171,14 @@ namespace vkShade
             {
                 char keys[32];
                 XQueryKeymap(kbDisplay, keys);
-                shifted = (keys[XKeysymToKeycode(kbDisplay, XK_Shift_L) >> 3] & (1 << (XKeysymToKeycode(kbDisplay, XK_Shift_L) & 7))) ||
-                          (keys[XKeysymToKeycode(kbDisplay, XK_Shift_R) >> 3] & (1 << (XKeysymToKeycode(kbDisplay, XK_Shift_R) & 7)));
+                shifted = (keys[XKeysymToKeycode(kbDisplay, XK_Shift_L) >> 3] & (1 << (XKeysymToKeycode(kbDisplay, XK_Shift_L) & 7)))
+                          || (keys[XKeysymToKeycode(kbDisplay, XK_Shift_R) >> 3] & (1 << (XKeysymToKeycode(kbDisplay, XK_Shift_R) & 7)));
             }
 
             KeySym actualSym = XkbKeycodeToKeysym(kbDisplay, keycode, 0, shifted ? 1 : 0);
             if (actualSym >= 0x20 && actualSym <= 0x7E)
             {
-                typedCharsAccumulator += (char)actualSym;
+                typedCharsAccumulator += (char) actualSym;
             }
         }
     }
@@ -198,38 +203,37 @@ namespace vkShade
                 processKeycode(ev.xkey.keycode, ev.xkey.state);
             }
             // Handle XInput2 raw events (normal operation)
-            else if (ev.xcookie.type == GenericEvent && ev.xcookie.extension == xiOpcode &&
-                XGetEventData(kbDisplay, &ev.xcookie))
+            else if (ev.xcookie.type == GenericEvent && ev.xcookie.extension == xiOpcode && XGetEventData(kbDisplay, &ev.xcookie))
             {
                 if (ev.xcookie.evtype == XI_RawKeyPress)
                 {
-                    XIRawEvent* rawEvent = (XIRawEvent*)ev.xcookie.data;
+                    XIRawEvent* rawEvent = (XIRawEvent*) ev.xcookie.data;
                     processKeycode(rawEvent->detail, 0);
                 }
                 XFreeEventData(kbDisplay, &ev.xcookie);
             }
         }
 
-        state.typedChars = std::move(typedCharsAccumulator);
+        state.typedChars  = std::move(typedCharsAccumulator);
         state.lastKeyName = std::move(lastKeyNameAccumulator);
-        state.backspace = backspacePressed;
-        state.del = deletePressed;
-        state.enter = enterPressed;
-        state.left = leftPressed;
-        state.right = rightPressed;
-        state.home = homePressed;
-        state.end = endPressed;
+        state.backspace   = backspacePressed;
+        state.del         = deletePressed;
+        state.enter       = enterPressed;
+        state.left        = leftPressed;
+        state.right       = rightPressed;
+        state.home        = homePressed;
+        state.end         = endPressed;
 
         // Reset accumulators
         typedCharsAccumulator.clear();
         lastKeyNameAccumulator.clear();
         backspacePressed = false;
-        deletePressed = false;
-        enterPressed = false;
-        leftPressed = false;
-        rightPressed = false;
-        homePressed = false;
-        endPressed = false;
+        deletePressed    = false;
+        enterPressed     = false;
+        leftPressed      = false;
+        rightPressed     = false;
+        homePressed      = false;
+        endPressed       = false;
 
         return state;
     }

@@ -17,12 +17,13 @@ namespace vkShade
     SimpleEffect::SimpleEffect()
     {
     }
-    void SimpleEffect::init(LogicalDevice*       pLogicalDevice,
-                            VkFormat             format,
-                            VkExtent2D           imageExtent,
-                            std::vector<VkImage> inputImages,
-                            std::vector<VkImage> outputImages,
-                            Config*              pConfig)
+    void SimpleEffect::init(LogicalDevice*              pLogicalDevice,
+                            VkFormat                    format,
+                            VkExtent2D                  imageExtent,
+                            const std::vector<VkImage>& inputImages,
+                            const std::vector<VkImage>& outputImages,
+                            Config*                     pConfig,
+                            const VkSpecializationInfo* fragmentSpecializationInfo)
     {
         Logger::debug("in creating SimpleEffect");
 
@@ -62,17 +63,22 @@ namespace vkShade
 
         graphicsPipeline = createGraphicsPipeline(pLogicalDevice,
                                                   vertexModule,
-                                                  pVertexSpecInfo,
+                                                  nullptr,
                                                   "main",
                                                   fragmentModule,
-                                                  pFragmentSpecInfo,
+                                                  fragmentSpecializationInfo,
                                                   "main",
                                                   imageExtent,
                                                   renderPass,
                                                   pipelineLayout);
 
-        imageDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
-            pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, {sampler}, std::vector<std::vector<VkImageView>>(1, inputImageViews));
+        imageDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(pLogicalDevice,
+                                                                         descriptorPool,
+                                                                         imageSamplerDescriptorSetLayout,
+                                                                         {sampler},
+                                                                         {inputImageViews},
+                                                                         {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER},
+                                                                         {VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL});
 
         framebuffers = createFramebuffers(pLogicalDevice, renderPass, imageExtent, {outputImageViews});
     }

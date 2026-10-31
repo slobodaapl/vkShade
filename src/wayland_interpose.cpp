@@ -17,7 +17,10 @@
 
 // Forward-declare to avoid pulling in mouse_input_wayland.hpp (which
 // transitively includes mouse_input.hpp → X11 headers in some targets).
-namespace vkShade { void mirrorButtonState(uint32_t button, bool pressed); }
+namespace vkShade
+{
+    void mirrorButtonState(uint32_t button, bool pressed);
+}
 
 #include <wayland-client.h>
 #include <dlfcn.h>
@@ -53,7 +56,7 @@ namespace vkShade
         }
     } // namespace
 
-    static std::mutex proxyMutex;
+    static std::mutex                    proxyMutex;
     static std::unordered_set<wl_proxy*> overlayProxies;
 
     void registerOverlayProxy(wl_proxy* proxy)
@@ -82,34 +85,34 @@ namespace vkShade
 struct GamePointerData
 {
     wl_pointer_listener original;
-    void* userData;
+    void*               userData = nullptr;
 };
 
 struct GameKeyboardData
 {
     wl_keyboard_listener original;
-    void* userData;
+    void*                userData = nullptr;
 };
 
-static std::mutex gameDataMutex;
-static std::unordered_map<wl_pointer*, GamePointerData> gamePointers;
+static std::mutex                                         gameDataMutex;
+static std::unordered_map<wl_pointer*, GamePointerData>   gamePointers;
 static std::unordered_map<wl_keyboard*, GameKeyboardData> gameKeyboards;
 
 struct GamePointerDispatcherData
 {
     wl_dispatcher_func_t original;
-    const void* dispatcherData;
+    const void*          dispatcherData = nullptr;
 };
 
 struct GameKeyboardDispatcherData
 {
     wl_dispatcher_func_t original;
-    const void* dispatcherData;
+    const void*          dispatcherData = nullptr;
 };
 
-static std::unordered_map<wl_proxy*, GamePointerDispatcherData> gamePointerDispatchers;
+static std::unordered_map<wl_proxy*, GamePointerDispatcherData>  gamePointerDispatchers;
 static std::unordered_map<wl_proxy*, GameKeyboardDispatcherData> gameKeyboardDispatchers;
-static std::atomic<bool> gameCursorHidden{false};
+static std::atomic<bool>                                         gameCursorHidden{false};
 
 // ── Wrapper pointer listener ─────────────────────────────────────────────────
 
@@ -118,7 +121,7 @@ static void wp_enter(void* data, wl_pointer* p, uint32_t serial, wl_surface* s, 
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.enter)
         it->second.original.enter(it->second.userData, p, serial, s, x, y);
 }
@@ -127,7 +130,7 @@ static void wp_leave(void* data, wl_pointer* p, uint32_t serial, wl_surface* s)
 {
     // Always forward leave — the game needs to know it lost focus
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.leave)
         it->second.original.leave(it->second.userData, p, serial, s);
 }
@@ -137,7 +140,7 @@ static void wp_motion(void* data, wl_pointer* p, uint32_t time, wl_fixed_t x, wl
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.motion)
         it->second.original.motion(it->second.userData, p, time, x, y);
 }
@@ -152,7 +155,7 @@ static void wp_button(void* data, wl_pointer* p, uint32_t serial, uint32_t time,
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.button)
         it->second.original.button(it->second.userData, p, serial, time, button, state);
 }
@@ -162,7 +165,7 @@ static void wp_axis(void* data, wl_pointer* p, uint32_t time, uint32_t axis, wl_
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis)
         it->second.original.axis(it->second.userData, p, time, axis, value);
 }
@@ -172,7 +175,7 @@ static void wp_frame(void* data, wl_pointer* p)
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.frame)
         it->second.original.frame(it->second.userData, p);
 }
@@ -182,7 +185,7 @@ static void wp_axis_source(void* data, wl_pointer* p, uint32_t source)
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis_source)
         it->second.original.axis_source(it->second.userData, p, source);
 }
@@ -192,7 +195,7 @@ static void wp_axis_stop(void* data, wl_pointer* p, uint32_t time, uint32_t axis
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis_stop)
         it->second.original.axis_stop(it->second.userData, p, time, axis);
 }
@@ -202,7 +205,7 @@ static void wp_axis_discrete(void* data, wl_pointer* p, uint32_t axis, int32_t d
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis_discrete)
         it->second.original.axis_discrete(it->second.userData, p, axis, discrete);
 }
@@ -212,7 +215,7 @@ static void wp_axis_value120(void* data, wl_pointer* p, uint32_t axis, int32_t v
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis_value120)
         it->second.original.axis_value120(it->second.userData, p, axis, value120);
 }
@@ -222,22 +225,22 @@ static void wp_axis_relative_direction(void* data, wl_pointer* p, uint32_t axis,
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointers.find(p);
+    auto                        it = gamePointers.find(p);
     if (it != gamePointers.end() && it->second.original.axis_relative_direction)
         it->second.original.axis_relative_direction(it->second.userData, p, axis, direction);
 }
 
 static const wl_pointer_listener wrapperPointerListener = {
-    .enter = wp_enter,
-    .leave = wp_leave,
-    .motion = wp_motion,
-    .button = wp_button,
-    .axis = wp_axis,
-    .frame = wp_frame,
-    .axis_source = wp_axis_source,
-    .axis_stop = wp_axis_stop,
-    .axis_discrete = wp_axis_discrete,
-    .axis_value120 = wp_axis_value120,
+    .enter                   = wp_enter,
+    .leave                   = wp_leave,
+    .motion                  = wp_motion,
+    .button                  = wp_button,
+    .axis                    = wp_axis,
+    .frame                   = wp_frame,
+    .axis_source             = wp_axis_source,
+    .axis_stop               = wp_axis_stop,
+    .axis_discrete           = wp_axis_discrete,
+    .axis_value120           = wp_axis_value120,
     .axis_relative_direction = wp_axis_relative_direction,
 };
 
@@ -247,7 +250,7 @@ static void wk_keymap(void* data, wl_keyboard* kb, uint32_t format, int32_t fd, 
 {
     // Always forward keymap — needed for initialization
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.keymap)
         it->second.original.keymap(it->second.userData, kb, format, fd, size);
 }
@@ -257,7 +260,7 @@ static void wk_enter(void* data, wl_keyboard* kb, uint32_t serial, wl_surface* s
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.enter)
         it->second.original.enter(it->second.userData, kb, serial, s, keys);
 }
@@ -266,7 +269,7 @@ static void wk_leave(void* data, wl_keyboard* kb, uint32_t serial, wl_surface* s
 {
     // Always forward leave
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.leave)
         it->second.original.leave(it->second.userData, kb, serial, s);
 }
@@ -276,7 +279,7 @@ static void wk_key(void* data, wl_keyboard* kb, uint32_t serial, uint32_t time, 
     if (vkShade::isInputBlocked())
         return;
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.key)
         it->second.original.key(it->second.userData, kb, serial, time, key, state);
 }
@@ -285,7 +288,7 @@ static void wk_modifiers(void* data, wl_keyboard* kb, uint32_t serial, uint32_t 
 {
     // Always forward modifiers — games need modifier state for keybinds
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.modifiers)
         it->second.original.modifiers(it->second.userData, kb, serial, depressed, latched, locked, group);
 }
@@ -294,17 +297,17 @@ static void wk_repeat_info(void* data, wl_keyboard* kb, int32_t rate, int32_t de
 {
     // Always forward repeat info
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboards.find(kb);
+    auto                        it = gameKeyboards.find(kb);
     if (it != gameKeyboards.end() && it->second.original.repeat_info)
         it->second.original.repeat_info(it->second.userData, kb, rate, delay);
 }
 
 static const wl_keyboard_listener wrapperKeyboardListener = {
-    .keymap = wk_keymap,
-    .enter = wk_enter,
-    .leave = wk_leave,
-    .key = wk_key,
-    .modifiers = wk_modifiers,
+    .keymap      = wk_keymap,
+    .enter       = wk_enter,
+    .leave       = wk_leave,
+    .key         = wk_key,
+    .modifiers   = wk_modifiers,
     .repeat_info = wk_repeat_info,
 };
 
@@ -321,25 +324,24 @@ static int wd_pointer(const void* data, void* target, uint32_t opcode, const str
     {
         switch (opcode)
         {
-            case 0: // enter
-            case 2: // motion
-            case 3: // button
-            case 4: // axis
-            case 5: // frame
-            case 6: // axis_source
-            case 7: // axis_stop
-            case 8: // axis_discrete
-            case 9: // axis_value120
+            case 0:  // enter
+            case 2:  // motion
+            case 3:  // button
+            case 4:  // axis
+            case 5:  // frame
+            case 6:  // axis_source
+            case 7:  // axis_stop
+            case 8:  // axis_discrete
+            case 9:  // axis_value120
             case 10: // axis_relative_direction
                 return 0;
             case 1: // leave
-            default:
-                break;
+            default: break;
         }
     }
 
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gamePointerDispatchers.find(proxy);
+    auto                        it = gamePointerDispatchers.find(proxy);
     if (it != gamePointerDispatchers.end() && it->second.original)
         return it->second.original(it->second.dispatcherData, target, opcode, msg, args);
     return 0;
@@ -360,13 +362,12 @@ static int wd_keyboard(const void* data, void* target, uint32_t opcode, const st
             case 2: // leave
             case 4: // modifiers
             case 5: // repeat_info
-            default:
-                break;
+            default: break;
         }
     }
 
     std::lock_guard<std::mutex> lock(gameDataMutex);
-    auto it = gameKeyboardDispatchers.find(proxy);
+    auto                        it = gameKeyboardDispatchers.find(proxy);
     if (it != gameKeyboardDispatchers.end() && it->second.original)
         return it->second.original(it->second.dispatcherData, target, opcode, msg, args);
     return 0;
@@ -379,7 +380,7 @@ static int wd_keyboard(const void* data, void* target, uint32_t opcode, const st
 // so that even inlined calls are caught.
 
 using AddListenerFn = int (*)(struct wl_proxy*, void (**)(void), void*);
-using DlsymFn = void* (*)(void*, const char*);
+using DlsymFn       = void* (*)(void*, const char*);
 
 static DlsymFn getRealDlsym()
 {
@@ -394,7 +395,7 @@ static DlsymFn getRealDlsym()
     return fn;
 }
 
-template <typename FnType>
+template<typename FnType>
 static FnType resolveWaylandSymbol(const char* symbol)
 {
     DlsymFn realDlsym = getRealDlsym();
@@ -432,7 +433,7 @@ static AddListenerFn getRealAddListener()
     return fn;
 }
 
-using AddDispatcherFn = int (*)(struct wl_proxy*, wl_dispatcher_func_t, const void*, void*);
+using AddDispatcherFn     = int (*)(struct wl_proxy*, wl_dispatcher_func_t, const void*, void*);
 using MarshalArrayFlagsFn = wl_proxy* (*)(struct wl_proxy*, uint32_t, const struct wl_interface*, uint32_t, uint32_t, union wl_argument*);
 
 static AddDispatcherFn getRealAddDispatcher()
@@ -447,10 +448,7 @@ static MarshalArrayFlagsFn getRealMarshalArrayFlags()
     return fn;
 }
 
-extern "C" __attribute__((visibility("default")))
-int wl_proxy_add_listener(struct wl_proxy* proxy,
-                          void (**implementation)(void),
-                          void* data)
+extern "C" __attribute__((visibility("default"))) int wl_proxy_add_listener(struct wl_proxy* proxy, void (**implementation)(void), void* data)
 {
     AddListenerFn real = getRealAddListener();
     if (!real)
@@ -466,54 +464,46 @@ int wl_proxy_add_listener(struct wl_proxy* proxy,
 
     if (std::strcmp(cls, "wl_pointer") == 0)
     {
-        auto* gameListener = (const wl_pointer_listener*)implementation;
-        auto* ptr = (wl_pointer*)proxy;
+        auto* gameListener = (const wl_pointer_listener*) implementation;
+        auto* ptr          = reinterpret_cast<wl_pointer*>(proxy);
 
         {
             std::lock_guard<std::mutex> lock(gameDataMutex);
-            GamePointerData gpd;
-            gpd.original = *gameListener;
-            gpd.userData = data;
+            GamePointerData             gpd;
+            gpd.original      = *gameListener;
+            gpd.userData      = data;
             gamePointers[ptr] = gpd;
         }
 
         vkShade::Logger::debug("Wayland interpose: wrapped game pointer listener");
-        return real(proxy, (void (**)(void))&wrapperPointerListener, nullptr);
+        return real(proxy, (void (**)(void)) &wrapperPointerListener, nullptr);
     }
 
     if (std::strcmp(cls, "wl_keyboard") == 0)
     {
-        auto* gameListener = (const wl_keyboard_listener*)implementation;
-        auto* kb = (wl_keyboard*)proxy;
+        auto* gameListener = (const wl_keyboard_listener*) implementation;
+        auto* kb           = reinterpret_cast<wl_keyboard*>(proxy);
 
         {
             std::lock_guard<std::mutex> lock(gameDataMutex);
-            GameKeyboardData gkd;
-            gkd.original = *gameListener;
-            gkd.userData = data;
+            GameKeyboardData            gkd;
+            gkd.original      = *gameListener;
+            gkd.userData      = data;
             gameKeyboards[kb] = gkd;
         }
 
         vkShade::Logger::debug("Wayland interpose: wrapped game keyboard listener");
-        return real(proxy, (void (**)(void))&wrapperKeyboardListener, nullptr);
+        return real(proxy, (void (**)(void)) &wrapperKeyboardListener, nullptr);
     }
 
     return real(proxy, implementation, data);
 }
 
-extern "C" __attribute__((visibility("default")))
-int wl_proxy_add_dispatcher(struct wl_proxy* proxy,
-                            wl_dispatcher_func_t dispatcher_func,
-                            const void* dispatcher_data,
-                            void* data);
+extern "C" __attribute__((visibility("default"))) int
+wl_proxy_add_dispatcher(struct wl_proxy* proxy, wl_dispatcher_func_t dispatcher_func, const void* dispatcher_data, void* data);
 
-extern "C" __attribute__((visibility("default")))
-wl_proxy* wl_proxy_marshal_array_flags(struct wl_proxy* proxy,
-                                       uint32_t opcode,
-                                       const struct wl_interface* iface,
-                                       uint32_t version,
-                                       uint32_t flags,
-                                       union wl_argument* args)
+extern "C" __attribute__((visibility("default"))) wl_proxy* wl_proxy_marshal_array_flags(
+    struct wl_proxy* proxy, uint32_t opcode, const struct wl_interface* iface, uint32_t version, uint32_t flags, union wl_argument* args)
 {
     MarshalArrayFlagsFn real = getRealMarshalArrayFlags();
     if (!real)
@@ -530,8 +520,7 @@ wl_proxy* wl_proxy_marshal_array_flags(struct wl_proxy* proxy,
         gameCursorHidden.store(args[1].o == nullptr, std::memory_order_release);
     }
 
-    if (vkShade::isInputBlocked() && cls && std::strcmp(cls, "xdg_toplevel") == 0 &&
-        (opcode == 4 || opcode == 5 || opcode == 6))
+    if (vkShade::isInputBlocked() && cls && std::strcmp(cls, "xdg_toplevel") == 0 && (opcode == 4 || opcode == 5 || opcode == 6))
     {
         return nullptr;
     }
@@ -539,8 +528,7 @@ wl_proxy* wl_proxy_marshal_array_flags(struct wl_proxy* proxy,
     return real(proxy, opcode, iface, version, flags, args);
 }
 
-extern "C" __attribute__((visibility("default")))
-void* dlsym(void* handle, const char* symbol)
+extern "C" __attribute__((visibility("default"))) void* dlsym(void* handle, const char* symbol)
 {
     DlsymFn realDlsym = getRealDlsym();
     if (!realDlsym)
@@ -553,8 +541,8 @@ void* dlsym(void* handle, const char* symbol)
     if (!enabled || std::strcmp(enabled, "1") != 0 || !resolved)
         return resolved;
 
-    bool wantsListener = (std::strcmp(symbol, "wl_proxy_add_listener") == 0);
-    bool wantsDispatcher = (std::strcmp(symbol, "wl_proxy_add_dispatcher") == 0);
+    bool wantsListener          = (std::strcmp(symbol, "wl_proxy_add_listener") == 0);
+    bool wantsDispatcher        = (std::strcmp(symbol, "wl_proxy_add_dispatcher") == 0);
     bool wantsMarshalArrayFlags = (std::strcmp(symbol, "wl_proxy_marshal_array_flags") == 0);
     if (!wantsListener && !wantsDispatcher && !wantsMarshalArrayFlags)
         return resolved;
@@ -564,8 +552,7 @@ void* dlsym(void* handle, const char* symbol)
         return resolved;
 
     std::string module(info.dli_fname);
-    std::transform(module.begin(), module.end(), module.begin(),
-                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::transform(module.begin(), module.end(), module.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
     // Only redirect lookups that currently resolve to libwayland-client.
     if (module.find("libwayland-client") == std::string::npos)
@@ -580,11 +567,8 @@ void* dlsym(void* handle, const char* symbol)
     return reinterpret_cast<void*>(&wl_proxy_marshal_array_flags);
 }
 
-extern "C" __attribute__((visibility("default")))
-int wl_proxy_add_dispatcher(struct wl_proxy* proxy,
-                            wl_dispatcher_func_t dispatcher_func,
-                            const void* dispatcher_data,
-                            void* data)
+extern "C" __attribute__((visibility("default"))) int
+wl_proxy_add_dispatcher(struct wl_proxy* proxy, wl_dispatcher_func_t dispatcher_func, const void* dispatcher_data, void* data)
 {
     AddDispatcherFn real = getRealAddDispatcher();
     if (!real)
@@ -604,9 +588,9 @@ int wl_proxy_add_dispatcher(struct wl_proxy* proxy,
 
         {
             std::lock_guard<std::mutex> lock(gameDataMutex);
-            GamePointerDispatcherData gpd;
-            gpd.original = dispatcher_func;
-            gpd.dispatcherData = dispatcher_data;
+            GamePointerDispatcherData   gpd;
+            gpd.original                = dispatcher_func;
+            gpd.dispatcherData          = dispatcher_data;
             gamePointerDispatchers[ptr] = gpd;
         }
 
@@ -620,9 +604,9 @@ int wl_proxy_add_dispatcher(struct wl_proxy* proxy,
 
         {
             std::lock_guard<std::mutex> lock(gameDataMutex);
-            GameKeyboardDispatcherData gkd;
-            gkd.original = dispatcher_func;
-            gkd.dispatcherData = dispatcher_data;
+            GameKeyboardDispatcherData  gkd;
+            gkd.original                = dispatcher_func;
+            gkd.dispatcherData          = dispatcher_data;
             gameKeyboardDispatchers[kb] = gkd;
         }
 
@@ -667,8 +651,7 @@ namespace vkShade
             }
         }
 
-        Logger::debug(std::string("Wayland interpose: synthetic keyboard ") +
-                       (hasFocus ? "enter" : "leave") + " sent to " +
-                       std::to_string(gameKeyboards.size()) + " game keyboard(s)");
+        Logger::debug(std::string("Wayland interpose: synthetic keyboard ") + (hasFocus ? "enter" : "leave") + " sent to "
+                      + std::to_string(gameKeyboards.size()) + " game keyboard(s)");
     }
 } // namespace vkShade

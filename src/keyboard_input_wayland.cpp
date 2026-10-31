@@ -19,9 +19,9 @@ namespace vkShade
     static wl_keyboard* wlKeyboard = nullptr;
 
     // XKB state for key translation
-    static xkb_context* xkbCtx = nullptr;
-    static xkb_keymap* xkbKeymap = nullptr;
-    static xkb_state* xkbState = nullptr;
+    static xkb_context* xkbCtx    = nullptr;
+    static xkb_keymap*  xkbKeymap = nullptr;
+    static xkb_state*   xkbState  = nullptr;
 
     // Tracking pressed keys (Wayland keycodes)
     static std::unordered_set<uint32_t> pressedKeys;
@@ -34,13 +34,13 @@ namespace vkShade
     // Accumulated state between getKeyboardState calls
     static std::string typedCharsAccumulator;
     static std::string lastKeyNameAccumulator;
-    static bool backspacePressed = false;
-    static bool deletePressed = false;
-    static bool enterPressed = false;
-    static bool leftPressed = false;
-    static bool rightPressed = false;
-    static bool homePressed = false;
-    static bool endPressed = false;
+    static bool        backspacePressed = false;
+    static bool        deletePressed    = false;
+    static bool        enterPressed     = false;
+    static bool        leftPressed      = false;
+    static bool        rightPressed     = false;
+    static bool        homePressed      = false;
+    static bool        endPressed       = false;
 
     static bool initialized = false;
 
@@ -67,13 +67,11 @@ namespace vkShade
         xkb_keysym_t keysym = xkb_state_key_get_one_sym(xkbState, xkbKeycode);
 
         // Track press event for edge detection (survives same-frame release)
-        keyPressEvents.insert((uint32_t)keysym);
+        keyPressEvents.insert((uint32_t) keysym);
 
         // Capture key name for keybind editor (skip modifiers)
-        if (keysym != XKB_KEY_Shift_L && keysym != XKB_KEY_Shift_R &&
-            keysym != XKB_KEY_Control_L && keysym != XKB_KEY_Control_R &&
-            keysym != XKB_KEY_Alt_L && keysym != XKB_KEY_Alt_R &&
-            keysym != XKB_KEY_Super_L && keysym != XKB_KEY_Super_R)
+        if (keysym != XKB_KEY_Shift_L && keysym != XKB_KEY_Shift_R && keysym != XKB_KEY_Control_L && keysym != XKB_KEY_Control_R
+            && keysym != XKB_KEY_Alt_L && keysym != XKB_KEY_Alt_R && keysym != XKB_KEY_Super_L && keysym != XKB_KEY_Super_R)
         {
             char nameBuf[64];
             if (xkb_keysym_get_name(keysym, nameBuf, sizeof(nameBuf)) > 0)
@@ -99,15 +97,14 @@ namespace vkShade
         {
             // Get UTF-8 text for the key
             char buf[8];
-            int len = xkb_state_key_get_utf8(xkbState, xkbKeycode, buf, sizeof(buf));
+            int  len = xkb_state_key_get_utf8(xkbState, xkbKeycode, buf, sizeof(buf));
             if (len > 0 && buf[0] >= 0x20) // Skip control characters
                 typedCharsAccumulator += std::string(buf, len);
         }
     }
 
     // Wayland keyboard listener callbacks
-    static void keyboardKeymap(void* /*data*/, wl_keyboard* /*keyboard*/,
-                               uint32_t format, int32_t fd, uint32_t size)
+    static void keyboardKeymap(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t format, int32_t fd, uint32_t size)
     {
         if (format != WL_KEYBOARD_KEYMAP_FORMAT_XKB_V1)
         {
@@ -115,7 +112,7 @@ namespace vkShade
             return;
         }
 
-        char* mapStr = (char*)mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+        char* mapStr = (char*) mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
         if (mapStr == MAP_FAILED)
         {
             close(fd);
@@ -135,9 +132,7 @@ namespace vkShade
             xkbKeymap = nullptr;
         }
 
-        xkbKeymap = xkb_keymap_new_from_string(xkbCtx, mapStr,
-                                                 XKB_KEYMAP_FORMAT_TEXT_V1,
-                                                 XKB_KEYMAP_COMPILE_NO_FLAGS);
+        xkbKeymap = xkb_keymap_new_from_string(xkbCtx, mapStr, XKB_KEYMAP_FORMAT_TEXT_V1, XKB_KEYMAP_COMPILE_NO_FLAGS);
         munmap(mapStr, size);
         close(fd);
 
@@ -154,46 +149,43 @@ namespace vkShade
         Logger::debug("Wayland: keymap loaded");
     }
 
-    static void keyboardEnter(void* /*data*/, wl_keyboard* /*keyboard*/,
-                              uint32_t /*serial*/, wl_surface* /*surface*/,
-                              wl_array* /*keys*/)
+    static void keyboardEnter(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t /*serial*/, wl_surface* /*surface*/, wl_array* /*keys*/)
     {
     }
 
-    static void keyboardLeave(void* /*data*/, wl_keyboard* /*keyboard*/,
-                              uint32_t /*serial*/, wl_surface* /*surface*/)
+    static void keyboardLeave(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t /*serial*/, wl_surface* /*surface*/)
     {
         pressedKeys.clear();
-        keyPressEvents.clear();  // Prevent stale keysyms surviving focus loss
+        keyPressEvents.clear(); // Prevent stale keysyms surviving focus loss
     }
 
-    static void keyboardKey(void* /*data*/, wl_keyboard* /*keyboard*/,
-                            uint32_t /*serial*/, uint32_t /*time*/,
-                            uint32_t key, uint32_t state)
+    static void keyboardKey(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t /*serial*/, uint32_t /*time*/, uint32_t key, uint32_t state)
     {
         processWaylandKey(key, state);
     }
 
-    static void keyboardModifiers(void* /*data*/, wl_keyboard* /*keyboard*/,
-                                  uint32_t /*serial*/, uint32_t modsDepressed,
-                                  uint32_t modsLatched, uint32_t modsLocked,
+    static void keyboardModifiers(void* /*data*/,
+                                  wl_keyboard* /*keyboard*/,
+                                  uint32_t /*serial*/,
+                                  uint32_t modsDepressed,
+                                  uint32_t modsLatched,
+                                  uint32_t modsLocked,
                                   uint32_t group)
     {
         if (xkbState)
             xkb_state_update_mask(xkbState, modsDepressed, modsLatched, modsLocked, 0, 0, group);
     }
 
-    static void keyboardRepeatInfo(void* /*data*/, wl_keyboard* /*keyboard*/,
-                                   int32_t /*rate*/, int32_t /*delay*/)
+    static void keyboardRepeatInfo(void* /*data*/, wl_keyboard* /*keyboard*/, int32_t /*rate*/, int32_t /*delay*/)
     {
     }
 
     static const wl_keyboard_listener keyboardListener = {
-        .keymap = keyboardKeymap,
-        .enter = keyboardEnter,
-        .leave = keyboardLeave,
-        .key = keyboardKey,
-        .modifiers = keyboardModifiers,
+        .keymap      = keyboardKeymap,
+        .enter       = keyboardEnter,
+        .leave       = keyboardLeave,
+        .key         = keyboardKey,
+        .modifiers   = keyboardModifiers,
         .repeat_info = keyboardRepeatInfo,
     };
 
@@ -206,7 +198,7 @@ namespace vkShade
         wlKeyboard = wl_seat_get_keyboard(seat);
         // Register as overlay proxy BEFORE add_listener so the interposition
         // layer passes this through without wrapping
-        registerOverlayProxy((wl_proxy*)wlKeyboard);
+        registerOverlayProxy(reinterpret_cast<wl_proxy*>(wlKeyboard));
         wl_keyboard_add_listener(wlKeyboard, &keyboardListener, nullptr);
         Logger::debug("Wayland: keyboard bound from shared seat");
     }
@@ -249,7 +241,7 @@ namespace vkShade
     {
         if (wlKeyboard)
         {
-            unregisterOverlayProxy((wl_proxy*)wlKeyboard);
+            unregisterOverlayProxy(reinterpret_cast<wl_proxy*>(wlKeyboard));
             wl_keyboard_destroy(wlKeyboard);
             wlKeyboard = nullptr;
         }
@@ -277,7 +269,7 @@ namespace vkShade
         cleanupWaylandInputCommon();
     }
 
-    uint32_t convertToKeySymWayland(std::string key)
+    uint32_t convertToKeySymWayland(const std::string& key)
     {
         // XKB keysym names are the same as X11 keysym names
         xkb_keysym_t sym = xkb_keysym_from_name(key.c_str(), XKB_KEYSYM_NO_FLAGS);
@@ -289,7 +281,7 @@ namespace vkShade
         if (sym == XKB_KEY_NoSymbol)
             Logger::err("Wayland: invalid key name: " + key);
 
-        return (uint32_t)sym;
+        return (uint32_t) sym;
     }
 
     bool isKeyPressedWayland(uint32_t ks)
@@ -313,9 +305,9 @@ namespace vkShade
 
         for (uint32_t keycode : pressedKeys)
         {
-            uint32_t xkbKeycode = keycode + 8;
-            xkb_keysym_t sym = xkb_state_key_get_one_sym(xkbState, xkbKeycode);
-            if ((uint32_t)sym == ks)
+            uint32_t     xkbKeycode = keycode + 8;
+            xkb_keysym_t sym        = xkb_state_key_get_one_sym(xkbState, xkbKeycode);
+            if ((uint32_t) sym == ks)
                 return true;
         }
         return false;
@@ -330,26 +322,26 @@ namespace vkShade
 
         dispatchWaylandInputEvents();
 
-        state.typedChars = std::move(typedCharsAccumulator);
+        state.typedChars  = std::move(typedCharsAccumulator);
         state.lastKeyName = std::move(lastKeyNameAccumulator);
-        state.backspace = backspacePressed;
-        state.del = deletePressed;
-        state.enter = enterPressed;
-        state.left = leftPressed;
-        state.right = rightPressed;
-        state.home = homePressed;
-        state.end = endPressed;
+        state.backspace   = backspacePressed;
+        state.del         = deletePressed;
+        state.enter       = enterPressed;
+        state.left        = leftPressed;
+        state.right       = rightPressed;
+        state.home        = homePressed;
+        state.end         = endPressed;
 
         // Reset accumulators (moved-from strings are already empty or valid-but-unspecified)
         typedCharsAccumulator.clear();
         lastKeyNameAccumulator.clear();
         backspacePressed = false;
-        deletePressed = false;
-        enterPressed = false;
-        leftPressed = false;
-        rightPressed = false;
-        homePressed = false;
-        endPressed = false;
+        deletePressed    = false;
+        enterPressed     = false;
+        leftPressed      = false;
+        rightPressed     = false;
+        homePressed      = false;
+        endPressed       = false;
 
         return state;
     }

@@ -11,6 +11,7 @@
 #include "vulkan_include.hpp"
 
 #include "effect.hpp"
+#include "effect_simple.hpp"
 #include "config.hpp"
 
 #include "logical_device.hpp"
@@ -20,12 +21,12 @@ namespace vkShade
     class TransferEffect : public Effect
     {
     public:
-        TransferEffect(LogicalDevice*       pLogicalDevice,
-                       VkFormat             format,
-                       VkExtent2D           imageExtent,
-                       std::vector<VkImage> inputImages,
-                       std::vector<VkImage> outputImages,
-                       Config*              pConfig);
+        TransferEffect(LogicalDevice*              pLogicalDevice,
+                       VkFormat                    format,
+                       VkExtent2D                  imageExtent,
+                       const std::vector<VkImage>& inputImages,
+                       const std::vector<VkImage>& outputImages,
+                       Config*                     pConfig);
         void virtual applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer) override;
         virtual ~TransferEffect();
 
@@ -36,6 +37,17 @@ namespace vkShade
         VkExtent2D           imageExtent;
         VkFormat             format;
         Config*              pConfig;
+    };
+
+    class PresentCopyEffect : public SimpleEffect
+    {
+    public:
+        PresentCopyEffect(LogicalDevice*              pLogicalDevice,
+                          VkFormat                    format,
+                          VkExtent2D                  imageExtent,
+                          const std::vector<VkImage>& inputImages,
+                          const std::vector<VkImage>& outputImages,
+                          Config*                     pConfig);
     };
 } // namespace vkShade
 #endif // EFFECT_TRANSFER_HPP_INCLUDED

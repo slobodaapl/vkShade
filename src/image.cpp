@@ -216,9 +216,9 @@ namespace vkShade
 
         for (auto& image : images)
         {
-            memoryBarrier.image = image;
-            memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-            memoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            memoryBarrier.image         = image;
+            memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+            memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             memoryBarrier.srcAccessMask = 0;
             memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             pLogicalDevice->vkd.CmdPipelineBarrier(
@@ -227,8 +227,8 @@ namespace vkShade
             pLogicalDevice->vkd.CmdClearColorImage(
                 commandBuffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearValue, 1, &memoryBarrier.subresourceRange);
 
-            memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
             memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
             pLogicalDevice->vkd.CmdPipelineBarrier(

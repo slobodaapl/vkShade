@@ -1,5 +1,5 @@
 {
-      description = "vkShade — Vulkan post-processing layer with in-game UI (Wayland + X11)";
+  description = "vkShade — Vulkan post-processing layer with in-game UI (Wayland + X11)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -39,6 +39,7 @@
               ninja
               pkg-config
               glslang
+              util-linux
               wayland-scanner
             ];
 
@@ -64,7 +65,7 @@
               # vkshade-run wrapper: sets ENABLE_VKSHADE and LD_AUDIT for Wine
               # Wayland input interposition (dlopen RTLD_LOCAL bypass).
               mkdir -p "$out/bin"
-              substitute ${./vkshade-run.sh} "$out/bin/vkshade-run" \
+              substitute ${./scripts/vkshade-run.sh} "$out/bin/vkshade-run" \
                 --subst-var out
               chmod +x "$out/bin/vkshade-run"
             '';
@@ -102,9 +103,21 @@
         {
           default = pkgs.mkShell {
             inherit (self.checks.${system}.pre-commit) shellHook;
-            buildInputs = self.checks.${system}.pre-commit.enabledPackages ++ [
-              pkgs.nil
-            ];
+            inputsFrom = [ self.packages.${system}.vkshade ];
+            buildInputs =
+              self.checks.${system}.pre-commit.enabledPackages
+              ++ (with pkgs; [
+                actionlint
+                clang-tools
+                git
+                jq
+                just
+                nil
+                nixfmt
+                nodejs
+                python3
+                uv
+              ]);
           };
         }
       );

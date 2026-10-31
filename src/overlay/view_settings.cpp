@@ -26,17 +26,18 @@ namespace vkShade
 
         // Helper lambda to render a keybind button
         // Uses local char buffer for display, updates settingsManager on change
-        auto renderKeyBind = [&](const char* label, const char* tooltip,
-                                 const std::string& currentKey,
+        auto renderKeyBind = [&](const char*                             label,
+                                 const char*                             tooltip,
+                                 const std::string&                      currentKey,
                                  std::function<void(const std::string&)> setter,
-                                 int bindingId) {
+                                 int                                     bindingId) {
             ImGui::Text("%s", label);
             if (ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", tooltip);
             ImGui::SameLine(150);
 
-            bool isListening = (listeningForKey == bindingId);
-            const char* buttonText = isListening ? "Press a key..." : currentKey.c_str();
+            bool        isListening = (listeningForKey == bindingId);
+            const char* buttonText  = isListening ? "Press a key..." : currentKey.c_str();
 
             if (isListening)
                 ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f, 0.4f, 0.1f, 1.0f));
@@ -56,15 +57,24 @@ namespace vkShade
             }
         };
 
-        renderKeyBind("Toggle Effects:", "Key to enable/disable all effects",
-                      settingsManager.getToggleKey(),
-                      [](const std::string& key) { settingsManager.setToggleKey(key); }, 1);
-        renderKeyBind("Reload Config:", "Key to reload the configuration file",
-                      settingsManager.getReloadKey(),
-                      [](const std::string& key) { settingsManager.setReloadKey(key); }, 2);
-        renderKeyBind("Toggle Overlay:", "Key to show/hide this overlay",
-                      settingsManager.getOverlayKey(),
-                      [](const std::string& key) { settingsManager.setOverlayKey(key); }, 3);
+        renderKeyBind(
+            "Toggle Effects:",
+            "Key to enable/disable all effects",
+            settingsManager.getToggleKey(),
+            [](const std::string& key) { settingsManager.setToggleKey(key); },
+            1);
+        renderKeyBind(
+            "Reload Config:",
+            "Key to reload the configuration file",
+            settingsManager.getReloadKey(),
+            [](const std::string& key) { settingsManager.setReloadKey(key); },
+            2);
+        renderKeyBind(
+            "Toggle Overlay:",
+            "Key to show/hide this overlay",
+            settingsManager.getOverlayKey(),
+            [](const std::string& key) { settingsManager.setOverlayKey(key); },
+            3);
 
         ImGui::Spacing();
         ImGui::Text("Overlay Options");
@@ -106,8 +116,8 @@ namespace vkShade
         }
 
         // Show VRAM estimate based on current resolution (2 images per slot, 4 bytes per pixel)
-        float bytesPerSlot = 2.0f * currentWidth * currentHeight * 4.0f;
-        int estimatedVramMB = static_cast<int>((maxEffectsVal * bytesPerSlot) / (1024.0f * 1024.0f));
+        float bytesPerSlot    = 2.0f * currentWidth * currentHeight * 4.0f;
+        int   estimatedVramMB = static_cast<int>((maxEffectsVal * bytesPerSlot) / (1024.0f * 1024.0f));
         ImGui::SameLine();
         if (maxEffectsVal > 20)
             ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f), "~%d MB @ %ux%u", estimatedVramMB, currentWidth, currentHeight);
@@ -167,7 +177,8 @@ namespace vkShade
             ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "(forced off by Safe Anti-Cheat)");
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
-            ImGui::SetTooltip("Enable depth buffer capture for effects that use depth.\nMay impact performance. Most effects don't need this.\nChanges require restarting the application.");
+            ImGui::SetTooltip("Enable depth buffer capture for effects that use depth.\nMay impact performance. Most effects don't need "
+                              "this.\nChanges require restarting the application.");
 
         ImGui::Spacing();
         ImGui::Text("Debug");

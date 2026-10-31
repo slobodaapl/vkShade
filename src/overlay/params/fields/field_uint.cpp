@@ -9,8 +9,8 @@ namespace vkShade
     public:
         bool render(EffectParam& param) override
         {
-            auto& p = static_cast<UintParam&>(param);
-            bool changed = false;
+            auto& p       = static_cast<UintParam&>(param);
+            bool  changed = false;
 
             // Use SliderScalar for unsigned int
             if (ImGui::SliderScalar(p.label.c_str(), ImGuiDataType_U32, &p.value, &p.minValue, &p.maxValue))

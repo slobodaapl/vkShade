@@ -19,12 +19,12 @@
 
 namespace vkShade
 {
-    SmaaEffect::SmaaEffect(LogicalDevice*       pLogicalDevice,
-                           VkFormat             format,
-                           VkExtent2D           imageExtent,
-                           std::vector<VkImage> inputImages,
-                           std::vector<VkImage> outputImages,
-                           Config*              pConfig)
+    SmaaEffect::SmaaEffect(LogicalDevice*              pLogicalDevice,
+                           VkFormat                    format,
+                           VkExtent2D                  imageExtent,
+                           const std::vector<VkImage>& inputImages,
+                           const std::vector<VkImage>& outputImages,
+                           Config*                     pConfig)
     {
         Logger::debug("in creating SmaaEffect");
 
@@ -195,11 +195,14 @@ namespace vkShade
                                                                   std::vector<VkImageView>(inputImageViews.size(), searchImageView),
                                                                   blendImageViews};
 
-        imageDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(pLogicalDevice,
-                                                                         descriptorPool,
-                                                                         imageSamplerDescriptorSetLayout,
-                                                                         std::vector<VkSampler>(imageViewsVector.size(), sampler),
-                                                                         imageViewsVector);
+        imageDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
+            pLogicalDevice,
+            descriptorPool,
+            imageSamplerDescriptorSetLayout,
+            std::vector<VkSampler>(imageViewsVector.size(), sampler),
+            imageViewsVector,
+            std::vector<VkDescriptorType>(imageViewsVector.size(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER),
+            std::vector<VkImageLayout>(imageViewsVector.size(), VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL));
 
         edgeFramebuffers     = createFramebuffers(pLogicalDevice, unormRenderPass, imageExtent, {edgeImageViews});
         blendFramebuffers    = createFramebuffers(pLogicalDevice, unormRenderPass, imageExtent, {blendImageViews});

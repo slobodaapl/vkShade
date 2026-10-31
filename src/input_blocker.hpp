@@ -7,4 +7,4 @@ namespace vkShade
 
     void setInputBlocked(bool blocked);
     bool isInputBlocked();
-}
+} // namespace vkShade

@@ -9,8 +9,8 @@ namespace vkShade
     public:
         bool render(EffectParam& param) override
         {
-            auto& p = static_cast<IntParam&>(param);
-            bool changed = false;
+            auto& p       = static_cast<IntParam&>(param);
+            bool  changed = false;
 
             if (!p.items.empty())
             {

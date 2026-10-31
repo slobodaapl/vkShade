@@ -15,12 +15,12 @@
 
 namespace vkShade
 {
-    FxaaEffect::FxaaEffect(LogicalDevice*       pLogicalDevice,
-                           VkFormat             format,
-                           VkExtent2D           imageExtent,
-                           std::vector<VkImage> inputImages,
-                           std::vector<VkImage> outputImages,
-                           Config*              pConfig)
+    FxaaEffect::FxaaEffect(LogicalDevice*              pLogicalDevice,
+                           VkFormat                    format,
+                           VkExtent2D                  imageExtent,
+                           const std::vector<VkImage>& inputImages,
+                           const std::vector<VkImage>& outputImages,
+                           Config*                     pConfig)
     {
         float fxaaQualitySubpix           = pConfig->getOption<float>("fxaaQualitySubpix", 0.75f);
         float fxaaQualityEdgeThreshold    = pConfig->getOption<float>("fxaaQualityEdgeThreshold", 0.125f);
@@ -46,10 +46,7 @@ namespace vkShade
         fragmentSpecializationInfo.dataSize      = sizeof(float) * specData.size();
         fragmentSpecializationInfo.pData         = specData.data();
 
-        pVertexSpecInfo   = nullptr;
-        pFragmentSpecInfo = &fragmentSpecializationInfo;
-
-        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig);
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, &fragmentSpecializationInfo);
     }
     FxaaEffect::~FxaaEffect()
     {

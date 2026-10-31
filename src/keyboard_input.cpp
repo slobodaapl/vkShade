@@ -17,7 +17,7 @@ namespace vkShade
         }
     }
 
-    uint32_t convertToKeySym(std::string key)
+    uint32_t convertToKeySym(const std::string& key)
     {
         if (isWayland())
             return convertToKeySymWayland(key);

@@ -15,12 +15,12 @@
 
 namespace vkShade
 {
-    DebandEffect::DebandEffect(LogicalDevice*       pLogicalDevice,
-                               VkFormat             format,
-                               VkExtent2D           imageExtent,
-                               std::vector<VkImage> inputImages,
-                               std::vector<VkImage> outputImages,
-                               Config*              pConfig)
+    DebandEffect::DebandEffect(LogicalDevice*              pLogicalDevice,
+                               VkFormat                    format,
+                               VkExtent2D                  imageExtent,
+                               const std::vector<VkImage>& inputImages,
+                               const std::vector<VkImage>& outputImages,
+                               Config*                     pConfig)
     {
         vertexCode   = full_screen_triangle_vert;
         fragmentCode = deband_frag;
@@ -64,10 +64,7 @@ namespace vkShade
         specializationInfo.dataSize      = sizeof(debandOptions);
         specializationInfo.pData         = &debandOptions;
 
-        pVertexSpecInfo   = nullptr;
-        pFragmentSpecInfo = &specializationInfo;
-
-        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig);
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, &specializationInfo);
     }
     DebandEffect::~DebandEffect()
     {

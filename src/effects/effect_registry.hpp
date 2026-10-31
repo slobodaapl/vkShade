@@ -52,14 +52,17 @@ namespace vkShade
         void setParameterValue(const std::string& effectName, const std::string& paramName, bool value);
 
         // Get parameter by name
-        EffectParam* getParameter(const std::string& effectName, const std::string& paramName);
+        EffectParam*       getParameter(const std::string& effectName, const std::string& paramName);
         const EffectParam* getParameter(const std::string& effectName, const std::string& paramName) const;
 
         // Get all parameters for a specific effect (returns pointers, not clones)
         std::vector<EffectParam*> getParametersForEffect(const std::string& effectName);
 
         // Get config reference for effects to read values
-        Config* getConfig() const { return pConfig; }
+        Config* getConfig() const
+        {
+            return pConfig;
+        }
 
         // Check if an effect is a built-in effect
         static bool isBuiltInEffect(const std::string& name);
@@ -93,29 +96,35 @@ namespace vkShade
         void setEffectError(const std::string& name, const std::string& error);
 
         // Get preprocessor definitions for an effect (ReShade only)
-        std::vector<PreprocessorDefinition>& getPreprocessorDefs(const std::string& effectName);
+        std::vector<PreprocessorDefinition>&       getPreprocessorDefs(const std::string& effectName);
         const std::vector<PreprocessorDefinition>& getPreprocessorDefs(const std::string& effectName) const;
 
         // Set a preprocessor definition value
         void setPreprocessorDefValue(const std::string& effectName, const std::string& macroName, const std::string& value);
 
         // Selected effects management (ordered list for UI)
-        const std::vector<std::string>& getSelectedEffects() const { return selectedEffects; }
+        const std::vector<std::string>& getSelectedEffects() const
+        {
+            return selectedEffects;
+        }
         void setSelectedEffects(const std::vector<std::string>& effects);
         void clearSelectedEffects();
 
         // Check if effects have been initialized from config (first load complete)
-        bool isInitializedFromConfig() const { return initializedFromConfig; }
+        bool isInitializedFromConfig() const
+        {
+            return initializedFromConfig;
+        }
 
         // Initialize selected effects from config (call once at startup)
         void initializeSelectedEffectsFromConfig();
 
     private:
         std::vector<EffectConfig> effects;
-        std::vector<std::string> selectedEffects;  // Ordered list of selected effects for UI
-        bool initializedFromConfig = false;        // True once first load from config is complete
-        Config* pConfig = nullptr;
-        mutable std::mutex mutex;
+        std::vector<std::string>  selectedEffects;               // Ordered list of selected effects for UI
+        bool                      initializedFromConfig = false; // True once first load from config is complete
+        Config*                   pConfig               = nullptr;
+        mutable std::mutex        mutex;
 
         // Initialize built-in effect configs
         void initBuiltInEffect(const std::string& instanceName, const std::string& effectType);
@@ -124,10 +133,10 @@ namespace vkShade
         void initReshadeEffect(const std::string& name, const std::string& path);
 
         // Internal helpers (assume mutex is held)
-        EffectConfig* findEffect(const std::string& effectName);
+        EffectConfig*       findEffect(const std::string& effectName);
         const EffectConfig* findEffect(const std::string& effectName) const;
-        EffectParam* findParam(EffectConfig& effect, const std::string& paramName);
-        const EffectParam* findParam(const EffectConfig& effect, const std::string& paramName) const;
+        EffectParam*        findParam(EffectConfig& effect, const std::string& paramName);
+        const EffectParam*  findParam(const EffectConfig& effect, const std::string& paramName) const;
     };
 
 } // namespace vkShade

@@ -34,8 +34,7 @@ namespace vkShade
         descriptorSetLayoutBinding.binding            = 0;
         descriptorSetLayoutBinding.descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         descriptorSetLayoutBinding.descriptorCount    = 1;
-        descriptorSetLayoutBinding.stageFlags =
-            VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
+        descriptorSetLayoutBinding.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
         descriptorSetLayoutBinding.pImmutableSamplers = nullptr;
 
         VkDescriptorSetLayoutCreateInfo descriptorSetCreateInfo;
@@ -93,8 +92,7 @@ namespace vkShade
         return descriptorSet;
     }
 
-    VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice*                         pLogicalDevice,
-                                                                const std::vector<VkDescriptorType>& bindingTypes)
+    VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice* pLogicalDevice, const std::vector<VkDescriptorType>& bindingTypes)
     {
         VkDescriptorSetLayout descriptorSetLayout;
 
@@ -124,17 +122,16 @@ namespace vkShade
     }
     VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice* pLogicalDevice, uint32_t count)
     {
-        return createImageSamplerDescriptorSetLayout(
-            pLogicalDevice, std::vector<VkDescriptorType>(count, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER));
+        return createImageSamplerDescriptorSetLayout(pLogicalDevice, std::vector<VkDescriptorType>(count, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER));
     }
 
-    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
-                                                                            VkDescriptorPool                      descriptorPool,
-                                                                            VkDescriptorSetLayout                 descriptorSetLayout,
-                                                                            std::vector<VkSampler>                samplers,
-                                                                            std::vector<std::vector<VkImageView>> imageViewsVectors,
-                                                                            const std::vector<VkDescriptorType>&  bindingTypes,
-                                                                            const std::vector<VkImageLayout>&     imageLayouts)
+    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                               pLogicalDevice,
+                                                                            VkDescriptorPool                             descriptorPool,
+                                                                            VkDescriptorSetLayout                        descriptorSetLayout,
+                                                                            const std::vector<VkSampler>&                samplers,
+                                                                            const std::vector<std::vector<VkImageView>>& imageViewsVectors,
+                                                                            const std::vector<VkDescriptorType>&         bindingTypes,
+                                                                            const std::vector<VkImageLayout>&            imageLayouts)
     {
         if (imageViewsVectors.empty() || imageViewsVectors[0].empty())
         {
@@ -145,6 +142,14 @@ namespace vkShade
         {
             Logger::err("allocateAndWriteImageSamplerDescriptorSets: binding/sampler/view count mismatch");
             return {};
+        }
+        for (const auto& imageViews : imageViewsVectors)
+        {
+            if (imageViews.size() != imageViewsVectors[0].size())
+            {
+                Logger::err("allocateAndWriteImageSamplerDescriptorSets: image view count mismatch");
+                return {};
+            }
         }
         if (!imageLayouts.empty() && imageLayouts.size() != imageViewsVectors.size())
         {
@@ -170,7 +175,7 @@ namespace vkShade
         imageInfo.imageView   = VK_NULL_HANDLE;
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
         std::vector<VkDescriptorImageInfo> imageInfos(imageViewsVectors.size(), imageInfo);
-        const bool hasExplicitImageLayouts = !imageLayouts.empty();
+        const bool                         hasExplicitImageLayouts = !imageLayouts.empty();
 
         VkWriteDescriptorSet writeDescriptorSet = {};
 
@@ -191,16 +196,16 @@ namespace vkShade
         {
             for (uint32_t j = 0; j < imageViewsVectors.size(); j++)
             {
-                imageInfos[j].sampler   = samplers[j];
-                imageInfos[j].imageView = imageViewsVectors[j][i];
+                imageInfos[j].sampler     = samplers[j];
+                imageInfos[j].imageView   = imageViewsVectors[j][i];
                 imageInfos[j].imageLayout = bindingTypes[j] == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
-                    ? VK_IMAGE_LAYOUT_GENERAL
-                    : (hasExplicitImageLayouts ? imageLayouts[j] : VK_IMAGE_LAYOUT_GENERAL);
+                                                ? VK_IMAGE_LAYOUT_GENERAL
+                                                : (hasExplicitImageLayouts ? imageLayouts[j] : VK_IMAGE_LAYOUT_GENERAL);
 
-                writeDescriptorSets[j].dstBinding = j;
+                writeDescriptorSets[j].dstBinding     = j;
                 writeDescriptorSets[j].descriptorType = bindingTypes[j];
-                writeDescriptorSets[j].pImageInfo = &imageInfos[j];
-                writeDescriptorSets[j].dstSet     = descriptorSets[i];
+                writeDescriptorSets[j].dstSet         = descriptorSets[i];
+                writeDescriptorSets[j].pImageInfo     = imageInfos.data() + j;
 
                 if (bindingTypes[j] == VK_DESCRIPTOR_TYPE_STORAGE_IMAGE)
                     imageInfos[j].sampler = VK_NULL_HANDLE;
@@ -210,19 +215,18 @@ namespace vkShade
         }
         return descriptorSets;
     }
-    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
-                                                                            VkDescriptorPool                      descriptorPool,
-                                                                            VkDescriptorSetLayout                 descriptorSetLayout,
-                                                                            std::vector<VkSampler>                samplers,
-                                                                            std::vector<std::vector<VkImageView>> imageViewsVectors)
+    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                               pLogicalDevice,
+                                                                            VkDescriptorPool                             descriptorPool,
+                                                                            VkDescriptorSetLayout                        descriptorSetLayout,
+                                                                            const std::vector<VkSampler>&                samplers,
+                                                                            const std::vector<std::vector<VkImageView>>& imageViewsVectors)
     {
         const size_t bindingCount = samplers.size();
-        return allocateAndWriteImageSamplerDescriptorSets(
-            pLogicalDevice,
-            descriptorPool,
-            descriptorSetLayout,
-            std::move(samplers),
-            std::move(imageViewsVectors),
-            std::vector<VkDescriptorType>(bindingCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER));
+        return allocateAndWriteImageSamplerDescriptorSets(pLogicalDevice,
+                                                          descriptorPool,
+                                                          descriptorSetLayout,
+                                                          samplers,
+                                                          imageViewsVectors,
+                                                          std::vector<VkDescriptorType>(bindingCount, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER));
     }
 } // namespace vkShade

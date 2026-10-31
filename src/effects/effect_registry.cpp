@@ -18,8 +18,7 @@ namespace vkShade
     {
         std::string toLower(std::string value)
         {
-            std::transform(value.begin(), value.end(), value.begin(),
-                           [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
             return value;
         }
 
@@ -33,7 +32,7 @@ namespace vkShade
             if (value.empty())
                 return "";
 
-            std::error_code ec;
+            std::error_code       ec;
             std::filesystem::path candidate(value);
             if (std::filesystem::exists(candidate, ec) && std::filesystem::is_regular_file(candidate, ec))
             {
@@ -53,58 +52,50 @@ namespace vkShade
         }
 
         // Helper to create a float parameter
-        std::unique_ptr<FloatParam> makeFloatParam(
-            const std::string& effectName,
-            const std::string& name,
-            const std::string& label,
-            float defaultVal,
-            float minVal,
-            float maxVal,
-            Config* pConfig)
+        std::unique_ptr<FloatParam> makeFloatParam(const std::string& effectName,
+                                                   const std::string& name,
+                                                   const std::string& label,
+                                                   float              defaultVal,
+                                                   float              minVal,
+                                                   float              maxVal,
+                                                   Config*            pConfig)
         {
-            auto p = std::make_unique<FloatParam>();
-            p->effectName = effectName;
-            p->name = name;
-            p->label = label;
+            auto p          = std::make_unique<FloatParam>();
+            p->effectName   = effectName;
+            p->name         = name;
+            p->label        = label;
             p->defaultValue = defaultVal;
-            p->value = pConfig->getInstanceOption<float>(effectName, name, defaultVal);
-            p->minValue = minVal;
-            p->maxValue = maxVal;
+            p->value        = pConfig->getInstanceOption<float>(effectName, name, defaultVal);
+            p->minValue     = minVal;
+            p->maxValue     = maxVal;
             return p;
         }
 
         // Helper to create an int parameter
         std::unique_ptr<IntParam> makeIntParam(
-            const std::string& effectName,
-            const std::string& name,
-            const std::string& label,
-            int defaultVal,
-            int minVal,
-            int maxVal,
-            Config* pConfig)
+            const std::string& effectName, const std::string& name, const std::string& label, int defaultVal, int minVal, int maxVal, Config* pConfig)
         {
-            auto p = std::make_unique<IntParam>();
-            p->effectName = effectName;
-            p->name = name;
-            p->label = label;
+            auto p          = std::make_unique<IntParam>();
+            p->effectName   = effectName;
+            p->name         = name;
+            p->label        = label;
             p->defaultValue = defaultVal;
-            p->value = pConfig->getInstanceOption<int32_t>(effectName, name, defaultVal);
-            p->minValue = minVal;
-            p->maxValue = maxVal;
+            p->value        = pConfig->getInstanceOption<int32_t>(effectName, name, defaultVal);
+            p->minValue     = minVal;
+            p->maxValue     = maxVal;
             return p;
         }
 
         // Search a list of directories for an effect file by name
-        std::string searchDirsForEffect(const std::string& name,
-                                        const std::vector<std::string>& dirs)
+        std::string searchDirsForEffect(const std::string& name, const std::vector<std::string>& dirs)
         {
             const std::filesystem::path queryPath(name);
-            const std::string queryFilenameLower = toLower(queryPath.filename().string());
-            const std::string queryStemLower = toLower(queryPath.stem().string());
+            const std::string           queryFilenameLower = toLower(queryPath.filename().string());
+            const std::string           queryStemLower     = toLower(queryPath.stem().string());
 
             for (const auto& dir : dirs)
             {
-                std::error_code ec;
+                std::error_code       ec;
                 std::filesystem::path base(dir);
 
                 std::filesystem::path path = base / name;
@@ -126,8 +117,8 @@ namespace vkShade
 
                 try
                 {
-                    for (const auto& entry : std::filesystem::recursive_directory_iterator(
-                             base, std::filesystem::directory_options::skip_permission_denied))
+                    for (const auto& entry :
+                         std::filesystem::recursive_directory_iterator(base, std::filesystem::directory_options::skip_permission_denied))
                     {
                         if (!entry.is_regular_file())
                             continue;
@@ -137,11 +128,11 @@ namespace vkShade
                             continue;
 
                         const std::string filenameLower = toLower(filePath.filename().string());
-                        const std::string stemLower = toLower(filePath.stem().string());
+                        const std::string stemLower     = toLower(filePath.stem().string());
 
                         // Match either full filename (for "Foo.fx") or stem (for "Foo")
-                        if ((!queryFilenameLower.empty() && filenameLower == queryFilenameLower) ||
-                            (!queryStemLower.empty() && stemLower == queryStemLower))
+                        if ((!queryFilenameLower.empty() && filenameLower == queryFilenameLower)
+                            || (!queryStemLower.empty() && stemLower == queryStemLower))
                         {
                             return filePath.string();
                         }
@@ -164,7 +155,7 @@ namespace vkShade
                 return directPath;
 
             // First check if path is directly configured (e.g. "Vibrance = /path/to/Vibrance.fx")
-            std::string path = pConfig->getOption<std::string>(name, "");
+            std::string path                   = pConfig->getOption<std::string>(name, "");
             std::string resolvedConfiguredPath = tryResolveDirectEffectPath(path);
             if (!resolvedConfiguredPath.empty())
                 return resolvedConfiguredPath;
@@ -174,8 +165,8 @@ namespace vkShade
             if (!includePath.empty())
             {
                 std::vector<std::string> includeDirs;
-                std::stringstream ss(includePath);
-                std::string dir;
+                std::stringstream        ss(includePath);
+                std::string              dir;
                 while (std::getline(ss, dir, ':'))
                 {
                     if (!dir.empty())
@@ -188,7 +179,7 @@ namespace vkShade
 
             // Search in shader manager discovered paths
             ShaderManagerConfig shaderMgrConfig = ConfigSerializer::loadShaderManagerConfig();
-            path = searchDirsForEffect(name, shaderMgrConfig.discoveredShaderPaths);
+            path                                = searchDirsForEffect(name, shaderMgrConfig.discoveredShaderPaths);
             if (!path.empty())
                 return path;
 
@@ -207,7 +198,7 @@ namespace vkShade
         this->pConfig = pConfig;
         effects.clear();
 
-        std::vector<std::string> effectNames = pConfig->getOption<std::vector<std::string>>("effects");
+        std::vector<std::string> effectNames     = pConfig->getOption<std::vector<std::string>>("effects");
         std::vector<std::string> disabledEffects = pConfig->getOption<std::vector<std::string>>("disabledEffects");
 
         // Build set for quick lookup
@@ -259,25 +250,23 @@ namespace vkShade
         }
 
         EffectConfig config;
-        config.name = instanceName;
+        config.name       = instanceName;
         config.effectType = effectType;
-        config.type = EffectType::BuiltIn;
-        config.enabled = true;
+        config.type       = EffectType::BuiltIn;
+        config.enabled    = true;
 
         // Create parameters from centralized definitions
         for (const auto& paramDef : def->params)
         {
             if (paramDef.type == ParamType::Float)
             {
-                config.parameters.push_back(
-                    makeFloatParam(instanceName, paramDef.name, paramDef.label,
-                                   paramDef.defaultFloat, paramDef.minFloat, paramDef.maxFloat, pConfig));
+                config.parameters.push_back(makeFloatParam(
+                    instanceName, paramDef.name, paramDef.label, paramDef.defaultFloat, paramDef.minFloat, paramDef.maxFloat, pConfig));
             }
             else if (paramDef.type == ParamType::Int)
             {
                 config.parameters.push_back(
-                    makeIntParam(instanceName, paramDef.name, paramDef.label,
-                                 paramDef.defaultInt, paramDef.minInt, paramDef.maxInt, pConfig));
+                    makeIntParam(instanceName, paramDef.name, paramDef.label, paramDef.defaultInt, paramDef.minInt, paramDef.maxInt, pConfig));
             }
         }
 
@@ -287,10 +276,10 @@ namespace vkShade
     void EffectRegistry::initReshadeEffect(const std::string& name, const std::string& path)
     {
         EffectConfig config;
-        config.name = name;
+        config.name     = name;
         config.filePath = path;
-        config.type = EffectType::ReShade;
-        config.enabled = true;
+        config.type     = EffectType::ReShade;
+        config.enabled  = true;
 
         // Record file modification time for change detection
         std::error_code ec;
@@ -305,7 +294,7 @@ namespace vkShade
         if (!testResult.success)
         {
             config.compileError = testResult.errorMessage;
-            config.enabled = false;  // Disable failed effects by default
+            config.enabled      = false; // Disable failed effects by default
             Logger::err("EffectRegistry: failed to compile " + name + ": " + testResult.errorMessage);
         }
         else
@@ -320,7 +309,7 @@ namespace vkShade
             // Config format: effectName@MACRO = value
             for (auto& def : config.preprocessorDefs)
             {
-                std::string configKey = name + "@" + def.name;
+                std::string configKey  = name + "@" + def.name;
                 std::string savedValue = pConfig->getOption<std::string>(configKey, "");
                 if (!savedValue.empty())
                 {
@@ -329,9 +318,8 @@ namespace vkShade
                 }
             }
 
-            Logger::debug("EffectRegistry: loaded ReShade effect " + name + " with " +
-                          std::to_string(config.parameters.size()) + " parameters and " +
-                          std::to_string(config.preprocessorDefs.size()) + " preprocessor defs");
+            Logger::debug("EffectRegistry: loaded ReShade effect " + name + " with " + std::to_string(config.parameters.size()) + " parameters and "
+                          + std::to_string(config.preprocessorDefs.size()) + " preprocessor defs");
         }
 
         effects.push_back(std::move(config));
@@ -339,7 +327,7 @@ namespace vkShade
 
     std::vector<const EffectConfig*> EffectRegistry::getEnabledEffects() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex>      lock(mutex);
         std::vector<const EffectConfig*> enabled;
 
         for (const auto& effect : effects)
@@ -353,7 +341,7 @@ namespace vkShade
 
     std::vector<std::unique_ptr<EffectParam>> EffectRegistry::getAllParameters() const
     {
-        std::lock_guard<std::mutex> lock(mutex);
+        std::lock_guard<std::mutex>               lock(mutex);
         std::vector<std::unique_ptr<EffectParam>> params;
 
         for (const auto& effect : effects)
@@ -498,7 +486,7 @@ namespace vkShade
     std::vector<EffectParam*> EffectRegistry::getParametersForEffect(const std::string& effectName)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        std::vector<EffectParam*> result;
+        std::vector<EffectParam*>   result;
 
         EffectConfig* effect = findEffect(effectName);
         if (!effect)
@@ -519,46 +507,46 @@ namespace vkShade
     std::string EffectRegistry::getEffectFilePath(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(name);
+        const EffectConfig*         effect = findEffect(name);
         return effect ? effect->filePath : "";
     }
 
     std::string EffectRegistry::getEffectType(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(name);
+        const EffectConfig*         effect = findEffect(name);
         return effect ? effect->effectType : "";
     }
 
     bool EffectRegistry::isEffectBuiltIn(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(name);
+        const EffectConfig*         effect = findEffect(name);
         return effect ? (effect->type == EffectType::BuiltIn) : false;
     }
 
     bool EffectRegistry::hasEffectFailed(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(name);
+        const EffectConfig*         effect = findEffect(name);
         return effect ? effect->hasFailed() : false;
     }
 
     std::string EffectRegistry::getEffectError(const std::string& name) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(name);
+        const EffectConfig*         effect = findEffect(name);
         return effect ? effect->compileError : "";
     }
 
     void EffectRegistry::setEffectError(const std::string& name, const std::string& error)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        EffectConfig* effect = findEffect(name);
+        EffectConfig*               effect = findEffect(name);
         if (effect)
         {
             effect->compileError = error;
-            effect->enabled = false;  // Disable failed effects
+            effect->enabled      = false; // Disable failed effects
         }
     }
 
@@ -569,7 +557,7 @@ namespace vkShade
 
         // Do path lookup outside mutex (filesystem I/O can be slow)
         std::string path;
-        bool isBuiltIn = isBuiltInEffect(type);
+        bool        isBuiltIn = isBuiltInEffect(type);
         if (!isBuiltIn)
         {
             path = findEffectPath(type, pConfig);
@@ -590,24 +578,22 @@ namespace vkShade
             if (!isBuiltIn && !path.empty())
             {
                 std::error_code ec;
-                auto currentModTime = std::filesystem::last_write_time(path, ec);
+                auto            currentModTime = std::filesystem::last_write_time(path, ec);
                 if (!ec && currentModTime != existing->fileModTime)
                 {
                     Logger::info("EffectRegistry: shader file changed on disk, re-parsing: " + instanceName);
                     // Remove the stale entry so we re-parse below
-                    effects.erase(
-                        std::remove_if(effects.begin(), effects.end(),
-                            [&](const EffectConfig& e) { return e.name == instanceName; }),
-                        effects.end());
+                    effects.erase(std::remove_if(effects.begin(), effects.end(), [&](const EffectConfig& e) { return e.name == instanceName; }),
+                                  effects.end());
                 }
                 else
                 {
-                    return;  // File unchanged, keep existing
+                    return; // File unchanged, keep existing
                 }
             }
             else
             {
-                return;  // Built-in or no path change
+                return; // Built-in or no path change
             }
         }
 
@@ -620,17 +606,14 @@ namespace vkShade
     void EffectRegistry::removeEffect(const std::string& name)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        effects.erase(
-            std::remove_if(effects.begin(), effects.end(),
-                [&](const EffectConfig& e) { return e.name == name; }),
-            effects.end());
+        effects.erase(std::remove_if(effects.begin(), effects.end(), [&](const EffectConfig& e) { return e.name == name; }), effects.end());
     }
 
     // Per-instance empty vector for returning when effect not found (avoids shared mutable static)
     std::vector<PreprocessorDefinition>& EffectRegistry::getPreprocessorDefs(const std::string& effectName)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        EffectConfig* effect = findEffect(effectName);
+        EffectConfig*               effect = findEffect(effectName);
         if (effect)
             return effect->preprocessorDefs;
         static thread_local std::vector<PreprocessorDefinition> emptyDefs;
@@ -641,7 +624,7 @@ namespace vkShade
     const std::vector<PreprocessorDefinition>& EffectRegistry::getPreprocessorDefs(const std::string& effectName) const
     {
         std::lock_guard<std::mutex> lock(mutex);
-        const EffectConfig* effect = findEffect(effectName);
+        const EffectConfig*         effect = findEffect(effectName);
         if (effect)
             return effect->preprocessorDefs;
         static thread_local const std::vector<PreprocessorDefinition> emptyDefs;
@@ -651,7 +634,7 @@ namespace vkShade
     void EffectRegistry::setPreprocessorDefValue(const std::string& effectName, const std::string& macroName, const std::string& value)
     {
         std::lock_guard<std::mutex> lock(mutex);
-        EffectConfig* effect = findEffect(effectName);
+        EffectConfig*               effect = findEffect(effectName);
         if (!effect)
             return;
 
@@ -686,7 +669,7 @@ namespace vkShade
         }
 
         // Read effects list from config
-        std::vector<std::string> configEffects = pConfig->getOption<std::vector<std::string>>("effects", {});
+        std::vector<std::string> configEffects   = pConfig->getOption<std::vector<std::string>>("effects", {});
         std::vector<std::string> disabledEffects = pConfig->getOption<std::vector<std::string>>("disabledEffects", {});
 
         // Build set of disabled effects for quick lookup
@@ -710,8 +693,8 @@ namespace vkShade
         }
 
         initializedFromConfig = true;
-        Logger::debug("EffectRegistry: initialized " + std::to_string(configEffects.size()) +
-                      " effects from config (" + std::to_string(disabledEffects.size()) + " disabled)");
+        Logger::debug("EffectRegistry: initialized " + std::to_string(configEffects.size()) + " effects from config ("
+                      + std::to_string(disabledEffects.size()) + " disabled)");
     }
 
 } // namespace vkShade

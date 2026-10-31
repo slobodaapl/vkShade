@@ -54,10 +54,10 @@ namespace vkShade
             return;
 
         // Get a mutable copy of selected effects for this frame
-        std::vector<std::string> selectedEffects = pEffectRegistry->getSelectedEffects();
-        static bool reorderPreviewActive = false;
-        static std::string reorderPreviewName;
-        static std::string reorderPreviewTargetName;
+        std::vector<std::string>        selectedEffects      = pEffectRegistry->getSelectedEffects();
+        static bool                     reorderPreviewActive = false;
+        static std::string              reorderPreviewName;
+        static std::string              reorderPreviewTargetName;
         static std::vector<std::string> reorderPreviewEffects;
 
         auto applySwapByName = [](std::vector<std::string>& effects, const std::string& movingName, int targetIndex) {
@@ -103,10 +103,10 @@ namespace vkShade
 
             // Profile dropdown
             static std::vector<std::string> profileList;
-            static bool profileListStale = true;
+            static bool                     profileListStale = true;
             if (profileListStale)
             {
-                profileList = ConfigSerializer::listProfilesForGame(activeGameName);
+                profileList      = ConfigSerializer::listProfilesForGame(activeGameName);
                 profileListStale = false;
             }
 
@@ -131,16 +131,15 @@ namespace vkShade
                             activeProfilePath = ConfigSerializer::getProfilePath(activeGameName, profile);
                             ConfigSerializer::setActiveProfile(activeGameName, profile);
                             pendingConfigPath = activeProfilePath;
-                            applyRequested = true;
-                            profileListStale = true;
+                            applyRequested    = true;
+                            profileListStale  = true;
 
                             // Load per-profile settings for the new profile
-                            ProfileSettings ps = ConfigSerializer::loadProfileSettings(activeProfilePath);
-                            profileSafeAntiCheat = ps.safeAntiCheat;
-                            profileDepthSourceIndex = ps.depthSourceIndex;
+                            ProfileSettings ps         = ConfigSerializer::loadProfileSettings(activeProfilePath);
+                            profileSafeAntiCheat       = ps.safeAntiCheat;
+                            profileDepthSourceIndex    = ps.depthSourceIndex;
                             profileDepthSourceIndexSet = ps.hasDepthSourceIndex;
-                            requestDepthSource(ps.hasDepthSourceIndex
-                                ? std::optional<int>(ps.depthSourceIndex) : std::nullopt);
+                            requestDepthSource(ps.hasDepthSourceIndex ? std::optional<int>(ps.depthSourceIndex) : std::nullopt);
                             settingsManager.setSafeAntiCheat(profileSafeAntiCheat);
                             if (profileSafeAntiCheat)
                             {
@@ -192,7 +191,7 @@ namespace vkShade
                         activeProfileName = newProfileName;
                         activeProfilePath = ConfigSerializer::getProfilePath(activeGameName, newProfileName);
                         ConfigSerializer::setActiveProfile(activeGameName, newProfileName);
-                        profileListStale = true;
+                        profileListStale  = true;
                         newProfileName[0] = '\0';
                         ImGui::CloseCurrentPopup();
                     }
@@ -212,8 +211,8 @@ namespace vkShade
                     activeProfilePath = ConfigSerializer::getProfilePath(activeGameName, "default");
                     ConfigSerializer::setActiveProfile(activeGameName, "default");
                     pendingConfigPath = activeProfilePath;
-                    applyRequested = true;
-                    profileListStale = true;
+                    applyRequested    = true;
+                    profileListStale  = true;
                     ImGui::CloseCurrentPopup();
                 }
                 ImGui::SameLine();
@@ -232,7 +231,7 @@ namespace vkShade
                     disableDepthEffects();
                     paramsDirty = true;
                 }
-                profileDirty = true;
+                profileDirty   = true;
                 lastChangeTime = std::chrono::steady_clock::now();
             }
             if (ImGui::IsItemHovered())
@@ -247,9 +246,9 @@ namespace vkShade
                 ImGui::BulletText("Depth-using effects are auto-disabled and hidden from Add Effects");
                 ImGui::Spacing();
                 ImGui::TextColored(ImVec4(0.6f, 0.8f, 1.0f, 1.0f),
-                    "The layer becomes invisible to the application — it cannot detect\n"
-                    "vkShade via vkEnumerateInstanceLayerProperties or similar queries.\n"
-                    "Only pixel colors are modified. Completely non-intrusive.");
+                                   "The layer becomes invisible to the application — it cannot detect\n"
+                                   "vkShade via vkEnumerateInstanceLayerProperties or similar queries.\n"
+                                   "Only pixel colors are modified. Completely non-intrusive.");
                 ImGui::EndTooltip();
             }
         }
@@ -282,7 +281,7 @@ namespace vkShade
         if (ImGui::Button("Add Effects..."))
         {
             inSelectionMode = true;
-            insertPosition = -1;  // Append to end
+            insertPosition  = -1; // Append to end
             pendingAddEffects.clear();
         }
         ImGui::SameLine();
@@ -291,10 +290,10 @@ namespace vkShade
         {
             selectedEffects.clear();
             pEffectRegistry->clearSelectedEffects();
-            paramsDirty = true;
+            paramsDirty    = true;
             lastChangeTime = std::chrono::steady_clock::now();
             applyRequested = true;
-            profileDirty = true;
+            profileDirty   = true;
         }
         ImGui::EndDisabled();
         ImGui::Separator();
@@ -310,42 +309,37 @@ namespace vkShade
             const std::string& effectName = displayedEffects[i];
             ImGui::PushID(effectName.c_str());
 
-            ImVec2 rowMin = ImGui::GetCursorScreenPos();
-            float rowWidth = ImGui::GetContentRegionAvail().x;
+            ImVec2 rowMin   = ImGui::GetCursorScreenPos();
+            float  rowWidth = ImGui::GetContentRegionAvail().x;
 
             // Dedicated drag handle (left-most): three gray bars
             const float handleSide = ImGui::GetFrameHeight();
             ImGui::InvisibleButton("##drag_handle", ImVec2(handleSide, handleSide));
-            ImVec2 handleMin = ImGui::GetItemRectMin();
-            ImVec2 handleMax = ImGui::GetItemRectMax();
-            ImDrawList* drawList = ImGui::GetWindowDrawList();
-            const bool handleHovered = ImGui::IsItemHovered();
+            ImVec2      handleMin     = ImGui::GetItemRectMin();
+            ImVec2      handleMax     = ImGui::GetItemRectMax();
+            ImDrawList* drawList      = ImGui::GetWindowDrawList();
+            const bool  handleHovered = ImGui::IsItemHovered();
             if (handleHovered)
                 ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
             ImU32 gripColor = handleHovered ? IM_COL32(200, 200, 200, 255) : IM_COL32(140, 140, 140, 220);
-            float cx = (handleMin.x + handleMax.x) * 0.5f;
-            float cy = (handleMin.y + handleMax.y) * 0.5f;
+            float cx        = (handleMin.x + handleMax.x) * 0.5f;
+            float cy        = (handleMin.y + handleMax.y) * 0.5f;
             for (int bar = -1; bar <= 1; ++bar)
             {
                 float y = cy + bar * 3.0f;
                 drawList->AddLine(ImVec2(cx - 4.0f, y), ImVec2(cx + 4.0f, y), gripColor, 1.5f);
             }
-            if (ImGui::BeginDragDropSource(
-                    ImGuiDragDropFlags_SourceNoDisableHover |
-                    ImGuiDragDropFlags_SourceNoPreviewTooltip))
+            if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoDisableHover | ImGuiDragDropFlags_SourceNoPreviewTooltip))
             {
-                ImGui::SetDragDropPayload(
-                    kEffectReorderPayload,
-                    effectName.c_str(),
-                    effectName.size() + 1);
+                ImGui::SetDragDropPayload(kEffectReorderPayload, effectName.c_str(), effectName.size() + 1);
                 ImGui::EndDragDropSource();
             }
 
             ImGui::SameLine();
 
             // Check if effect failed to compile
-            bool effectFailed = pEffectRegistry ? pEffectRegistry->hasEffectFailed(effectName) : false;
-            std::string effectError = effectFailed && pEffectRegistry ? pEffectRegistry->getEffectError(effectName) : "";
+            bool        effectFailed = pEffectRegistry ? pEffectRegistry->hasEffectFailed(effectName) : false;
+            std::string effectError  = effectFailed && pEffectRegistry ? pEffectRegistry->getEffectError(effectName) : "";
 
             // Checkbox to enable/disable effect (read/write via registry)
             // Disabled for failed effects
@@ -357,7 +351,7 @@ namespace vkShade
             {
                 if (pEffectRegistry)
                     pEffectRegistry->setEffectEnabled(effectName, effectEnabled);
-                paramsDirty = true;
+                paramsDirty    = true;
                 lastChangeTime = std::chrono::steady_clock::now();
             }
 
@@ -384,7 +378,7 @@ namespace vkShade
                     if (pEffectRegistry)
                     {
                         pEffectRegistry->setEffectEnabled(effectName, !effectEnabled);
-                        paramsDirty = true;
+                        paramsDirty    = true;
                         lastChangeTime = std::chrono::steady_clock::now();
                     }
                 }
@@ -398,7 +392,7 @@ namespace vkShade
                         if (editor)
                             editor->resetToDefault(*param);
                     }
-                    paramsDirty = true;
+                    paramsDirty    = true;
                     lastChangeTime = std::chrono::steady_clock::now();
                 }
 
@@ -408,9 +402,8 @@ namespace vkShade
                 if (ImGui::MenuItem("Insert effects here..."))
                 {
                     auto baseIt = std::find(selectedEffects.begin(), selectedEffects.end(), effectName);
-                    insertPosition = (baseIt != selectedEffects.end())
-                        ? static_cast<int>(std::distance(selectedEffects.begin(), baseIt))
-                        : static_cast<int>(i);
+                    insertPosition =
+                        (baseIt != selectedEffects.end()) ? static_cast<int>(std::distance(selectedEffects.begin(), baseIt)) : static_cast<int>(i);
                     inSelectionMode = true;
                     pendingAddEffects.clear();
                 }
@@ -429,13 +422,13 @@ namespace vkShade
                     selectedEffects.erase(removeIt);
                     pEffectRegistry->setSelectedEffects(selectedEffects);
                     pEffectRegistry->removeEffect(removedName);
-                    paramsDirty = true;
+                    paramsDirty    = true;
                     lastChangeTime = std::chrono::steady_clock::now();
                     applyRequested = true;
-                    profileDirty = true;
+                    profileDirty   = true;
                     ImGui::EndPopup();
                     ImGui::PopID();
-                    break;  // Iterator invalidated — exit loop safely
+                    break; // Iterator invalidated — exit loop safely
                 }
 
                 ImGui::EndPopup();
@@ -446,8 +439,7 @@ namespace vkShade
             if (ImGui::BeginDragDropTargetCustom(rowDropRect, ImGui::GetID("##effect_row_drop_target")))
             {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(
-                        kEffectReorderPayload,
-                        ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
+                        kEffectReorderPayload, ImGuiDragDropFlags_AcceptBeforeDelivery | ImGuiDragDropFlags_AcceptNoDrawDefaultRect))
                 {
                     const char* movingName = static_cast<const char*>(payload->Data);
                     if (payload->IsPreview())
@@ -455,21 +447,17 @@ namespace vkShade
                         if (!reorderPreviewActive || reorderPreviewName != movingName)
                         {
                             reorderPreviewActive = true;
-                            reorderPreviewName = movingName;
+                            reorderPreviewName   = movingName;
                             reorderPreviewTargetName.clear();
                             reorderPreviewEffects = selectedEffects;
                         }
 
                         if (reorderPreviewTargetName != effectName)
                         {
-                            auto targetIt = std::find(
-                                reorderPreviewEffects.begin(),
-                                reorderPreviewEffects.end(),
-                                effectName);
+                            auto targetIt = std::find(reorderPreviewEffects.begin(), reorderPreviewEffects.end(), effectName);
                             if (targetIt != reorderPreviewEffects.end())
                             {
-                                int targetIndex = static_cast<int>(
-                                    std::distance(reorderPreviewEffects.begin(), targetIt));
+                                int targetIndex = static_cast<int>(std::distance(reorderPreviewEffects.begin(), targetIt));
                                 if (applySwapByName(reorderPreviewEffects, movingName, targetIndex))
                                     reorderPreviewTargetName = effectName;
                             }
@@ -484,10 +472,10 @@ namespace vkShade
                             {
                                 selectedEffects = reorderPreviewEffects;
                                 pEffectRegistry->setSelectedEffects(selectedEffects);
-                                paramsDirty = true;
+                                paramsDirty    = true;
                                 lastChangeTime = std::chrono::steady_clock::now();
                                 applyRequested = true;
-                                profileDirty = true;
+                                profileDirty   = true;
                             }
                         }
                         reorderPreviewActive = false;
@@ -521,11 +509,11 @@ namespace vkShade
                 if (!defs.empty())
                 {
                     // Draw background rect behind preprocessor section using channels
-                    ImVec2 startPos = ImGui::GetCursorScreenPos();
-                    float contentWidth = ImGui::GetContentRegionAvail().x;
-                    ImDrawList* drawList = ImGui::GetWindowDrawList();
+                    ImVec2      startPos     = ImGui::GetCursorScreenPos();
+                    float       contentWidth = ImGui::GetContentRegionAvail().x;
+                    ImDrawList* drawList     = ImGui::GetWindowDrawList();
                     drawList->ChannelsSplit(2);
-                    drawList->ChannelsSetCurrent(1);  // Foreground for content
+                    drawList->ChannelsSetCurrent(1); // Foreground for content
 
                     if (ImGui::TreeNode("preprocessor", "Preprocessor (%zu)", defs.size()))
                     {
@@ -542,12 +530,11 @@ namespace vkShade
 
                     // Draw background rect on channel 0 (behind content)
                     ImVec2 endPos = ImGui::GetCursorScreenPos();
-                    drawList->ChannelsSetCurrent(0);  // Background
-                    drawList->AddRectFilled(
-                        startPos,
-                        ImVec2(startPos.x + contentWidth, endPos.y),
-                        IM_COL32(0, 0, 0, 128),  // 50% opacity black
-                        0.0f);
+                    drawList->ChannelsSetCurrent(0); // Background
+                    drawList->AddRectFilled(startPos,
+                                            ImVec2(startPos.x + contentWidth, endPos.y),
+                                            IM_COL32(0, 0, 0, 128), // 50% opacity black
+                                            0.0f);
                     drawList->ChannelsMerge();
                 }
             }
@@ -555,14 +542,14 @@ namespace vkShade
             // Show parameters for this effect, grouped under ui_category headers
             // (declaration order preserved; a header spans its contiguous run of
             // params, matching ReShade). Params with no category render directly.
-            auto effectParams = pEffectRegistry->getParametersForEffect(effectName);
-            std::string activeCategory;   // category of the header currently open
-            bool haveCategory = false;    // currently inside a category header?
-            bool categoryVisible = true;  // is that header expanded?
+            auto        effectParams = pEffectRegistry ? pEffectRegistry->getParametersForEffect(effectName) : std::vector<EffectParam*>{};
+            std::string activeCategory;          // category of the header currently open
+            bool        haveCategory    = false; // currently inside a category header?
+            bool        categoryVisible = true;  // is that header expanded?
             for (size_t paramIdx = 0; paramIdx < effectParams.size(); paramIdx++)
             {
-                EffectParam* param = effectParams[paramIdx];
-                const std::string& cat = param->category;
+                EffectParam*       param = effectParams[paramIdx];
+                const std::string& cat   = param->category;
 
                 if (!(haveCategory && cat == activeCategory))
                 {
@@ -570,16 +557,15 @@ namespace vkShade
                     if (haveCategory && categoryVisible)
                         ImGui::Unindent();
 
-                    haveCategory = !cat.empty();
+                    haveCategory   = !cat.empty();
                     activeCategory = cat;
 
                     if (haveCategory)
                     {
-                        ImGuiTreeNodeFlags flags = param->categoryClosed
-                            ? 0 : ImGuiTreeNodeFlags_DefaultOpen;
+                        ImGuiTreeNodeFlags flags = param->categoryClosed ? 0 : ImGuiTreeNodeFlags_DefaultOpen;
                         // ## suffix keeps the ImGui id unique across effects.
                         std::string header = cat + "##cat_" + effectName;
-                        categoryVisible = ImGui::CollapsingHeader(header.c_str(), flags);
+                        categoryVisible    = ImGui::CollapsingHeader(header.c_str(), flags);
                         if (categoryVisible)
                             ImGui::Indent();
                     }
@@ -595,7 +581,7 @@ namespace vkShade
                 ImGui::PushID(static_cast<int>(paramIdx));
                 if (renderFieldEditor(*param))
                 {
-                    paramsDirty = true;
+                    paramsDirty    = true;
                     lastChangeTime = std::chrono::steady_clock::now();
                 }
                 ImGui::PopID();
@@ -607,7 +593,7 @@ namespace vkShade
         }
 
         const ImGuiPayload* activePayload = ImGui::GetDragDropPayload();
-        const bool dragActive = activePayload && activePayload->IsDataType(kEffectReorderPayload);
+        const bool          dragActive    = activePayload && activePayload->IsDataType(kEffectReorderPayload);
         if (!dragActive)
         {
             // If drag ended outside a row target, still commit the last valid preview.
@@ -617,10 +603,10 @@ namespace vkShade
                 {
                     selectedEffects = reorderPreviewEffects;
                     pEffectRegistry->setSelectedEffects(selectedEffects);
-                    paramsDirty = true;
+                    paramsDirty    = true;
                     lastChangeTime = std::chrono::steady_clock::now();
                     applyRequested = true;
-                    profileDirty = true;
+                    profileDirty   = true;
                 }
             }
 
@@ -646,8 +632,8 @@ namespace vkShade
         if (ImGui::Button("Apply"))
         {
             applyRequested = true;
-            paramsDirty = false;
-            profileDirty = true;  // Mark for auto-save to profile
+            paramsDirty    = false;
+            profileDirty   = true; // Mark for auto-save to profile
         }
         // Note: Auto-apply is handled globally in imgui_overlay.cpp
     }

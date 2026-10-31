@@ -7,21 +7,21 @@
 
 namespace vkShade
 {
-    static wl_display* displayWrapper = nullptr;
-    static wl_event_queue* queue = nullptr;
-    static wl_registry* registry = nullptr;
-    static wl_seat* seat = nullptr;
-    static bool commonInitialized = false;
+    static wl_display*     displayWrapper    = nullptr;
+    static wl_event_queue* queue             = nullptr;
+    static wl_registry*    registry          = nullptr;
+    static wl_seat*        seat              = nullptr;
+    static bool            commonInitialized = false;
 
     // Frame-level dispatch deduplication — tracks a monotonic counter so
     // multiple callers (getMouseState, getKeyboardState, isKeyPressed×N)
     // within the same frame only do one real dispatch.
-    static uint64_t dispatchFrameId = 0;
+    static uint64_t dispatchFrameId     = 0;
     static uint64_t lastDispatchedFrame = 0;
 
     // Device bind callbacks — set by keyboard/mouse modules before init
     static KeyboardBindCallback keyboardBind = nullptr;
-    static PointerBindCallback pointerBind = nullptr;
+    static PointerBindCallback  pointerBind  = nullptr;
 
     void setKeyboardBindCallback(KeyboardBindCallback cb)
     {
@@ -54,19 +54,17 @@ namespace vkShade
 
     static const wl_seat_listener sharedSeatListener = {
         .capabilities = seatCapabilities,
-        .name = seatName,
+        .name         = seatName,
     };
 
-    static void registryGlobal(void* /*data*/, wl_registry* reg,
-                               uint32_t name, const char* interface, uint32_t version)
+    static void registryGlobal(void* /*data*/, wl_registry* reg, uint32_t name, const char* interface, uint32_t version)
     {
         if (std::strcmp(interface, wl_seat_interface.name) != 0)
             return;
         if (seat)
             return;
 
-        seat = (wl_seat*)wl_registry_bind(reg, name, &wl_seat_interface,
-                                            version < 5 ? version : 5);
+        seat = (wl_seat*) wl_registry_bind(reg, name, &wl_seat_interface, version < 5 ? version : 5);
         wl_seat_add_listener(seat, &sharedSeatListener, nullptr);
         Logger::debug("Wayland: shared seat bound");
     }
@@ -76,7 +74,7 @@ namespace vkShade
     }
 
     static const wl_registry_listener registryListener = {
-        .global = registryGlobal,
+        .global        = registryGlobal,
         .global_remove = registryGlobalRemove,
     };
 
@@ -99,7 +97,7 @@ namespace vkShade
         if (!display)
             return false;
 
-        displayWrapper = (wl_display*)wl_proxy_create_wrapper(display);
+        displayWrapper = (wl_display*) wl_proxy_create_wrapper(display);
         if (!displayWrapper)
             return false;
 
@@ -111,7 +109,7 @@ namespace vkShade
             return false;
         }
 
-        wl_proxy_set_queue((wl_proxy*)displayWrapper, queue);
+        wl_proxy_set_queue(reinterpret_cast<wl_proxy*>(displayWrapper), queue);
 
         registry = wl_display_get_registry(displayWrapper);
         wl_registry_add_listener(registry, &registryListener, nullptr);
@@ -177,7 +175,7 @@ namespace vkShade
         // NOT read from the socket.  Without this, button release and
         // other events stay stuck in the kernel buffer.
         wl_display_flush(display);
-        struct pollfd pfd = { wl_display_get_fd(display), POLLIN, 0 };
+        struct pollfd pfd = {wl_display_get_fd(display), POLLIN, 0};
         if (poll(&pfd, 1, 0) > 0 && (pfd.revents & POLLIN))
             wl_display_read_events(display);
         else
@@ -209,8 +207,8 @@ namespace vkShade
             displayWrapper = nullptr;
         }
 
-        keyboardBind = nullptr;
-        pointerBind = nullptr;
+        keyboardBind      = nullptr;
+        pointerBind       = nullptr;
         commonInitialized = false;
     }
 

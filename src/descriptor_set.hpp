@@ -22,22 +22,21 @@ namespace vkShade
                                              VkDescriptorSetLayout descriptorSetLayout,
                                              VkBuffer              buffer);
 
-    VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice*                         pLogicalDevice,
-                                                                const std::vector<VkDescriptorType>& bindingTypes);
+    VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice* pLogicalDevice, const std::vector<VkDescriptorType>& bindingTypes);
     VkDescriptorSetLayout createImageSamplerDescriptorSetLayout(LogicalDevice* pLogicalDevice, uint32_t count);
 
-    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
-                                                                            VkDescriptorPool                      descriptorPool,
-                                                                            VkDescriptorSetLayout                 descriptorSetLayout,
-                                                                            std::vector<VkSampler>                samplers,
-                                                                            std::vector<std::vector<VkImageView>> imageViewsVectors,
-                                                                            const std::vector<VkDescriptorType>&  bindingTypes,
-                                                                            const std::vector<VkImageLayout>&     imageLayouts = {});
-    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                        pLogicalDevice,
-                                                                            VkDescriptorPool                      descriptorPool,
-                                                                            VkDescriptorSetLayout                 descriptorSetLayout,
-                                                                            std::vector<VkSampler>                samplers,
-                                                                            std::vector<std::vector<VkImageView>> imageViewsVectors);
+    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                               pLogicalDevice,
+                                                                            VkDescriptorPool                             descriptorPool,
+                                                                            VkDescriptorSetLayout                        descriptorSetLayout,
+                                                                            const std::vector<VkSampler>&                samplers,
+                                                                            const std::vector<std::vector<VkImageView>>& imageViewsVectors,
+                                                                            const std::vector<VkDescriptorType>&         bindingTypes,
+                                                                            const std::vector<VkImageLayout>&            imageLayouts = {});
+    std::vector<VkDescriptorSet> allocateAndWriteImageSamplerDescriptorSets(LogicalDevice*                               pLogicalDevice,
+                                                                            VkDescriptorPool                             descriptorPool,
+                                                                            VkDescriptorSetLayout                        descriptorSetLayout,
+                                                                            const std::vector<VkSampler>&                samplers,
+                                                                            const std::vector<std::vector<VkImageView>>& imageViewsVectors);
 } // namespace vkShade
 
 #endif // DESCRIPTOR_SET_HPP_INCLUDED

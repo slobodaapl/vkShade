@@ -35,23 +35,21 @@ namespace vkShade
     {
         bool hasFatalCompilerDiagnostics(const std::string& diagnostics)
         {
-            return diagnostics.find(" error ") != std::string::npos ||
-                   diagnostics.find(": error ") != std::string::npos ||
-                   diagnostics.find("error X") != std::string::npos ||
-                   diagnostics.find("preprocessor error:") != std::string::npos;
+            return diagnostics.find(" error ") != std::string::npos || diagnostics.find(": error ") != std::string::npos
+                   || diagnostics.find("error X") != std::string::npos || diagnostics.find("preprocessor error:") != std::string::npos;
         }
 
         struct RuntimeCodegenPolicy
         {
-            bool useLocalSizeId = true;
-            bool useUniformSpecConstants = true;
-            bool emitDebugInfo = true;
+            bool useLocalSizeId                     = true;
+            bool useUniformSpecConstants            = true;
+            bool emitDebugInfo                      = true;
             bool disableComputePipelineOptimization = false;
         };
 
         bool getLocalSizeIdEnabledOverride(bool& hasOverride, bool defaultValue)
         {
-            hasOverride = false;
+            hasOverride       = false;
             const char* value = std::getenv("VKSHADE_ENABLE_LOCAL_SIZE_ID");
             if (value == nullptr || *value == '\0')
                 return defaultValue;
@@ -62,29 +60,26 @@ namespace vkShade
             if (value[0] == '1')
                 return true;
 
-            Logger::warn(std::string("Invalid VKSHADE_ENABLE_LOCAL_SIZE_ID value '") + value +
-                         "'. Expected 0 or 1.");
+            Logger::warn(std::string("Invalid VKSHADE_ENABLE_LOCAL_SIZE_ID value '") + value + "'. Expected 0 or 1.");
             return defaultValue;
         }
 
         RuntimeCodegenPolicy selectRuntimeCodegenPolicy(const LogicalDevice* logicalDevice)
         {
             RuntimeCodegenPolicy policy;
-            const bool isNvidiaGpu = (logicalDevice != nullptr) && logicalDevice->isNvidiaGpu;
-            policy.useUniformSpecConstants = !isNvidiaGpu;
-            policy.emitDebugInfo = !isNvidiaGpu;
+            const bool           isNvidiaGpu          = (logicalDevice != nullptr) && logicalDevice->isNvidiaGpu;
+            policy.useUniformSpecConstants            = !isNvidiaGpu;
+            policy.emitDebugInfo                      = !isNvidiaGpu;
             policy.disableComputePipelineOptimization = isNvidiaGpu;
 
             bool hasLocalSizeIdOverride = false;
-            policy.useLocalSizeId = getLocalSizeIdEnabledOverride(hasLocalSizeIdOverride, !isNvidiaGpu);
+            policy.useLocalSizeId       = getLocalSizeIdEnabledOverride(hasLocalSizeIdOverride, !isNvidiaGpu);
             return policy;
         }
 
         bool hasSourceAnnotation(const reshadefx::uniform_info& uniform)
         {
-            return std::any_of(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) {
-                return a.name == "source";
-            });
+            return std::any_of(uniform.annotations.begin(), uniform.annotations.end(), [](const auto& a) { return a.name == "source"; });
         }
 
         bool isReshadeUniformLogEnabled()
@@ -100,12 +95,8 @@ namespace vkShade
             if (!isReshadeUniformLogEnabled() || effectName != "DisplayDepth")
                 return false;
 
-            return uniformName == "fUIFarPlane"
-                || uniformName == "iUIUpsideDown"
-                || uniformName == "iUIReversed"
-                || uniformName == "iUILogarithmic"
-                || uniformName == "iUIPresentType"
-                || uniformName == "bUIUsePreprocessorDefs";
+            return uniformName == "fUIFarPlane" || uniformName == "iUIUpsideDown" || uniformName == "iUIReversed" || uniformName == "iUILogarithmic"
+                   || uniformName == "iUIPresentType" || uniformName == "bUIUsePreprocessorDefs";
         }
 
         std::string describeReshadeUiUniformValue(const EffectParam& param)
@@ -163,8 +154,8 @@ namespace vkShade
                 return;
 
             static std::unordered_map<std::string, std::string> lastValues;
-            const std::string key = effectName + "::" + uniformName;
-            const std::string value = describeReshadeUiUniformValue(param);
+            const std::string                                   key   = effectName + "::" + uniformName;
+            const std::string                                   value = describeReshadeUiUniformValue(param);
 
             auto it = lastValues.find(key);
             if (it != lastValues.end() && it->second == value)
@@ -186,9 +177,7 @@ namespace vkShade
             uint8_t* dst = static_cast<uint8_t*>(mappedBuffer) + uniform.offset;
             switch (uniform.type.base)
             {
-                case reshadefx::type::t_float:
-                    std::memcpy(dst, uniform.initializer_value.as_float, componentCount * sizeof(float));
-                    break;
+                case reshadefx::type::t_float: std::memcpy(dst, uniform.initializer_value.as_float, componentCount * sizeof(float)); break;
                 case reshadefx::type::t_bool:
                 {
                     VkBool32 values[16] = {};
@@ -197,14 +186,9 @@ namespace vkShade
                     std::memcpy(dst, values, componentCount * sizeof(VkBool32));
                     break;
                 }
-                case reshadefx::type::t_int:
-                    std::memcpy(dst, uniform.initializer_value.as_int, componentCount * sizeof(int32_t));
-                    break;
-                case reshadefx::type::t_uint:
-                    std::memcpy(dst, uniform.initializer_value.as_uint, componentCount * sizeof(uint32_t));
-                    break;
-                default:
-                    break;
+                case reshadefx::type::t_int: std::memcpy(dst, uniform.initializer_value.as_int, componentCount * sizeof(int32_t)); break;
+                case reshadefx::type::t_uint: std::memcpy(dst, uniform.initializer_value.as_uint, componentCount * sizeof(uint32_t)); break;
+                default: break;
             }
         }
 
@@ -257,31 +241,31 @@ namespace vkShade
                 return;
             }
         }
-    }
+    } // namespace
 
-    ReshadeEffect::ReshadeEffect(LogicalDevice*       pLogicalDevice,
-                                 VkFormat             format,
-                                 VkExtent2D           imageExtent,
-                                 std::vector<VkImage> inputImages,
-                                 std::vector<VkImage> outputImages,
-                                 EffectRegistry*      pEffectRegistry,
-                                 std::string          effectName,
-                                 std::string          effectPath,
-                                 std::vector<PreprocessorDefinition> customDefs)
+    ReshadeEffect::ReshadeEffect(LogicalDevice*                             pLogicalDevice,
+                                 VkFormat                                   format,
+                                 VkExtent2D                                 imageExtent,
+                                 const std::vector<VkImage>&                inputImages,
+                                 const std::vector<VkImage>&                outputImages,
+                                 EffectRegistry*                            pEffectRegistry,
+                                 std::string                                effectName,
+                                 const std::string&                         effectPath,
+                                 const std::vector<PreprocessorDefinition>& customDefs)
     {
         Logger::debug("in creating ReshadeEffect");
 
-        this->pLogicalDevice        = pLogicalDevice;
-        this->imageExtent           = imageExtent;
-        this->inputImages           = inputImages;
-        this->outputImages          = outputImages;
+        this->pLogicalDevice = pLogicalDevice;
+        this->imageExtent    = imageExtent;
+        this->inputImages    = inputImages;
+        this->outputImages   = outputImages;
         outputImageInitialized.assign(outputImages.size(), false);
-        this->pEffectRegistry       = pEffectRegistry;
-        this->effectName            = effectName;
-        this->effectPath            = effectPath;
+        this->pEffectRegistry        = pEffectRegistry;
+        this->effectName             = effectName;
+        this->effectPath             = effectPath;
         this->customPreprocessorDefs = customDefs;
-        inputOutputFormatUNORM = convertToUNORM(format);
-        inputOutputFormatSRGB  = convertToSRGB(format);
+        inputOutputFormatUNORM       = convertToUNORM(format);
+        inputOutputFormatSRGB        = convertToSRGB(format);
 
         inputImageViewsSRGB  = createImageViews(pLogicalDevice, inputOutputFormatSRGB, inputImages);
         inputImageViewsUNORM = createImageViews(pLogicalDevice, inputOutputFormatUNORM, inputImages);
@@ -336,10 +320,10 @@ namespace vkShade
         for (size_t i = 0; i < module.textures.size(); i++)
         {
             textureMipLevels[module.textures[i].unique_name] = module.textures[i].levels;
-            const bool textureIs3D = module.textures[i].dimensions == 3;
-            const VkImageViewType textureViewType = textureIs3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
-            const uint32_t textureDepth = textureIs3D ? std::max(module.textures[i].depth, 1u) : 1u;
-            textureExtents[module.textures[i].unique_name] = {module.textures[i].width, module.textures[i].height, textureDepth};
+            const bool            textureIs3D                = module.textures[i].dimensions == 3;
+            const VkImageViewType textureViewType            = textureIs3D ? VK_IMAGE_VIEW_TYPE_3D : VK_IMAGE_VIEW_TYPE_2D;
+            const uint32_t        textureDepth               = textureIs3D ? std::max(module.textures[i].depth, 1u) : 1u;
+            textureExtents[module.textures[i].unique_name]   = {module.textures[i].width, module.textures[i].height, textureDepth};
             if (module.textures[i].semantic == "COLOR")
             {
                 textureImageViewsUNORM[module.textures[i].unique_name] = inputImageViewsUNORM;
@@ -411,23 +395,23 @@ namespace vkShade
                 if (module.textures[i].levels > 1)
                 {
 
-                    renderImageViewsUNORM[module.textures[i].unique_name] = std::vector<VkImageView>(
-                        inputImages.size(),
-                        createImageViews(pLogicalDevice,
-                                         convertToUNORM(convertReshadeFormat(module.textures[i].format)),
-                                         images,
-                                         textureViewType,
-                                         VK_IMAGE_ASPECT_COLOR_BIT,
-                                         module.textures[i].levels)[0]);
+                    renderImageViewsUNORM[module.textures[i].unique_name] =
+                        std::vector<VkImageView>(inputImages.size(),
+                                                 createImageViews(pLogicalDevice,
+                                                                  convertToUNORM(convertReshadeFormat(module.textures[i].format)),
+                                                                  images,
+                                                                  textureViewType,
+                                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                  module.textures[i].levels)[0]);
 
-                    renderImageViewsSRGB[module.textures[i].unique_name] = std::vector<VkImageView>(
-                        inputImages.size(),
-                        createImageViews(pLogicalDevice,
-                                         convertToSRGB(convertReshadeFormat(module.textures[i].format)),
-                                         images,
-                                         textureViewType,
-                                         VK_IMAGE_ASPECT_COLOR_BIT,
-                                         module.textures[i].levels)[0]);
+                    renderImageViewsSRGB[module.textures[i].unique_name] =
+                        std::vector<VkImageView>(inputImages.size(),
+                                                 createImageViews(pLogicalDevice,
+                                                                  convertToSRGB(convertReshadeFormat(module.textures[i].format)),
+                                                                  images,
+                                                                  textureViewType,
+                                                                  VK_IMAGE_ASPECT_COLOR_BIT,
+                                                                  module.textures[i].levels)[0]);
                 }
                 else
                 {
@@ -443,16 +427,15 @@ namespace vkShade
             else
             {
                 textureMemory.push_back(VK_NULL_HANDLE);
-                std::vector<VkImage> images =
-                    createImages(pLogicalDevice,
-                                 1,
-                                 textureExtent,
-                                 convertReshadeFormat(module.textures[i].format), // TODO search for format and save it
-                                 VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-                                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-                                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                                 textureMemory.back(),
-                                 module.textures[i].levels);
+                std::vector<VkImage> images = createImages(pLogicalDevice,
+                                                           1,
+                                                           textureExtent,
+                                                           convertReshadeFormat(module.textures[i].format), // TODO search for format and save it
+                                                           VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+                                                               | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                                                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                                                           textureMemory.back(),
+                                                           module.textures[i].levels);
 
                 textureImages[module.textures[i].unique_name] = images;
 
@@ -501,12 +484,12 @@ namespace vkShade
                 // Search for texture in discovered paths from shader manager
                 std::string textureName = source->value.string_data;
                 std::string filePath;
-                FILE* file = nullptr;
+                FILE*       file = nullptr;
 
                 for (const auto& texPath : cachedShaderMgrConfig.discoveredTexturePaths)
                 {
                     filePath = texPath + "/" + textureName;
-                    file = fopen(filePath.c_str(), "rb");
+                    file     = fopen(filePath.c_str(), "rb");
                     if (file != nullptr)
                         break;
                 }
@@ -517,13 +500,12 @@ namespace vkShade
                 if (file == nullptr)
                 {
                     std::filesystem::path texturePath(textureName);
-                    const std::string textureBaseName = texturePath.filename().string();
+                    const std::string     textureBaseName = texturePath.filename().string();
 
                     for (const auto& texPath : cachedShaderMgrConfig.discoveredTexturePaths)
                     {
-                        std::error_code ec;
-                        std::filesystem::recursive_directory_iterator it(
-                            texPath, std::filesystem::directory_options::skip_permission_denied, ec);
+                        std::error_code                               ec;
+                        std::filesystem::recursive_directory_iterator it(texPath, std::filesystem::directory_options::skip_permission_denied, ec);
                         std::filesystem::recursive_directory_iterator end;
                         if (ec)
                             continue;
@@ -540,7 +522,7 @@ namespace vkShade
                             if (it->path().filename() == textureBaseName)
                             {
                                 filePath = it->path().string();
-                                file = fopen(filePath.c_str(), "rb");
+                                file     = fopen(filePath.c_str(), "rb");
                                 if (file != nullptr)
                                     break;
                             }
@@ -561,8 +543,9 @@ namespace vkShade
 
                 if (file == nullptr)
                 {
-                    Logger::err("couldn't open texture: " + textureName + " (searched " +
-                        std::to_string(cachedShaderMgrConfig.discoveredTexturePaths.size()) + " directories, including recursive fallback)");
+                    Logger::err("couldn't open texture: " + textureName + " (searched "
+                                + std::to_string(cachedShaderMgrConfig.discoveredTexturePaths.size())
+                                + " directories, including recursive fallback)");
                     continue;
                 }
 
@@ -635,8 +618,8 @@ namespace vkShade
         }
 
         std::vector<VkDescriptorType> samplerBindingTypes(module.samplers.size(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
-        size_t sampledBindingCount = 0;
-        size_t storageBindingCount = 0;
+        size_t                        sampledBindingCount = 0;
+        size_t                        storageBindingCount = 0;
         for (size_t i = 0; i < module.samplers.size(); ++i)
         {
             if (module.samplers[i].storage)
@@ -648,11 +631,9 @@ namespace vkShade
             {
                 ++sampledBindingCount;
             }
-            Logger::debug(
-                "sampler binding " + std::to_string(i) + " name=" + module.samplers[i].unique_name +
-                " texture=" + module.samplers[i].texture_name +
-                " storage=" + (module.samplers[i].storage ? "1" : "0") +
-                " filter=" + std::to_string(static_cast<uint32_t>(samplerFilters[i])));
+            Logger::debug("sampler binding " + std::to_string(i) + " name=" + module.samplers[i].unique_name
+                          + " texture=" + module.samplers[i].texture_name + " storage=" + (module.samplers[i].storage ? "1" : "0")
+                          + " filter=" + std::to_string(static_cast<uint32_t>(samplerFilters[i])));
         }
 
         imageSamplerDescriptorSetLayout = createImageSamplerDescriptorSetLayout(pLogicalDevice, samplerBindingTypes);
@@ -700,12 +681,10 @@ namespace vkShade
         std::vector<reshadefx::pass_info> allPasses;
         for (const auto& technique : module.techniques)
         {
-            Logger::debug("technique: " + technique.name + " (" +
-                          std::to_string(technique.passes.size()) + " passes)");
+            Logger::debug("technique: " + technique.name + " (" + std::to_string(technique.passes.size()) + " passes)");
             allPasses.insert(allPasses.end(), technique.passes.begin(), technique.passes.end());
         }
-        Logger::debug("total passes across " + std::to_string(module.techniques.size()) +
-                      " technique(s): " + std::to_string(allPasses.size()));
+        Logger::debug("total passes across " + std::to_string(module.techniques.size()) + " technique(s): " + std::to_string(allPasses.size()));
 
         // count the back buffer writes
         for (const auto& pass : allPasses)
@@ -722,9 +701,8 @@ namespace vkShade
             bufferDescriptorSet = writeBufferDescriptorSet(pLogicalDevice, descriptorPool, uniformDescriptorSetLayout, stagingBuffer);
         }
 
-        inputDescriptorSets =
-            allocateAndWriteImageSamplerDescriptorSets(
-                pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+        inputDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
+            pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
 
         // if there is only one outputWrite, we can directly write to outputImages
         if (outputWrites > 1)
@@ -763,9 +741,9 @@ namespace vkShade
         auto buildSpecializationData = [&]() {
             std::vector<VkSpecializationMapEntry> specMapEntrys;
             std::vector<char>                     specData;
-            const auto appendSpecValue = [&](uint32_t specId, const auto &value) {
+            const auto                            appendSpecValue = [&](uint32_t specId, const auto& value) {
                 const uint32_t offset = static_cast<uint32_t>(specData.size());
-                using ValueType = std::decay_t<decltype(value)>;
+                using ValueType       = std::decay_t<decltype(value)>;
                 specData.resize(offset + sizeof(ValueType));
                 std::memcpy(specData.data() + offset, &value, sizeof(ValueType));
                 specMapEntrys.push_back({specId, offset, sizeof(ValueType)});
@@ -773,9 +751,9 @@ namespace vkShade
 
             // Track vector component index (for float2/float3/float4 which are split into multiple spec constants)
             std::string prevSpecName;
-            int vectorComponentIndex = 0;
+            int         vectorComponentIndex = 0;
 
-            for (uint32_t specId = 0; auto &opt : module.spec_constants)
+            for (uint32_t specId = 0; auto& opt : module.spec_constants)
             {
                 if (!opt.name.empty())
                 {
@@ -787,7 +765,7 @@ namespace vkShade
                     else
                     {
                         vectorComponentIndex = 0;
-                        prevSpecName = opt.name;
+                        prevSpecName         = opt.name;
                     }
 
                     // Get parameter from EffectRegistry (the single source of truth)
@@ -860,8 +838,7 @@ namespace vkShade
                                 appendSpecValue(specId, value);
                             }
                             break;
-                        default:
-                            break;
+                        default: break;
                     }
                 }
                 specId++;
@@ -875,13 +852,12 @@ namespace vkShade
             const bool isComputePass = !pass.cs_entry_point.empty();
             if (!isComputePass && (pass.vs_entry_point.empty() || pass.ps_entry_point.empty()))
             {
-                std::string error = "unsupported pass type in effect '" + effectName +
-                                    "': graphics pass requires vertex and fragment entry points";
+                std::string error = "unsupported pass type in effect '" + effectName + "': graphics pass requires vertex and fragment entry points";
                 Logger::err(error);
                 throw std::runtime_error(error);
             }
 
-            auto [specMapEntrys, specData] = buildSpecializationData();
+            auto [specMapEntrys, specData]          = buildSpecializationData();
             VkSpecializationInfo specializationInfo = {};
             if (!specMapEntrys.empty())
             {
@@ -893,23 +869,23 @@ namespace vkShade
 
             if (isComputePass)
             {
-                PassRuntime runtime = {};
-                runtime.isCompute = true;
+                PassRuntime runtime   = {};
+                runtime.isCompute     = true;
                 runtime.dispatchSizeX = std::max(pass.dispatch_size_x, 1u);
                 runtime.dispatchSizeY = std::max(pass.dispatch_size_y, 1u);
                 runtime.dispatchSizeZ = std::max(pass.dispatch_size_z, 1u);
 
                 VkPipelineShaderStageCreateInfo shaderStageCreateInfoCompute = {};
-                shaderStageCreateInfoCompute.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-                shaderStageCreateInfoCompute.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-                shaderStageCreateInfoCompute.module = shaderModule;
-                shaderStageCreateInfoCompute.pName  = pass.cs_entry_point.c_str();
-                shaderStageCreateInfoCompute.pSpecializationInfo = specMapEntrys.empty() ? nullptr : &specializationInfo;
+                shaderStageCreateInfoCompute.sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+                shaderStageCreateInfoCompute.stage                           = VK_SHADER_STAGE_COMPUTE_BIT;
+                shaderStageCreateInfoCompute.module                          = shaderModule;
+                shaderStageCreateInfoCompute.pName                           = pass.cs_entry_point.c_str();
+                shaderStageCreateInfoCompute.pSpecializationInfo             = specMapEntrys.empty() ? nullptr : &specializationInfo;
 
                 VkComputePipelineCreateInfo computePipelineCreateInfo = {};
-                computePipelineCreateInfo.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
-                computePipelineCreateInfo.stage = shaderStageCreateInfoCompute;
-                computePipelineCreateInfo.layout = pipelineLayout;
+                computePipelineCreateInfo.sType                       = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+                computePipelineCreateInfo.stage                       = shaderStageCreateInfoCompute;
+                computePipelineCreateInfo.layout                      = pipelineLayout;
                 if (disableComputePipelineOptimization)
                     computePipelineCreateInfo.flags = VK_PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
 
@@ -918,17 +894,14 @@ namespace vkShade
                     pLogicalDevice->device, VK_NULL_HANDLE, 1, &computePipelineCreateInfo, nullptr, &runtime.pipeline);
                 if (computeResult != VK_SUCCESS)
                 {
-                    std::string error = "CreateComputePipelines failed for effect '" + effectName +
-                                        "', pass CS='" + pass.cs_entry_point +
-                                        "', VkResult=" + std::to_string(computeResult);
+                    std::string error = "CreateComputePipelines failed for effect '" + effectName + "', pass CS='" + pass.cs_entry_point
+                                        + "', VkResult=" + std::to_string(computeResult);
                     Logger::err(error);
                     throw std::runtime_error(error);
                 }
 
-                Logger::debug("compute  entry: " + pass.cs_entry_point +
-                              " dispatch(" + std::to_string(runtime.dispatchSizeX) + ", " +
-                              std::to_string(runtime.dispatchSizeY) + ", " +
-                              std::to_string(runtime.dispatchSizeZ) + ")");
+                Logger::debug("compute  entry: " + pass.cs_entry_point + " dispatch(" + std::to_string(runtime.dispatchSizeX) + ", "
+                              + std::to_string(runtime.dispatchSizeY) + ", " + std::to_string(runtime.dispatchSizeZ) + ")");
                 passRuntimes.push_back(std::move(runtime));
                 continue;
             }
@@ -948,8 +921,7 @@ namespace vkShade
                 attachmentDescription.flags   = 0;
                 attachmentDescription.format  = pass.srgb_write_enable ? textureFormatsSRGB[target] : textureFormatsUNORM[target];
                 attachmentDescription.samples = VK_SAMPLE_COUNT_1_BIT;
-                attachmentDescription.loadOp  = pass.clear_render_targets ? VK_ATTACHMENT_LOAD_OP_CLEAR
-                                                                          : VK_ATTACHMENT_LOAD_OP_LOAD;
+                attachmentDescription.loadOp  = pass.clear_render_targets ? VK_ATTACHMENT_LOAD_OP_CLEAR : VK_ATTACHMENT_LOAD_OP_LOAD;
 
                 attachmentDescription.storeOp        = VK_ATTACHMENT_STORE_OP_STORE;
                 attachmentDescription.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
@@ -1055,34 +1027,25 @@ namespace vkShade
             subpassDescription.pPreserveAttachments    = nullptr;
 
             VkSubpassDependency subpassDependencies[2] = {};
-            subpassDependencies[0].srcSubpass      = VK_SUBPASS_EXTERNAL;
-            subpassDependencies[0].dstSubpass      = 0;
-            subpassDependencies[0].srcStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT
-                                                  | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-                                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-                                                  | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            subpassDependencies[0].dstStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            subpassDependencies[0].srcAccessMask   = VK_ACCESS_TRANSFER_WRITE_BIT
-                                                  | VK_ACCESS_SHADER_READ_BIT
-                                                  | VK_ACCESS_SHADER_WRITE_BIT
-                                                  | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            subpassDependencies[0].srcSubpass          = VK_SUBPASS_EXTERNAL;
+            subpassDependencies[0].dstSubpass          = 0;
+            subpassDependencies[0].srcStageMask        = VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                                                         | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            subpassDependencies[0].dstStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            subpassDependencies[0].srcAccessMask =
+                VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             subpassDependencies[0].dstAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             subpassDependencies[0].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
             subpassDependencies[1].srcSubpass      = 0;
             subpassDependencies[1].dstSubpass      = VK_SUBPASS_EXTERNAL;
             subpassDependencies[1].srcStageMask    = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            subpassDependencies[1].dstStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT
-                                                  | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
-                                                  | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
-                                                  | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            subpassDependencies[1].dstStageMask    = VK_PIPELINE_STAGE_TRANSFER_BIT | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                                                     | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
             subpassDependencies[1].srcAccessMask   = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            subpassDependencies[1].dstAccessMask   = VK_ACCESS_TRANSFER_READ_BIT
-                                                  | VK_ACCESS_TRANSFER_WRITE_BIT
-                                                  | VK_ACCESS_SHADER_READ_BIT
-                                                  | VK_ACCESS_SHADER_WRITE_BIT
-                                                  | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
-                                                  | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            subpassDependencies[1].dstAccessMask   = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT | VK_ACCESS_SHADER_READ_BIT
+                                                     | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                                                     | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             subpassDependencies[1].dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT;
 
             VkRenderPassCreateInfo renderPassCreateInfo;
@@ -1096,52 +1059,52 @@ namespace vkShade
             renderPassCreateInfo.dependencyCount = 2;
             renderPassCreateInfo.pDependencies   = subpassDependencies;
 
-            PassRuntime runtime = {};
+            PassRuntime runtime   = {};
             runtime.renderTargets = std::move(currentRenderTargets);
-            runtime.vertexCount = pass.num_vertices == 0 ? 3 : pass.num_vertices;
+            runtime.vertexCount   = pass.num_vertices == 0 ? 3 : pass.num_vertices;
 
             VkResult result = pLogicalDevice->vkd.CreateRenderPass(pLogicalDevice->device, &renderPassCreateInfo, nullptr, &runtime.renderPass);
             ASSERT_VULKAN(result);
 
-            runtime.renderArea = scissor;
+            runtime.renderArea      = scissor;
             runtime.clearValueCount = std::min<uint32_t>(attachmentDescriptions.size(), runtime.clearValues.size());
 
             if (pass.render_target_names[0].empty())
             {
-                std::vector<VkImageView> backBufferImageViews = pass.srgb_write_enable ? backBufferImageViewsSRGB : backBufferImageViewsUNORM;
+                std::vector<VkImageView> backBufferImageViews  = pass.srgb_write_enable ? backBufferImageViewsSRGB : backBufferImageViewsUNORM;
                 std::vector<VkImageView> finalOutputImageViews = pass.srgb_write_enable ? outputImageViewsSRGB : outputImageViewsUNORM;
-                runtime.framebuffers = createFramebuffers(
-                    pLogicalDevice,
-                    runtime.renderPass,
-                    imageExtent,
-                    {outputToBackBuffer ? backBufferImageViews : finalOutputImageViews, std::vector<VkImageView>(inputImages.size(), stencilImageView)});
-                outputToBackBuffer = !outputToBackBuffer;
+                runtime.framebuffers   = createFramebuffers(pLogicalDevice,
+                                                            runtime.renderPass,
+                                                            imageExtent,
+                                                            {outputToBackBuffer ? backBufferImageViews : finalOutputImageViews,
+                                                             std::vector<VkImageView>(inputImages.size(), stencilImageView)});
+                outputToBackBuffer     = !outputToBackBuffer;
                 runtime.switchSamplers = true;
             }
             else
             {
-                runtime.framebuffers = createFramebuffers(pLogicalDevice, runtime.renderPass, scissor.extent, attachmentImageViews);
+                runtime.framebuffers   = createFramebuffers(pLogicalDevice, runtime.renderPass, scissor.extent, attachmentImageViews);
                 runtime.switchSamplers = false;
             }
 
             VkPipelineShaderStageCreateInfo shaderStageCreateInfoVert = {};
-            shaderStageCreateInfoVert.sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            shaderStageCreateInfoVert.stage               = VK_SHADER_STAGE_VERTEX_BIT;
-            shaderStageCreateInfoVert.module              = shaderModule;
-            shaderStageCreateInfoVert.pName               = pass.vs_entry_point.c_str();
-            shaderStageCreateInfoVert.pSpecializationInfo = specMapEntrys.empty() ? nullptr : &specializationInfo;
+            shaderStageCreateInfoVert.sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shaderStageCreateInfoVert.stage                           = VK_SHADER_STAGE_VERTEX_BIT;
+            shaderStageCreateInfoVert.module                          = shaderModule;
+            shaderStageCreateInfoVert.pName                           = pass.vs_entry_point.c_str();
+            shaderStageCreateInfoVert.pSpecializationInfo             = specMapEntrys.empty() ? nullptr : &specializationInfo;
 
             VkPipelineShaderStageCreateInfo shaderStageCreateInfoFrag = {};
-            shaderStageCreateInfoFrag.sType               = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-            shaderStageCreateInfoFrag.stage               = VK_SHADER_STAGE_FRAGMENT_BIT;
-            shaderStageCreateInfoFrag.module              = shaderModule;
-            shaderStageCreateInfoFrag.pName               = pass.ps_entry_point.c_str();
-            shaderStageCreateInfoFrag.pSpecializationInfo = specMapEntrys.empty() ? nullptr : &specializationInfo;
+            shaderStageCreateInfoFrag.sType                           = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            shaderStageCreateInfoFrag.stage                           = VK_SHADER_STAGE_FRAGMENT_BIT;
+            shaderStageCreateInfoFrag.module                          = shaderModule;
+            shaderStageCreateInfoFrag.pName                           = pass.ps_entry_point.c_str();
+            shaderStageCreateInfoFrag.pSpecializationInfo             = specMapEntrys.empty() ? nullptr : &specializationInfo;
 
             VkPipelineShaderStageCreateInfo shaderStages[] = {shaderStageCreateInfoVert, shaderStageCreateInfoFrag};
 
             VkPipelineVertexInputStateCreateInfo vertexInputCreateInfo = {};
-            vertexInputCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+            vertexInputCreateInfo.sType                                = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 
             VkPrimitiveTopology topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
             switch (pass.topology)
@@ -1155,90 +1118,89 @@ namespace vkShade
             }
 
             VkPipelineInputAssemblyStateCreateInfo inputAssemblyCreateInfo = {};
-            inputAssemblyCreateInfo.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-            inputAssemblyCreateInfo.topology               = topology;
-            inputAssemblyCreateInfo.primitiveRestartEnable = VK_FALSE;
+            inputAssemblyCreateInfo.sType                                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+            inputAssemblyCreateInfo.topology                               = topology;
+            inputAssemblyCreateInfo.primitiveRestartEnable                 = VK_FALSE;
 
             VkPipelineViewportStateCreateInfo viewportStateCreateInfo = {};
-            viewportStateCreateInfo.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-            viewportStateCreateInfo.viewportCount = 1;
-            viewportStateCreateInfo.pViewports    = &viewport;
-            viewportStateCreateInfo.scissorCount  = 1;
-            viewportStateCreateInfo.pScissors     = &scissor;
+            viewportStateCreateInfo.sType                             = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+            viewportStateCreateInfo.viewportCount                     = 1;
+            viewportStateCreateInfo.pViewports                        = &viewport;
+            viewportStateCreateInfo.scissorCount                      = 1;
+            viewportStateCreateInfo.pScissors                         = &scissor;
 
             VkPipelineRasterizationStateCreateInfo rasterizationCreateInfo = {};
-            rasterizationCreateInfo.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-            rasterizationCreateInfo.depthClampEnable        = VK_FALSE;
-            rasterizationCreateInfo.rasterizerDiscardEnable = VK_FALSE;
-            rasterizationCreateInfo.polygonMode             = VK_POLYGON_MODE_FILL;
-            rasterizationCreateInfo.cullMode                = VK_CULL_MODE_NONE;
-            rasterizationCreateInfo.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-            rasterizationCreateInfo.lineWidth               = 1.0f;
+            rasterizationCreateInfo.sType                                  = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+            rasterizationCreateInfo.depthClampEnable                       = VK_FALSE;
+            rasterizationCreateInfo.rasterizerDiscardEnable                = VK_FALSE;
+            rasterizationCreateInfo.polygonMode                            = VK_POLYGON_MODE_FILL;
+            rasterizationCreateInfo.cullMode                               = VK_CULL_MODE_NONE;
+            rasterizationCreateInfo.frontFace                              = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            rasterizationCreateInfo.lineWidth                              = 1.0f;
 
             VkPipelineMultisampleStateCreateInfo multisampleCreateInfo = {};
-            multisampleCreateInfo.sType                 = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-            multisampleCreateInfo.rasterizationSamples  = VK_SAMPLE_COUNT_1_BIT;
-            multisampleCreateInfo.sampleShadingEnable   = VK_FALSE;
-            multisampleCreateInfo.minSampleShading      = 1.0f;
-            multisampleCreateInfo.alphaToCoverageEnable = VK_FALSE;
-            multisampleCreateInfo.alphaToOneEnable      = VK_FALSE;
+            multisampleCreateInfo.sType                                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+            multisampleCreateInfo.rasterizationSamples                 = VK_SAMPLE_COUNT_1_BIT;
+            multisampleCreateInfo.sampleShadingEnable                  = VK_FALSE;
+            multisampleCreateInfo.minSampleShading                     = 1.0f;
+            multisampleCreateInfo.alphaToCoverageEnable                = VK_FALSE;
+            multisampleCreateInfo.alphaToOneEnable                     = VK_FALSE;
 
             VkPipelineColorBlendStateCreateInfo colorBlendCreateInfo = {};
-            colorBlendCreateInfo.sType           = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-            colorBlendCreateInfo.logicOpEnable   = VK_FALSE;
-            colorBlendCreateInfo.logicOp         = VK_LOGIC_OP_NO_OP;
-            colorBlendCreateInfo.attachmentCount = attachmentBlendStates.size();
-            colorBlendCreateInfo.pAttachments    = attachmentBlendStates.data();
+            colorBlendCreateInfo.sType                               = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+            colorBlendCreateInfo.logicOpEnable                       = VK_FALSE;
+            colorBlendCreateInfo.logicOp                             = VK_LOGIC_OP_NO_OP;
+            colorBlendCreateInfo.attachmentCount                     = attachmentBlendStates.size();
+            colorBlendCreateInfo.pAttachments                        = attachmentBlendStates.data();
 
             VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo = {};
-            dynamicStateCreateInfo.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-            dynamicStateCreateInfo.dynamicStateCount = 0;
-            dynamicStateCreateInfo.pDynamicStates    = nullptr;
+            dynamicStateCreateInfo.sType                            = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+            dynamicStateCreateInfo.dynamicStateCount                = 0;
+            dynamicStateCreateInfo.pDynamicStates                   = nullptr;
 
             VkPipelineDepthStencilStateCreateInfo depthStencilStateCreateInfo = {};
-            depthStencilStateCreateInfo.sType                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-            depthStencilStateCreateInfo.depthTestEnable       = VK_FALSE;
-            depthStencilStateCreateInfo.depthWriteEnable      = VK_FALSE;
-            depthStencilStateCreateInfo.depthCompareOp        = VK_COMPARE_OP_ALWAYS;
-            depthStencilStateCreateInfo.depthBoundsTestEnable = VK_FALSE;
-            depthStencilStateCreateInfo.stencilTestEnable     = pass.stencil_enable;
-            depthStencilStateCreateInfo.front.failOp          = convertReshadeStencilOp(pass.stencil_op_fail);
-            depthStencilStateCreateInfo.front.passOp          = convertReshadeStencilOp(pass.stencil_op_pass);
-            depthStencilStateCreateInfo.front.depthFailOp     = convertReshadeStencilOp(pass.stencil_op_depth_fail);
-            depthStencilStateCreateInfo.front.compareOp       = convertReshadeCompareOp(pass.stencil_comparison_func);
-            depthStencilStateCreateInfo.front.compareMask     = pass.stencil_read_mask;
-            depthStencilStateCreateInfo.front.writeMask       = pass.stencil_write_mask;
-            depthStencilStateCreateInfo.front.reference       = pass.stencil_reference_value;
-            depthStencilStateCreateInfo.back                  = depthStencilStateCreateInfo.front;
-            depthStencilStateCreateInfo.minDepthBounds        = 0.0f;
-            depthStencilStateCreateInfo.maxDepthBounds        = 1.0f;
+            depthStencilStateCreateInfo.sType                                 = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+            depthStencilStateCreateInfo.depthTestEnable                       = VK_FALSE;
+            depthStencilStateCreateInfo.depthWriteEnable                      = VK_FALSE;
+            depthStencilStateCreateInfo.depthCompareOp                        = VK_COMPARE_OP_ALWAYS;
+            depthStencilStateCreateInfo.depthBoundsTestEnable                 = VK_FALSE;
+            depthStencilStateCreateInfo.stencilTestEnable                     = pass.stencil_enable;
+            depthStencilStateCreateInfo.front.failOp                          = convertReshadeStencilOp(pass.stencil_op_fail);
+            depthStencilStateCreateInfo.front.passOp                          = convertReshadeStencilOp(pass.stencil_op_pass);
+            depthStencilStateCreateInfo.front.depthFailOp                     = convertReshadeStencilOp(pass.stencil_op_depth_fail);
+            depthStencilStateCreateInfo.front.compareOp                       = convertReshadeCompareOp(pass.stencil_comparison_func);
+            depthStencilStateCreateInfo.front.compareMask                     = pass.stencil_read_mask;
+            depthStencilStateCreateInfo.front.writeMask                       = pass.stencil_write_mask;
+            depthStencilStateCreateInfo.front.reference                       = pass.stencil_reference_value;
+            depthStencilStateCreateInfo.back                                  = depthStencilStateCreateInfo.front;
+            depthStencilStateCreateInfo.minDepthBounds                        = 0.0f;
+            depthStencilStateCreateInfo.maxDepthBounds                        = 1.0f;
 
             VkGraphicsPipelineCreateInfo pipelineCreateInfo = {};
-            pipelineCreateInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-            pipelineCreateInfo.stageCount          = 2;
-            pipelineCreateInfo.pStages             = shaderStages;
-            pipelineCreateInfo.pVertexInputState   = &vertexInputCreateInfo;
-            pipelineCreateInfo.pInputAssemblyState = &inputAssemblyCreateInfo;
-            pipelineCreateInfo.pViewportState      = &viewportStateCreateInfo;
-            pipelineCreateInfo.pRasterizationState = &rasterizationCreateInfo;
-            pipelineCreateInfo.pMultisampleState   = &multisampleCreateInfo;
-            pipelineCreateInfo.pDepthStencilState  = &depthStencilStateCreateInfo;
-            pipelineCreateInfo.pColorBlendState    = &colorBlendCreateInfo;
-            pipelineCreateInfo.pDynamicState       = &dynamicStateCreateInfo;
-            pipelineCreateInfo.layout              = pipelineLayout;
-            pipelineCreateInfo.renderPass          = runtime.renderPass;
-            pipelineCreateInfo.subpass             = 0;
-            pipelineCreateInfo.basePipelineHandle  = VK_NULL_HANDLE;
-            pipelineCreateInfo.basePipelineIndex   = -1;
+            pipelineCreateInfo.sType                        = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+            pipelineCreateInfo.stageCount                   = 2;
+            pipelineCreateInfo.pStages                      = shaderStages;
+            pipelineCreateInfo.pVertexInputState            = &vertexInputCreateInfo;
+            pipelineCreateInfo.pInputAssemblyState          = &inputAssemblyCreateInfo;
+            pipelineCreateInfo.pViewportState               = &viewportStateCreateInfo;
+            pipelineCreateInfo.pRasterizationState          = &rasterizationCreateInfo;
+            pipelineCreateInfo.pMultisampleState            = &multisampleCreateInfo;
+            pipelineCreateInfo.pDepthStencilState           = &depthStencilStateCreateInfo;
+            pipelineCreateInfo.pColorBlendState             = &colorBlendCreateInfo;
+            pipelineCreateInfo.pDynamicState                = &dynamicStateCreateInfo;
+            pipelineCreateInfo.layout                       = pipelineLayout;
+            pipelineCreateInfo.renderPass                   = runtime.renderPass;
+            pipelineCreateInfo.subpass                      = 0;
+            pipelineCreateInfo.basePipelineHandle           = VK_NULL_HANDLE;
+            pipelineCreateInfo.basePipelineIndex            = -1;
 
             Logger::debug("creating graphics pipeline VS=" + pass.vs_entry_point + " PS=" + pass.ps_entry_point);
             result = pLogicalDevice->vkd.CreateGraphicsPipelines(
                 pLogicalDevice->device, VK_NULL_HANDLE, 1, &pipelineCreateInfo, nullptr, &runtime.pipeline);
             if (result != VK_SUCCESS)
             {
-                std::string error = "CreateGraphicsPipelines failed for effect '" + effectName +
-                                    "', pass VS='" + pass.vs_entry_point + "', PS='" + pass.ps_entry_point +
-                                    "', VkResult=" + std::to_string(result);
+                std::string error = "CreateGraphicsPipelines failed for effect '" + effectName + "', pass VS='" + pass.vs_entry_point + "', PS='"
+                                    + pass.ps_entry_point + "', VkResult=" + std::to_string(result);
                 Logger::err(error);
                 throw std::runtime_error(error);
             }
@@ -1310,27 +1272,22 @@ namespace vkShade
                     VkDescriptorImageInfo imageInfo;
                     imageInfo.sampler = module.samplers[i].storage ? VK_NULL_HANDLE : samplers[i];
                     // Use a input image if there is no depth image to prevent a crash
-                    imageInfo.imageView   = depthImageView ? depthImageView : inputImageViewsUNORM[imageIndex];
-                    imageInfo.imageLayout = module.samplers[i].storage
-                        ? VK_IMAGE_LAYOUT_GENERAL
-                        : (depthImageView ? depthImageLayout : VK_IMAGE_LAYOUT_GENERAL);
+                    imageInfo.imageView = depthImageView ? depthImageView : inputImageViewsUNORM[imageIndex];
+                    imageInfo.imageLayout =
+                        module.samplers[i].storage ? VK_IMAGE_LAYOUT_GENERAL : (depthImageView ? depthImageLayout : VK_IMAGE_LAYOUT_GENERAL);
 
-                    Logger::debug("useDepthImage: effect=" + effectName
-                                  + " imageIndex=" + std::to_string(imageIndex)
-                                  + " binding=" + std::to_string(i)
-                                  + " texture=" + name
-                                  + " hasDepth=" + std::string(depthImageView ? "true" : "false")
-                                  + " imageView=" + convertToString(imageInfo.imageView)
-                                  + " imageLayout=" + convertToString(imageInfo.imageLayout));
+                    Logger::debug("useDepthImage: effect=" + effectName + " imageIndex=" + std::to_string(imageIndex) + " binding="
+                                  + std::to_string(i) + " texture=" + name + " hasDepth=" + std::string(depthImageView ? "true" : "false")
+                                  + " imageView=" + convertToString(imageInfo.imageView) + " imageLayout=" + convertToString(imageInfo.imageLayout));
 
                     VkWriteDescriptorSet writeDescriptorSet = {};
 
-                    writeDescriptorSet.sType            = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-                    writeDescriptorSet.pNext            = nullptr;
-                    writeDescriptorSet.dstSet           = inputDescriptorSets[imageIndex];
-                    writeDescriptorSet.dstBinding       = i;
-                    writeDescriptorSet.dstArrayElement  = 0;
-                    writeDescriptorSet.descriptorCount  = 1;
+                    writeDescriptorSet.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    writeDescriptorSet.pNext           = nullptr;
+                    writeDescriptorSet.dstSet          = inputDescriptorSets[imageIndex];
+                    writeDescriptorSet.dstBinding      = i;
+                    writeDescriptorSet.dstArrayElement = 0;
+                    writeDescriptorSet.descriptorCount = 1;
                     writeDescriptorSet.descriptorType =
                         module.samplers[i].storage ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
                     writeDescriptorSet.pImageInfo       = &imageInfo;
@@ -1355,16 +1312,16 @@ namespace vkShade
     }
     void ReshadeEffect::applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer)
     {
-        const VkPipelineStageFlags shaderStages = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        const VkPipelineStageFlags shaderStages  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
         const VkPipelineStageFlags transferStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
 
-        VkImageCopy fullCopyRegion = {};
-        fullCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        fullCopyRegion.srcSubresource.mipLevel = 0;
+        VkImageCopy fullCopyRegion                   = {};
+        fullCopyRegion.srcSubresource.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        fullCopyRegion.srcSubresource.mipLevel       = 0;
         fullCopyRegion.srcSubresource.baseArrayLayer = 0;
-        fullCopyRegion.srcSubresource.layerCount = 1;
-        fullCopyRegion.dstSubresource = fullCopyRegion.srcSubresource;
-        fullCopyRegion.extent = {imageExtent.width, imageExtent.height, 1};
+        fullCopyRegion.srcSubresource.layerCount     = 1;
+        fullCopyRegion.dstSubresource                = fullCopyRegion.srcSubresource;
+        fullCopyRegion.extent                        = {imageExtent.width, imageExtent.height, 1};
 
         // Transition input image for seed copy.
         VkImageMemoryBarrier memoryBarrier;
@@ -1388,9 +1345,9 @@ namespace vkShade
             commandBuffer, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, transferStage, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
 
         // Seed output image from current input so backbuffer/load-based passes never start from undefined data.
-        memoryBarrier.image = outputImages[imageIndex];
-        memoryBarrier.oldLayout = outputImageInitialized[imageIndex] ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_UNDEFINED;
-        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        memoryBarrier.image         = outputImages[imageIndex];
+        memoryBarrier.oldLayout     = outputImageInitialized[imageIndex] ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_UNDEFINED;
+        memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         memoryBarrier.srcAccessMask = 0;
         memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         pLogicalDevice->vkd.CmdPipelineBarrier(
@@ -1407,22 +1364,21 @@ namespace vkShade
 
         if (outputWrites > 1)
         {
-            memoryBarrier.image = backBufferImages[imageIndex];
-            memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-            memoryBarrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            memoryBarrier.image         = backBufferImages[imageIndex];
+            memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_GENERAL;
+            memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
             memoryBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-            pLogicalDevice->vkd.CmdPipelineBarrier(
-                commandBuffer,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | shaderStages,
-                transferStage,
-                0,
-                0,
-                nullptr,
-                0,
-                nullptr,
-                1,
-                &memoryBarrier);
+            pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
+                                                   VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | shaderStages,
+                                                   transferStage,
+                                                   0,
+                                                   0,
+                                                   nullptr,
+                                                   0,
+                                                   nullptr,
+                                                   1,
+                                                   &memoryBarrier);
 
             pLogicalDevice->vkd.CmdCopyImage(commandBuffer,
                                              inputImages[imageIndex],
@@ -1434,11 +1390,11 @@ namespace vkShade
         }
 
         // Used to make the image accessible by shaders after seed copy.
-        memoryBarrier.image = inputImages[imageIndex];
+        memoryBarrier.image         = inputImages[imageIndex];
         memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
         memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
         // Reverses the first Barrier
         VkImageMemoryBarrier secondBarrier;
         secondBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -1457,37 +1413,25 @@ namespace vkShade
         secondBarrier.subresourceRange.baseArrayLayer = 0;
         secondBarrier.subresourceRange.layerCount     = 1;
 
-        pLogicalDevice->vkd.CmdPipelineBarrier(
-            commandBuffer, transferStage, shaderStages, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
-        memoryBarrier.image     = outputImages[imageIndex];
-        memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+        pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer, transferStage, shaderStages, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
+        memoryBarrier.image         = outputImages[imageIndex];
+        memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
         memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
         memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-        pLogicalDevice->vkd.CmdPipelineBarrier(
-            commandBuffer, transferStage, shaderStages, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
+        pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer, transferStage, shaderStages, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
         if (outputWrites > 1)
         {
-            memoryBarrier.image = backBufferImages[imageIndex];
-            memoryBarrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-            memoryBarrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+            memoryBarrier.image         = backBufferImages[imageIndex];
+            memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+            memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_GENERAL;
             memoryBarrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
             memoryBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-            pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
-                                                   transferStage,
-                                                   shaderStages,
-                                                   0,
-                                                   0,
-                                                   nullptr,
-                                                   0,
-                                                   nullptr,
-                                                   1,
-                                                   &memoryBarrier);
+            pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer, transferStage, shaderStages, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
         }
 
-        const bool hasGraphicsPass = std::any_of(passRuntimes.begin(), passRuntimes.end(), [](const PassRuntime& passRuntime) {
-            return !passRuntime.isCompute;
-        });
+        const bool hasGraphicsPass =
+            std::any_of(passRuntimes.begin(), passRuntimes.end(), [](const PassRuntime& passRuntime) { return !passRuntime.isCompute; });
         if (hasGraphicsPass)
         {
             // stencil image
@@ -1511,7 +1455,7 @@ namespace vkShade
         }
 
         VkDescriptorSet currentSamplerSet = inputDescriptorSets[imageIndex];
-        bool backBufferNext = outputWrites % 2 == 0;
+        bool            backBufferNext    = outputWrites % 2 == 0;
         for (size_t i = 0; i < passRuntimes.size(); i++)
         {
             auto& runtime = passRuntimes[i];
@@ -1539,12 +1483,12 @@ namespace vkShade
                 }
 
                 VkRenderPassBeginInfo renderPassBeginInfo = {};
-                renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-                renderPassBeginInfo.renderPass = runtime.renderPass;
-                renderPassBeginInfo.framebuffer = runtime.framebuffers[imageIndex];
-                renderPassBeginInfo.renderArea = runtime.renderArea;
-                renderPassBeginInfo.clearValueCount = runtime.clearValueCount;
-                renderPassBeginInfo.pClearValues = runtime.clearValues.data();
+                renderPassBeginInfo.sType                 = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+                renderPassBeginInfo.renderPass            = runtime.renderPass;
+                renderPassBeginInfo.framebuffer           = runtime.framebuffers[imageIndex];
+                renderPassBeginInfo.renderArea            = runtime.renderArea;
+                renderPassBeginInfo.clearValueCount       = runtime.clearValueCount;
+                renderPassBeginInfo.pClearValues          = runtime.clearValues.data();
 
                 pLogicalDevice->vkd.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
                 pLogicalDevice->vkd.CmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, runtime.pipeline);
@@ -1572,8 +1516,8 @@ namespace vkShade
             }
 
             VkMemoryBarrier passMemoryBarrier = {};
-            passMemoryBarrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
-            passMemoryBarrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            passMemoryBarrier.sType           = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            passMemoryBarrier.srcAccessMask   = VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             passMemoryBarrier.dstAccessMask =
                 VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
             pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
@@ -1588,10 +1532,12 @@ namespace vkShade
                                                    nullptr);
         }
 
-        pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer, shaderStages, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &secondBarrier);
-        secondBarrier.image = outputImages[imageIndex];
+        pLogicalDevice->vkd.CmdPipelineBarrier(
+            commandBuffer, shaderStages, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &secondBarrier);
+        secondBarrier.image     = outputImages[imageIndex];
         secondBarrier.oldLayout = VK_IMAGE_LAYOUT_GENERAL;
-        pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer, shaderStages, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &secondBarrier);
+        pLogicalDevice->vkd.CmdPipelineBarrier(
+            commandBuffer, shaderStages, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &secondBarrier);
     }
 
     std::vector<std::unique_ptr<EffectParam>> ReshadeEffect::getParameters() const
@@ -1600,25 +1546,20 @@ namespace vkShade
 
         // Helper lambdas
         auto findAnnotation = [](const auto& annotations, const std::string& name) {
-            return std::find_if(annotations.begin(), annotations.end(),
-                [&name](const auto& a) { return a.name == name; });
+            return std::find_if(annotations.begin(), annotations.end(), [&name](const auto& a) { return a.name == name; });
         };
 
         auto getAnnotationFloat = [](const auto& annotation) {
-            return annotation.type.is_floating_point()
-                ? annotation.value.as_float[0]
-                : static_cast<float>(annotation.value.as_int[0]);
+            return annotation.type.is_floating_point() ? annotation.value.as_float[0] : static_cast<float>(annotation.value.as_int[0]);
         };
 
         auto getAnnotationInt = [](const auto& annotation) {
-            return annotation.type.is_integral()
-                ? annotation.value.as_int[0]
-                : static_cast<int>(annotation.value.as_float[0]);
+            return annotation.type.is_integral() ? annotation.value.as_int[0] : static_cast<int>(annotation.value.as_float[0]);
         };
 
         auto parseNullSeparatedString = [](const std::string& str) {
             std::vector<std::string> items;
-            size_t start = 0;
+            size_t                   start = 0;
             for (size_t i = 0; i <= str.size(); i++)
             {
                 if (i == str.size() || str[i] == '\0')
@@ -1645,13 +1586,13 @@ namespace vkShade
                 continue;
 
             // Get common annotations
-            auto labelIt = findAnnotation(spec.annotations, "ui_label");
-            std::string label = (labelIt != spec.annotations.end()) ? labelIt->value.string_data : spec.name;
+            auto        labelIt = findAnnotation(spec.annotations, "ui_label");
+            std::string label   = (labelIt != spec.annotations.end()) ? labelIt->value.string_data : spec.name;
 
-            auto tooltipIt = findAnnotation(spec.annotations, "ui_tooltip");
-            std::string tooltip = (tooltipIt != spec.annotations.end()) ? tooltipIt->value.string_data : "";
+            auto        tooltipIt = findAnnotation(spec.annotations, "ui_tooltip");
+            std::string tooltip   = (tooltipIt != spec.annotations.end()) ? tooltipIt->value.string_data : "";
 
-            auto typeIt = findAnnotation(spec.annotations, "ui_type");
+            auto        typeIt = findAnnotation(spec.annotations, "ui_type");
             std::string uiType = (typeIt != spec.annotations.end()) ? typeIt->value.string_data : "";
 
             // Get current value from EffectRegistry (the single source of truth)
@@ -1660,12 +1601,12 @@ namespace vkShade
             // Create appropriate subclass based on spec type
             if (spec.type.is_floating_point())
             {
-                auto p = std::make_unique<FloatParam>();
-                p->effectName = effectName;
-                p->name = spec.name;
-                p->label = label;
-                p->tooltip = tooltip;
-                p->uiType = uiType;
+                auto p          = std::make_unique<FloatParam>();
+                p->effectName   = effectName;
+                p->name         = spec.name;
+                p->label        = label;
+                p->tooltip      = tooltip;
+                p->uiType       = uiType;
                 p->defaultValue = spec.initializer_value.as_float[0];
                 // Get value from registry if available
                 if (auto* rp = dynamic_cast<FloatParam*>(registryParam))
@@ -1688,12 +1629,12 @@ namespace vkShade
             }
             else if (spec.type.is_boolean())
             {
-                auto p = std::make_unique<BoolParam>();
-                p->effectName = effectName;
-                p->name = spec.name;
-                p->label = label;
-                p->tooltip = tooltip;
-                p->uiType = uiType;
+                auto p          = std::make_unique<BoolParam>();
+                p->effectName   = effectName;
+                p->name         = spec.name;
+                p->label        = label;
+                p->tooltip      = tooltip;
+                p->uiType       = uiType;
                 p->defaultValue = (spec.initializer_value.as_uint[0] != 0);
                 // Get value from registry if available
                 if (auto* rp = dynamic_cast<BoolParam*>(registryParam))
@@ -1705,12 +1646,12 @@ namespace vkShade
             }
             else if (spec.type.is_integral())
             {
-                auto p = std::make_unique<IntParam>();
-                p->effectName = effectName;
-                p->name = spec.name;
-                p->label = label;
-                p->tooltip = tooltip;
-                p->uiType = uiType;
+                auto p          = std::make_unique<IntParam>();
+                p->effectName   = effectName;
+                p->name         = spec.name;
+                p->label        = label;
+                p->tooltip      = tooltip;
+                p->uiType       = uiType;
                 p->defaultValue = spec.initializer_value.as_int[0];
                 // Get value from registry if available
                 if (auto* rp = dynamic_cast<IntParam*>(registryParam))
@@ -1760,7 +1701,7 @@ namespace vkShade
             if (stagingBufferMapped)
                 pLogicalDevice->vkd.UnmapMemory(pLogicalDevice->device, stagingBufferMemory);
             pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, stagingBufferMemory, nullptr);
-                pLogicalDevice->vkd.DestroyBuffer(pLogicalDevice->device, stagingBuffer, nullptr);
+            pLogicalDevice->vkd.DestroyBuffer(pLogicalDevice->device, stagingBuffer, nullptr);
         }
 
         pLogicalDevice->vkd.DestroyPipelineLayout(pLogicalDevice->device, pipelineLayout, nullptr);
@@ -1918,7 +1859,8 @@ namespace vkShade
             "}\n"
             "uint2 _vkshade_f32tof16(float2 v) { return uint2(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y)); }\n"
             "uint3 _vkshade_f32tof16(float3 v) { return uint3(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y), _vkshade_f32tof16(v.z)); }\n"
-            "uint4 _vkshade_f32tof16(float4 v) { return uint4(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y), _vkshade_f32tof16(v.z), _vkshade_f32tof16(v.w)); }\n"
+            "uint4 _vkshade_f32tof16(float4 v) { return uint4(_vkshade_f32tof16(v.x), _vkshade_f32tof16(v.y), _vkshade_f32tof16(v.z), "
+            "_vkshade_f32tof16(v.w)); }\n"
             "float _vkshade_f16tof32(uint h) {\n"
             "  uint sign = (h & 0x8000u) << 16;\n"
             "  uint exp = (h >> 10) & 0x1Fu;\n"
@@ -1936,7 +1878,8 @@ namespace vkShade
             "}\n"
             "float2 _vkshade_f16tof32(uint2 h) { return float2(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y)); }\n"
             "float3 _vkshade_f16tof32(uint3 h) { return float3(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y), _vkshade_f16tof32(h.z)); }\n"
-            "float4 _vkshade_f16tof32(uint4 h) { return float4(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y), _vkshade_f16tof32(h.z), _vkshade_f16tof32(h.w)); }\n"
+            "float4 _vkshade_f16tof32(uint4 h) { return float4(_vkshade_f16tof32(h.x), _vkshade_f16tof32(h.y), _vkshade_f16tof32(h.z), "
+            "_vkshade_f16tof32(h.w)); }\n"
             "#define float2x3 matrix<float, 2, 3>\n"
             "#define float2x4 matrix<float, 2, 4>\n"
             "#define float3x2 matrix<float, 3, 2>\n"
@@ -2009,18 +1952,17 @@ namespace vkShade
             Logger::err(errors);
 
         const RuntimeCodegenPolicy runtimePolicy = selectRuntimeCodegenPolicy(pLogicalDevice);
-        disableComputePipelineOptimization = runtimePolicy.disableComputePipelineOptimization;
-        Logger::debug("runtime codegen policy: local_size_id=" + std::to_string(runtimePolicy.useLocalSizeId ? 1 : 0) +
-                      " uniform_spec_constants=" + std::to_string(runtimePolicy.useUniformSpecConstants ? 1 : 0) +
-                      " debug_info=" + std::to_string(runtimePolicy.emitDebugInfo ? 1 : 0) +
-                      " disable_compute_opt=" + std::to_string(runtimePolicy.disableComputePipelineOptimization ? 1 : 0));
+        disableComputePipelineOptimization       = runtimePolicy.disableComputePipelineOptimization;
+        Logger::debug("runtime codegen policy: local_size_id=" + std::to_string(runtimePolicy.useLocalSizeId ? 1 : 0)
+                      + " uniform_spec_constants=" + std::to_string(runtimePolicy.useUniformSpecConstants ? 1 : 0)
+                      + " debug_info=" + std::to_string(runtimePolicy.emitDebugInfo ? 1 : 0)
+                      + " disable_compute_opt=" + std::to_string(runtimePolicy.disableComputePipelineOptimization ? 1 : 0));
 
-        std::unique_ptr<reshadefx::codegen> codegen(reshadefx::create_codegen_spirv(
-            true /* vulkan semantics */,
-            runtimePolicy.emitDebugInfo,
-            runtimePolicy.useUniformSpecConstants,
-            true /* flip vertex shader */,
-            runtimePolicy.useLocalSizeId));
+        std::unique_ptr<reshadefx::codegen> codegen(reshadefx::create_codegen_spirv(true /* vulkan semantics */,
+                                                                                    runtimePolicy.emitDebugInfo,
+                                                                                    runtimePolicy.useUniformSpecConstants,
+                                                                                    true /* flip vertex shader */,
+                                                                                    runtimePolicy.useLocalSizeId));
 
         if (!parser.parse(std::move(preprocessor.output()), codegen.get()))
         {

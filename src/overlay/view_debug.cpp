@@ -67,9 +67,8 @@ namespace vkShade
 
                 for (const auto& effect : effects)
                 {
-                    bool open = ImGui::TreeNode(effect.name.c_str(), "[%s] %s",
-                        effect.type == EffectType::BuiltIn ? "BuiltIn" : "ReShade",
-                        effect.name.c_str());
+                    bool open = ImGui::TreeNode(
+                        effect.name.c_str(), "[%s] %s", effect.type == EffectType::BuiltIn ? "BuiltIn" : "ReShade", effect.name.c_str());
 
                     if (open)
                     {
@@ -92,12 +91,13 @@ namespace vkShade
                             {
                                 for (const auto& param : effect.parameters)
                                 {
-                                    const char* typeName = param->getTypeName();
-                                    auto serialized = param->serialize();
+                                    const char* typeName   = param->getTypeName();
+                                    auto        serialized = param->serialize();
                                     std::string valueStr;
                                     for (size_t i = 0; i < serialized.size(); i++)
                                     {
-                                        if (i > 0) valueStr += ", ";
+                                        if (i > 0)
+                                            valueStr += ", ";
                                         if (!serialized[i].first.empty())
                                             valueStr += serialized[i].first + "=";
                                         valueStr += serialized[i].second;
@@ -149,7 +149,7 @@ namespace vkShade
                             size_t len = strlen(debugLogSearch);
                             if (len < sizeof(debugLogSearch) - 1)
                             {
-                                debugLogSearch[len] = static_cast<char>(c);
+                                debugLogSearch[len]     = static_cast<char>(c);
                                 debugLogSearch[len + 1] = '\0';
                             }
                         }
@@ -194,8 +194,8 @@ namespace vkShade
                 ImGui::SameLine();
                 if (ImGui::Button("Export"))
                 {
-                    std::string exportPath = ConfigSerializer::getBaseConfigDir() + "/vkshade-log.txt";
-                    auto history = Logger::getHistory();
+                    std::string   exportPath = ConfigSerializer::getBaseConfigDir() + "/vkshade-log.txt";
+                    auto          history    = Logger::getHistory();
                     std::ofstream out(exportPath);
                     if (out.is_open())
                     {
@@ -219,20 +219,22 @@ namespace vkShade
                 auto history = Logger::getHistory();
 
                 static ImVec4 levelColors[5] = {
-                    ImVec4(0.5f, 0.5f, 0.5f, 1.0f),  // Trace - gray
-                    ImVec4(0.4f, 0.7f, 1.0f, 1.0f),  // Debug - light blue
-                    ImVec4(0.8f, 0.8f, 0.8f, 1.0f),  // Info - white-ish
-                    ImVec4(1.0f, 0.8f, 0.3f, 1.0f),  // Warn - yellow
-                    ImVec4(1.0f, 0.3f, 0.3f, 1.0f),  // Error - red
+                    ImVec4(0.5f, 0.5f, 0.5f, 1.0f), // Trace - gray
+                    ImVec4(0.4f, 0.7f, 1.0f, 1.0f), // Debug - light blue
+                    ImVec4(0.8f, 0.8f, 0.8f, 1.0f), // Info - white-ish
+                    ImVec4(1.0f, 0.8f, 0.3f, 1.0f), // Warn - yellow
+                    ImVec4(1.0f, 0.3f, 0.3f, 1.0f), // Error - red
                 };
 
                 auto containsIgnoreCase = [](const std::string& haystack, const char* needle) {
                     if (!needle || needle[0] == '\0')
                         return true;
                     std::string lowerHaystack = haystack;
-                    std::string lowerNeedle = needle;
-                    for (auto& c : lowerHaystack) c = std::tolower(c);
-                    for (auto& c : lowerNeedle) c = std::tolower(c);
+                    std::string lowerNeedle   = needle;
+                    for (auto& c : lowerHaystack)
+                        c = std::tolower(c);
+                    for (auto& c : lowerNeedle)
+                        c = std::tolower(c);
                     return lowerHaystack.find(lowerNeedle) != std::string::npos;
                 };
 

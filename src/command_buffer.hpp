@@ -18,16 +18,16 @@ namespace vkShade
 
     std::vector<VkCommandBuffer> allocateCommandBuffer(LogicalDevice* pLogicalDevice, uint32_t count);
 
-    void writeCommandBuffers(LogicalDevice*                                 pLogicalDevice,
-                             LogicalSwapchain*                              pLogicalSwapchain,
+    void writeCommandBuffers(LogicalDevice*                                pLogicalDevice,
+                             LogicalSwapchain*                             pLogicalSwapchain,
                              std::vector<std::shared_ptr<vkShade::Effect>> effects,
-                             std::vector<VkCommandBuffer>                   commandBuffers);
+                             std::vector<VkCommandBuffer>                  commandBuffers);
 
-    void recordDepthResolveSnapshot(LogicalDevice*            pLogicalDevice,
-                                    LogicalSwapchain*         pLogicalSwapchain,
-                                    VkCommandBuffer           commandBuffer,
-                                    uint32_t                  imageIndex,
-                                    const DepthState&         depthState);
+    void recordDepthResolveSnapshot(LogicalDevice*    pLogicalDevice,
+                                    LogicalSwapchain* pLogicalSwapchain,
+                                    VkCommandBuffer   commandBuffer,
+                                    uint32_t          imageIndex,
+                                    const DepthState& depthState);
 
     std::vector<VkSemaphore> createSemaphores(LogicalDevice* pLogicalDevice, uint32_t count);
 } // namespace vkShade

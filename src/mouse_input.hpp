@@ -7,12 +7,12 @@ namespace vkShade
 {
     struct MouseState
     {
-        int x = 0;
-        int y = 0;
-        bool leftButton = false;
-        bool rightButton = false;
-        bool middleButton = false;
-        float scrollDelta = 0.0f;  // Positive = up, negative = down
+        int   x            = 0;
+        int   y            = 0;
+        bool  leftButton   = false;
+        bool  rightButton  = false;
+        bool  middleButton = false;
+        float scrollDelta  = 0.0f; // Positive = up, negative = down
     };
 
     MouseState getMouseState();

@@ -114,7 +114,7 @@ namespace vkShade
         std::lock_guard<std::mutex> lock(s_instance.m_mutex);
         s_instance.m_historyEnabled = enabled;
         if (!enabled)
-            s_instance.m_history.clear();  // Free memory when disabled
+            s_instance.m_history.clear(); // Free memory when disabled
     }
 
     bool Logger::isHistoryEnabled()
@@ -126,7 +126,7 @@ namespace vkShade
     const char* Logger::levelName(LogLevel level)
     {
         static std::array<const char*, 5> names = {{"TRACE", "DEBUG", "INFO", "WARN", "ERROR"}};
-        uint32_t idx = static_cast<uint32_t>(level);
+        uint32_t                          idx   = static_cast<uint32_t>(level);
         if (idx < names.size())
             return names[idx];
         return "UNKNOWN";

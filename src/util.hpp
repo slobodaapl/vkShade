@@ -23,7 +23,7 @@ namespace vkShade
         white
     };
 
-    void outputInColor(std::string output, Color foreground = Color::defaultColor, Color background = Color::defaultColor);
+    void outputInColor(const std::string& output, Color foreground = Color::defaultColor, Color background = Color::defaultColor);
 
     template<typename T>
     std::string convertToString(T object)

@@ -28,20 +28,23 @@ namespace vkShade
     class ReshadeEffect : public Effect
     {
     public:
-        ReshadeEffect(LogicalDevice*       pLogicalDevice,
-                      VkFormat             format,
-                      VkExtent2D           imageExtent,
-                      std::vector<VkImage> inputImages,
-                      std::vector<VkImage> outputImages,
-                      EffectRegistry*      pEffectRegistry,
-                      std::string          effectName,
-                      std::string          effectPath = "",  // Optional: explicit path to .fx file
-                      std::vector<PreprocessorDefinition> customDefs = {});  // Custom preprocessor definitions
+        ReshadeEffect(LogicalDevice*                             pLogicalDevice,
+                      VkFormat                                   format,
+                      VkExtent2D                                 imageExtent,
+                      const std::vector<VkImage>&                inputImages,
+                      const std::vector<VkImage>&                outputImages,
+                      EffectRegistry*                            pEffectRegistry,
+                      std::string                                effectName,
+                      const std::string&                         effectPath = "",  // Optional: explicit path to .fx file
+                      const std::vector<PreprocessorDefinition>& customDefs = {}); // Custom preprocessor definitions
         void virtual applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer) override;
         void virtual updateEffect() override;
         void virtual useDepthImage(uint32_t imageIndex, VkImageView depthImageView, VkImageLayout depthImageLayout) override;
         std::vector<std::unique_ptr<EffectParam>> getParameters() const override;
-        int getOutputWrites() const { return outputWrites; }
+        int                                       getOutputWrites() const
+        {
+            return outputWrites;
+        }
         virtual ~ReshadeEffect();
 
     private:
@@ -70,35 +73,35 @@ namespace vkShade
 
         struct PassRuntime
         {
-            bool                        isCompute = false;
-            VkPipeline                  pipeline = VK_NULL_HANDLE;
+            bool                        isCompute  = false;
+            VkPipeline                  pipeline   = VK_NULL_HANDLE;
             VkRenderPass                renderPass = VK_NULL_HANDLE;
             std::vector<VkFramebuffer>  framebuffers;
             std::vector<std::string>    renderTargets;
-            bool                        switchSamplers = false;
-            uint32_t                    vertexCount = 3;
-            uint32_t                    dispatchSizeX = 1;
-            uint32_t                    dispatchSizeY = 1;
-            uint32_t                    dispatchSizeZ = 1;
-            VkRect2D                    renderArea = {};
+            bool                        switchSamplers  = false;
+            uint32_t                    vertexCount     = 3;
+            uint32_t                    dispatchSizeX   = 1;
+            uint32_t                    dispatchSizeY   = 1;
+            uint32_t                    dispatchSizeZ   = 1;
+            VkRect2D                    renderArea      = {};
             uint32_t                    clearValueCount = 0;
-            std::array<VkClearValue, 9> clearValues = {};
+            std::array<VkClearValue, 9> clearValues     = {};
         };
         std::vector<PassRuntime> passRuntimes;
 
-        VkDescriptorSetLayout                 uniformDescriptorSetLayout;
-        VkDescriptorSetLayout                 imageSamplerDescriptorSetLayout;
-        VkShaderModule                        shaderModule;
-        VkDescriptorPool                      descriptorPool;
-        VkPipelineLayout                      pipelineLayout;
-        VkExtent2D                            imageExtent;
-        std::vector<VkSampler>                samplers;
-        EffectRegistry*                       pEffectRegistry;
-        std::string                           effectName;
-        std::string                           effectPath;  // Path to .fx file (may differ from effectName)
-        std::vector<PreprocessorDefinition>   customPreprocessorDefs;  // User-defined macros
-        reshadefx::module                     module;
-        std::vector<VkDeviceMemory>           textureMemory;
+        VkDescriptorSetLayout               uniformDescriptorSetLayout;
+        VkDescriptorSetLayout               imageSamplerDescriptorSetLayout;
+        VkShaderModule                      shaderModule;
+        VkDescriptorPool                    descriptorPool;
+        VkPipelineLayout                    pipelineLayout;
+        VkExtent2D                          imageExtent;
+        std::vector<VkSampler>              samplers;
+        EffectRegistry*                     pEffectRegistry;
+        std::string                         effectName;
+        std::string                         effectPath;             // Path to .fx file (may differ from effectName)
+        std::vector<PreprocessorDefinition> customPreprocessorDefs; // User-defined macros
+        reshadefx::module                   module;
+        std::vector<VkDeviceMemory>         textureMemory;
 
         VkFormat    inputOutputFormatUNORM;
         VkFormat    inputOutputFormatSRGB;
@@ -115,7 +118,7 @@ namespace vkShade
         VkBuffer                 stagingBuffer;
         VkDeviceMemory           stagingBufferMemory;
         uint32_t                 bufferSize;
-        void*                    stagingBufferMapped = nullptr;  // Persistent map (HOST_COHERENT)
+        void*                    stagingBufferMapped = nullptr; // Persistent map (HOST_COHERENT)
         VkDescriptorSet          bufferDescriptorSet;
         bool                     disableComputePipelineOptimization = false;
 

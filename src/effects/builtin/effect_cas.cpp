@@ -15,12 +15,12 @@
 
 namespace vkShade
 {
-    CasEffect::CasEffect(LogicalDevice*       pLogicalDevice,
-                         VkFormat             format,
-                         VkExtent2D           imageExtent,
-                         std::vector<VkImage> inputImages,
-                         std::vector<VkImage> outputImages,
-                         Config*              pConfig)
+    CasEffect::CasEffect(LogicalDevice*              pLogicalDevice,
+                         VkFormat                    format,
+                         VkExtent2D                  imageExtent,
+                         const std::vector<VkImage>& inputImages,
+                         const std::vector<VkImage>& outputImages,
+                         Config*                     pConfig)
     {
 
         float sharpness = pConfig->getOption<float>("casSharpness", 0.4f);
@@ -39,10 +39,7 @@ namespace vkShade
         fragmentSpecializationInfo.dataSize      = sizeof(float);
         fragmentSpecializationInfo.pData         = &sharpness;
 
-        pVertexSpecInfo   = nullptr;
-        pFragmentSpecInfo = &fragmentSpecializationInfo;
-
-        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig);
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, &fragmentSpecializationInfo);
     }
     CasEffect::~CasEffect()
     {

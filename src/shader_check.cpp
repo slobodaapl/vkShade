@@ -13,7 +13,7 @@ namespace
     {
         std::cerr << "Usage: " << argv0 << " <shader.fx> [--effect-name NAME] [--include DIR ...] [--define NAME=VALUE ...]\n";
     }
-}
+} // namespace
 
 int main(int argc, char** argv)
 {
@@ -23,11 +23,11 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    std::string shaderPath;
-    std::string effectName;
-    std::vector<std::string> includePaths;
+    std::string                                      shaderPath;
+    std::string                                      effectName;
+    std::vector<std::string>                         includePaths;
     std::vector<std::pair<std::string, std::string>> extraDefines;
-    bool dumpDefines = false;
+    bool                                             dumpDefines = false;
 
     for (int i = 1; i < argc; ++i)
     {
@@ -67,8 +67,8 @@ int main(int argc, char** argv)
                 std::cerr << "Missing value for --define\n";
                 return 1;
             }
-            std::string def = argv[++i];
-            const size_t eq = def.find('=');
+            std::string  def = argv[++i];
+            const size_t eq  = def.find('=');
             if (eq == std::string::npos)
                 extraDefines.emplace_back(def, "1");
             else
@@ -114,7 +114,7 @@ int main(int argc, char** argv)
         if (includePaths.empty())
         {
             const auto smConfig = vkShade::ConfigSerializer::loadShaderManagerConfig();
-            includePaths = smConfig.discoveredShaderPaths;
+            includePaths        = smConfig.discoveredShaderPaths;
         }
         result = vkShade::testShaderCompilation(effectName, shaderPath, includePaths, extraDefines);
     }
@@ -128,4 +128,3 @@ int main(int argc, char** argv)
 
     return result.success ? 0 : 2;
 }
-

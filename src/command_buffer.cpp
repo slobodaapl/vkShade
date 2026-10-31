@@ -15,8 +15,7 @@ namespace vkShade
 {
     static bool hasDepthResolveResources(const LogicalSwapchain* pLogicalSwapchain, size_t commandBufferCount)
     {
-        return pLogicalSwapchain != nullptr
-               && pLogicalSwapchain->depthResolveImages.size() == commandBufferCount
+        return pLogicalSwapchain != nullptr && pLogicalSwapchain->depthResolveImages.size() == commandBufferCount
                && pLogicalSwapchain->depthResolveImageViews.size() == commandBufferCount
                && pLogicalSwapchain->depthResolveMemories.size() == commandBufferCount
                && pLogicalSwapchain->depthResolveInitialized.size() == commandBufferCount;
@@ -43,9 +42,7 @@ namespace vkShade
 
     static VkImageLayout getObservedDepthAttachmentLayout(const DepthState& depthState)
     {
-        return depthState.observedLayout != VK_IMAGE_LAYOUT_UNDEFINED
-            ? depthState.observedLayout
-            : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+        return depthState.observedLayout != VK_IMAGE_LAYOUT_UNDEFINED ? depthState.observedLayout : VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
 
     static VkPipelineStageFlags getObservedDepthSourceStages(const DepthState& depthState)
@@ -101,8 +98,7 @@ namespace vkShade
     {
         if (!pLogicalDevice || !pLogicalSwapchain)
             return;
-        if (imageIndex >= pLogicalSwapchain->depthResolveDescriptorSets.size()
-            || imageIndex >= pLogicalSwapchain->depthResolveFramebuffers.size())
+        if (imageIndex >= pLogicalSwapchain->depthResolveDescriptorSets.size() || imageIndex >= pLogicalSwapchain->depthResolveFramebuffers.size())
         {
             if (isDepthResolveTraceEnabled())
                 Logger::debug("depth resolve trace shader skip: imageIndex=" + std::to_string(imageIndex)
@@ -112,31 +108,28 @@ namespace vkShade
         }
 
         if (isDepthResolveTraceEnabled())
-            Logger::debug("depth resolve trace shader begin: cb=" + convertToString(commandBuffer)
-                          + " imageIndex=" + std::to_string(imageIndex)
-                          + " srcImage=" + convertToString(depthState.image)
-                          + " srcView=" + convertToString(depthState.imageView)
+            Logger::debug("depth resolve trace shader begin: cb=" + convertToString(commandBuffer) + " imageIndex=" + std::to_string(imageIndex)
+                          + " srcImage=" + convertToString(depthState.image) + " srcView=" + convertToString(depthState.imageView)
                           + " srcLayout=" + convertToString(getObservedDepthAttachmentLayout(depthState))
                           + " dstImage=" + convertToString(pLogicalSwapchain->depthResolveImages[imageIndex])
                           + " dstInitialized=" + std::string(pLogicalSwapchain->depthResolveInitialized[imageIndex] ? "true" : "false"));
 
         VkImageMemoryBarrier sourceBarrier = {};
-        sourceBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        sourceBarrier.image = depthState.image;
-        sourceBarrier.oldLayout = getObservedDepthAttachmentLayout(depthState);
-        sourceBarrier.newLayout = shouldKeepObservedDepthInGeneralLayout(depthState)
-            ? VK_IMAGE_LAYOUT_GENERAL
-            : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        sourceBarrier.srcAccessMask = getObservedDepthSourceAccess(depthState);
-        sourceBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        sourceBarrier.sType                = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        sourceBarrier.image                = depthState.image;
+        sourceBarrier.oldLayout            = getObservedDepthAttachmentLayout(depthState);
+        sourceBarrier.newLayout =
+            shouldKeepObservedDepthInGeneralLayout(depthState) ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        sourceBarrier.srcAccessMask       = getObservedDepthSourceAccess(depthState);
+        sourceBarrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
         sourceBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         sourceBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         sourceBarrier.subresourceRange.aspectMask =
             isStencilFormat(depthState.format) ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT) : VK_IMAGE_ASPECT_DEPTH_BIT;
-        sourceBarrier.subresourceRange.baseMipLevel = 0;
-        sourceBarrier.subresourceRange.levelCount = 1;
+        sourceBarrier.subresourceRange.baseMipLevel   = 0;
+        sourceBarrier.subresourceRange.levelCount     = 1;
         sourceBarrier.subresourceRange.baseArrayLayer = 0;
-        sourceBarrier.subresourceRange.layerCount = 1;
+        sourceBarrier.subresourceRange.layerCount     = 1;
 
         pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
                                                getObservedDepthSourceStages(depthState),
@@ -149,20 +142,20 @@ namespace vkShade
                                                1,
                                                &sourceBarrier);
 
-        VkImageMemoryBarrier resolveBarrier = {};
-        resolveBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        resolveBarrier.image = pLogicalSwapchain->depthResolveImages[imageIndex];
-        resolveBarrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        resolveBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        resolveBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        resolveBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        resolveBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        resolveBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        resolveBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        resolveBarrier.subresourceRange.baseMipLevel = 0;
-        resolveBarrier.subresourceRange.levelCount = 1;
+        VkImageMemoryBarrier resolveBarrier            = {};
+        resolveBarrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        resolveBarrier.image                           = pLogicalSwapchain->depthResolveImages[imageIndex];
+        resolveBarrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+        resolveBarrier.newLayout                       = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        resolveBarrier.srcAccessMask                   = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        resolveBarrier.dstAccessMask                   = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        resolveBarrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        resolveBarrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        resolveBarrier.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        resolveBarrier.subresourceRange.baseMipLevel   = 0;
+        resolveBarrier.subresourceRange.levelCount     = 1;
         resolveBarrier.subresourceRange.baseArrayLayer = 0;
-        resolveBarrier.subresourceRange.layerCount = 1;
+        resolveBarrier.subresourceRange.layerCount     = 1;
 
         pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
                                                VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT
@@ -177,15 +170,15 @@ namespace vkShade
                                                &resolveBarrier);
 
         VkRenderPassBeginInfo renderPassBeginInfo = {};
-        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        renderPassBeginInfo.renderPass = pLogicalSwapchain->depthResolveRenderPass;
-        renderPassBeginInfo.framebuffer = pLogicalSwapchain->depthResolveFramebuffers[imageIndex];
-        renderPassBeginInfo.renderArea.offset = {0, 0};
-        renderPassBeginInfo.renderArea.extent = {pLogicalSwapchain->depthResolveExtent.width, pLogicalSwapchain->depthResolveExtent.height};
-        VkClearValue clearValue = {};
-        clearValue.color.float32[0] = 1.0f;
-        renderPassBeginInfo.clearValueCount = 1;
-        renderPassBeginInfo.pClearValues = &clearValue;
+        renderPassBeginInfo.sType                 = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass            = pLogicalSwapchain->depthResolveRenderPass;
+        renderPassBeginInfo.framebuffer           = pLogicalSwapchain->depthResolveFramebuffers[imageIndex];
+        renderPassBeginInfo.renderArea.offset     = {0, 0};
+        renderPassBeginInfo.renderArea.extent     = {pLogicalSwapchain->depthResolveExtent.width, pLogicalSwapchain->depthResolveExtent.height};
+        VkClearValue clearValue                   = {};
+        clearValue.color.float32[0]               = 1.0f;
+        renderPassBeginInfo.clearValueCount       = 1;
+        renderPassBeginInfo.pClearValues          = &clearValue;
 
         pLogicalDevice->vkd.CmdBeginRenderPass(commandBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         if (!isDepthResolveConstantTestEnabled())
@@ -206,15 +199,14 @@ namespace vkShade
         pLogicalSwapchain->depthResolveInitialized[imageIndex] = true;
 
         if (isDepthResolveTraceEnabled())
-            Logger::debug("depth resolve trace shader end: cb=" + convertToString(commandBuffer)
-                          + " imageIndex=" + std::to_string(imageIndex)
+            Logger::debug("depth resolve trace shader end: cb=" + convertToString(commandBuffer) + " imageIndex=" + std::to_string(imageIndex)
                           + " dstImage=" + convertToString(pLogicalSwapchain->depthResolveImages[imageIndex]));
 
         if (shouldKeepObservedDepthInGeneralLayout(depthState))
             return;
 
-        sourceBarrier.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        sourceBarrier.newLayout = getObservedDepthAttachmentLayout(depthState);
+        sourceBarrier.oldLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        sourceBarrier.newLayout     = getObservedDepthAttachmentLayout(depthState);
         sourceBarrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
         sourceBarrier.dstAccessMask = getObservedDepthRestoreAccess(depthState);
         pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
@@ -250,10 +242,10 @@ namespace vkShade
 
         return commandBuffers;
     }
-    void writeCommandBuffers(LogicalDevice*                                 pLogicalDevice,
-                             LogicalSwapchain*                              pLogicalSwapchain,
+    void writeCommandBuffers(LogicalDevice*                                pLogicalDevice,
+                             LogicalSwapchain*                             pLogicalSwapchain,
                              std::vector<std::shared_ptr<vkShade::Effect>> effects,
-                             std::vector<VkCommandBuffer>                   commandBuffers)
+                             std::vector<VkCommandBuffer>                  commandBuffers)
     {
         VkCommandBufferBeginInfo beginInfo = {};
 
@@ -266,10 +258,9 @@ namespace vkShade
 
         for (uint32_t i = 0; i < commandBuffers.size(); i++)
         {
-            const VkImageView  boundDepthImageView = hasDepthResolveTarget ? pLogicalSwapchain->depthResolveImageViews[i]
-                                                                           : VK_NULL_HANDLE;
-            const VkImageLayout boundDepthLayout   = hasDepthResolveTarget ? getDepthResolveReadOnlyLayout(pLogicalSwapchain)
-                                                                           : VK_IMAGE_LAYOUT_UNDEFINED;
+            const VkImageView   boundDepthImageView = hasDepthResolveTarget ? pLogicalSwapchain->depthResolveImageViews[i] : VK_NULL_HANDLE;
+            const VkImageLayout boundDepthLayout =
+                hasDepthResolveTarget ? getDepthResolveReadOnlyLayout(pLogicalSwapchain) : VK_IMAGE_LAYOUT_UNDEFINED;
             for (auto& effect : effects)
             {
                 effect->useDepthImage(i, boundDepthImageView, boundDepthLayout);
@@ -283,8 +274,7 @@ namespace vkShade
                 // [DEBUG-TAG: present-depth-fallback-20260424]
                 if (isDepthResolveTraceEnabled())
                     Logger::debug("depth resolve trace present fallback record: cb=" + convertToString(commandBuffers[i])
-                                  + " imageIndex=" + std::to_string(i)
-                                  + " depthImage=" + convertToString(pLogicalDevice->activeDepthState.image)
+                                  + " imageIndex=" + std::to_string(i) + " depthImage=" + convertToString(pLogicalDevice->activeDepthState.image)
                                   + " depthView=" + convertToString(pLogicalDevice->activeDepthState.imageView));
                 recordDepthResolveSnapshot(pLogicalDevice, pLogicalSwapchain, commandBuffers[i], i, pLogicalDevice->activeDepthState);
             }
@@ -299,10 +289,10 @@ namespace vkShade
         }
     }
 
-    void recordDepthResolveSnapshot(LogicalDevice*  pLogicalDevice,
+    void recordDepthResolveSnapshot(LogicalDevice*    pLogicalDevice,
                                     LogicalSwapchain* pLogicalSwapchain,
-                                    VkCommandBuffer commandBuffer,
-                                    uint32_t imageIndex,
+                                    VkCommandBuffer   commandBuffer,
+                                    uint32_t          imageIndex,
                                     const DepthState& depthState)
     {
         if (!pLogicalDevice || !pLogicalSwapchain || !hasDepthState(depthState))
@@ -323,8 +313,7 @@ namespace vkShade
                               + " initialized=" + std::to_string(pLogicalSwapchain->depthResolveInitialized.size()));
             return;
         }
-        if (imageIndex >= pLogicalSwapchain->depthResolveImageViews.size()
-            || imageIndex >= pLogicalSwapchain->depthResolveImages.size()
+        if (imageIndex >= pLogicalSwapchain->depthResolveImageViews.size() || imageIndex >= pLogicalSwapchain->depthResolveImages.size()
             || imageIndex >= pLogicalSwapchain->depthResolveInitialized.size())
         {
             if (isDepthResolveTraceEnabled())
@@ -335,11 +324,9 @@ namespace vkShade
         }
 
         if (isDepthResolveTraceEnabled())
-            Logger::debug("depth resolve trace snapshot begin: cb=" + convertToString(commandBuffer)
-                          + " imageIndex=" + std::to_string(imageIndex)
+            Logger::debug("depth resolve trace snapshot begin: cb=" + convertToString(commandBuffer) + " imageIndex=" + std::to_string(imageIndex)
                           + " usesShader=" + std::string(pLogicalSwapchain->depthResolveUsesShader ? "true" : "false")
-                          + " srcImage=" + convertToString(depthState.image)
-                          + " srcView=" + convertToString(depthState.imageView)
+                          + " srcImage=" + convertToString(depthState.image) + " srcView=" + convertToString(depthState.imageView)
                           + " srcLayout=" + convertToString(depthState.observedLayout)
                           + " dstImage=" + convertToString(pLogicalSwapchain->depthResolveImages[imageIndex]));
 
@@ -350,16 +337,15 @@ namespace vkShade
         }
 
         VkImageMemoryBarrier memoryBarrier;
-        memoryBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        memoryBarrier.pNext               = nullptr;
-        memoryBarrier.image               = depthState.image;
+        memoryBarrier.sType          = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        memoryBarrier.pNext          = nullptr;
+        memoryBarrier.image          = depthState.image;
         const bool keepGeneralLayout = shouldKeepObservedDepthInGeneralLayout(depthState);
-        memoryBarrier.oldLayout           = getObservedDepthAttachmentLayout(depthState);
-        memoryBarrier.newLayout           = keepGeneralLayout ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-        memoryBarrier.srcAccessMask       = getObservedDepthSourceAccess(depthState);
-        memoryBarrier.dstAccessMask       = keepGeneralLayout
-                                                ? (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT)
-                                                : VK_ACCESS_TRANSFER_READ_BIT;
+        memoryBarrier.oldLayout      = getObservedDepthAttachmentLayout(depthState);
+        memoryBarrier.newLayout      = keepGeneralLayout ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        memoryBarrier.srcAccessMask  = getObservedDepthSourceAccess(depthState);
+        memoryBarrier.dstAccessMask =
+            keepGeneralLayout ? (VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT) : VK_ACCESS_TRANSFER_READ_BIT;
         memoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         memoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         memoryBarrier.subresourceRange.aspectMask =
@@ -369,29 +355,22 @@ namespace vkShade
         memoryBarrier.subresourceRange.baseArrayLayer = 0;
         memoryBarrier.subresourceRange.layerCount     = 1;
 
-        pLogicalDevice->vkd.CmdPipelineBarrier(commandBuffer,
-                                               getObservedDepthSourceStages(depthState),
-                                               VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                               0,
-                                               0,
-                                               nullptr,
-                                               0,
-                                               nullptr,
-                                               1,
-                                               &memoryBarrier);
+        pLogicalDevice->vkd.CmdPipelineBarrier(
+            commandBuffer, getObservedDepthSourceStages(depthState), VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &memoryBarrier);
 
-        VkImageMemoryBarrier resolveBarrier = {};
-        resolveBarrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        resolveBarrier.pNext               = nullptr;
-        resolveBarrier.image               = pLogicalSwapchain->depthResolveImages[imageIndex];
-        resolveBarrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-        resolveBarrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        resolveBarrier.srcAccessMask       = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
-        resolveBarrier.dstAccessMask       = VK_ACCESS_TRANSFER_WRITE_BIT;
-        resolveBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        resolveBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        VkImageMemoryBarrier resolveBarrier            = {};
+        resolveBarrier.sType                           = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        resolveBarrier.pNext                           = nullptr;
+        resolveBarrier.image                           = pLogicalSwapchain->depthResolveImages[imageIndex];
+        resolveBarrier.oldLayout                       = VK_IMAGE_LAYOUT_UNDEFINED;
+        resolveBarrier.newLayout                       = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        resolveBarrier.srcAccessMask                   = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+        resolveBarrier.dstAccessMask                   = VK_ACCESS_TRANSFER_WRITE_BIT;
+        resolveBarrier.srcQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
+        resolveBarrier.dstQueueFamilyIndex             = VK_QUEUE_FAMILY_IGNORED;
         resolveBarrier.subresourceRange.aspectMask     = isStencilFormat(pLogicalSwapchain->depthResolveFormat)
-            ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT : VK_IMAGE_ASPECT_DEPTH_BIT;
+                                                             ? VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+                                                             : VK_IMAGE_ASPECT_DEPTH_BIT;
         resolveBarrier.subresourceRange.baseMipLevel   = 0;
         resolveBarrier.subresourceRange.levelCount     = 1;
         resolveBarrier.subresourceRange.baseArrayLayer = 0;
@@ -409,7 +388,7 @@ namespace vkShade
                                                1,
                                                &resolveBarrier);
 
-        VkImageCopy copyRegion = {};
+        VkImageCopy copyRegion                   = {};
         copyRegion.srcSubresource.aspectMask     = VK_IMAGE_ASPECT_DEPTH_BIT;
         copyRegion.srcSubresource.mipLevel       = 0;
         copyRegion.srcSubresource.baseArrayLayer = 0;

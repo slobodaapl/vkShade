@@ -1,13 +1,23 @@
 #include "effect_transfer.hpp"
 
+namespace
+{
+    const std::vector<uint32_t> presentCopyVertex = {
+#include "full_screen_triangle.vert.h"
+    };
+    const std::vector<uint32_t> presentCopyFragment = {
+#include "present_copy.frag.h"
+    };
+} // namespace
+
 namespace vkShade
 {
-    TransferEffect::TransferEffect(LogicalDevice*       pLogicalDevice,
-                                   VkFormat             format,
-                                   VkExtent2D           imageExtent,
-                                   std::vector<VkImage> inputImages,
-                                   std::vector<VkImage> outputImages,
-                                   Config*              pConfig)
+    TransferEffect::TransferEffect(LogicalDevice*              pLogicalDevice,
+                                   VkFormat                    format,
+                                   VkExtent2D                  imageExtent,
+                                   const std::vector<VkImage>& inputImages,
+                                   const std::vector<VkImage>& outputImages,
+                                   Config*                     pConfig)
     {
         this->pLogicalDevice = pLogicalDevice;
         this->format         = format;
@@ -83,6 +93,18 @@ namespace vkShade
 
     TransferEffect::~TransferEffect()
     {
+    }
+
+    PresentCopyEffect::PresentCopyEffect(LogicalDevice*              pLogicalDevice,
+                                         VkFormat                    format,
+                                         VkExtent2D                  imageExtent,
+                                         const std::vector<VkImage>& inputImages,
+                                         const std::vector<VkImage>& outputImages,
+                                         Config*                     pConfig)
+    {
+        vertexCode   = presentCopyVertex;
+        fragmentCode = presentCopyFragment;
+        init(pLogicalDevice, format, imageExtent, inputImages, outputImages, pConfig, nullptr);
     }
 
 } // namespace vkShade

@@ -10,16 +10,15 @@ namespace vkShade
     Config::Config()
     {
         // Find vkShade.conf in standard locations
-        const char* homeEnv = std::getenv("HOME");
+        const char* homeEnv  = std::getenv("HOME");
         std::string homePath = homeEnv ? homeEnv : "/tmp";
 
         const char* tmpHomeEnv     = std::getenv("XDG_DATA_HOME");
-        std::string userConfigFile = tmpHomeEnv ? std::string(tmpHomeEnv) + "/vkShade/vkShade.conf"
-                                                : homePath + "/.local/share/vkShade/vkShade.conf";
+        std::string userConfigFile = tmpHomeEnv ? std::string(tmpHomeEnv) + "/vkShade/vkShade.conf" : homePath + "/.local/share/vkShade/vkShade.conf";
 
-        const char* tmpConfigEnv      = std::getenv("XDG_CONFIG_HOME");
-        std::string userXdgConfigFile = tmpConfigEnv ? std::string(tmpConfigEnv) + "/vkShade/vkShade.conf"
-                                                     : homePath + "/.config/vkShade/vkShade.conf";
+        const char* tmpConfigEnv = std::getenv("XDG_CONFIG_HOME");
+        std::string userXdgConfigFile =
+            tmpConfigEnv ? std::string(tmpConfigEnv) + "/vkShade/vkShade.conf" : homePath + "/.config/vkShade/vkShade.conf";
 
         const std::array<std::string, 5> configPaths = {
             userXdgConfigFile,
@@ -139,12 +138,12 @@ namespace vkShade
             readConfigLine(line);
     }
 
-    void Config::readConfigLine(std::string line)
+    void Config::readConfigLine(const std::string& line)
     {
         std::string key;
         std::string value;
-        bool inQuotes    = false;
-        bool foundEquals = false;
+        bool        inQuotes    = false;
+        bool        foundEquals = false;
 
         auto appendChar = [&key, &value, &foundEquals](const char& c) {
             if (foundEquals)
@@ -188,8 +187,14 @@ namespace vkShade
         auto found = options.find(option);
         if (found != options.end())
         {
-            try { result = std::stoi(found->second); }
-            catch (...) { Logger::warn("invalid int32_t value for: " + option); }
+            try
+            {
+                result = std::stoi(found->second);
+            }
+            catch (...)
+            {
+                Logger::warn("invalid int32_t value for: " + option);
+            }
         }
     }
 
@@ -198,8 +203,14 @@ namespace vkShade
         auto found = options.find(option);
         if (found != options.end())
         {
-            try { result = static_cast<uint32_t>(std::stoul(found->second)); }
-            catch (...) { Logger::warn("invalid uint32_t value for: " + option); }
+            try
+            {
+                result = static_cast<uint32_t>(std::stoul(found->second));
+            }
+            catch (...)
+            {
+                Logger::warn("invalid uint32_t value for: " + option);
+            }
         }
     }
 
@@ -257,7 +268,7 @@ namespace vkShade
         {
             result = {};
             std::stringstream ss(found->second);
-            std::string item;
+            std::string       item;
             while (std::getline(ss, item, ':'))
                 result.push_back(item);
         }
@@ -275,14 +286,26 @@ namespace vkShade
 
     void Config::parseOverride(const std::string& value, int32_t& result)
     {
-        try { result = std::stoi(value); }
-        catch (...) { Logger::warn("invalid int32_t override value"); }
+        try
+        {
+            result = std::stoi(value);
+        }
+        catch (...)
+        {
+            Logger::warn("invalid int32_t override value");
+        }
     }
 
     void Config::parseOverride(const std::string& value, uint32_t& result)
     {
-        try { result = static_cast<uint32_t>(std::stoul(value)); }
-        catch (...) { Logger::warn("invalid uint32_t override value"); }
+        try
+        {
+            result = static_cast<uint32_t>(std::stoul(value));
+        }
+        catch (...)
+        {
+            Logger::warn("invalid uint32_t override value");
+        }
     }
 
     void Config::parseOverride(const std::string& value, float& result)
@@ -316,7 +339,7 @@ namespace vkShade
     {
         result = {};
         std::stringstream ss(value);
-        std::string item;
+        std::string       item;
         while (std::getline(ss, item, ':'))
             result.push_back(item);
     }

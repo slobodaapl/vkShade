@@ -7,15 +7,17 @@ namespace vkShade
 {
     struct MouseState
     {
-        int   x            = 0;
-        int   y            = 0;
-        bool  leftButton   = false;
-        bool  rightButton  = false;
-        bool  middleButton = false;
-        float scrollDelta  = 0.0f; // Positive = up, negative = down
+        double x                 = 0;
+        double y                 = 0;
+        double framebufferScaleX = 1;
+        double framebufferScaleY = 1;
+        bool   leftButton        = false;
+        bool   rightButton       = false;
+        bool   middleButton      = false;
+        float  scrollDelta       = 0.0f; // Positive = up, negative = down
     };
 
-    MouseState getMouseState();
+    MouseState getMouseState(uint32_t framebufferWidth, uint32_t framebufferHeight);
 
 } // namespace vkShade
 

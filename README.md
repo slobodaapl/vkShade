@@ -14,10 +14,10 @@ This project also includes many additional compatibility fixes for various ReSha
 The base project required editing config files and restarting. vkShade adds:
 
 - **In-game overlay** (`Home` key) with dockable/undockable tab windows
-- **Add/remove/reorder effects** without restart (drag to reorder)
+- **Enable and reorder techniques** without restarting (drag to reorder)
 - **Parameter sliders** for all types (float, int, uint, bool, vectors)
 - **Preprocessor definitions** editor for ReShade `#define` values
-- **Multiple effect instances** (e.g., cas, cas.1, cas.2)
+- **Multiple effect instances** of the same shader
 - **Per-game profiles** with auto-detection and profile switching
 - **Save/load named configs**
 - **Shader manager** — browse directories, discover and load ReShade shaders
@@ -72,14 +72,14 @@ Candidates are tracked when command buffers are recorded, so buffers used only b
 
 Per-profile toggle (`safeAntiCheat = true`) that:
 - Forces `depthCapture = off` — no depth buffer binding
-- Blocks shaders that use depth at runtime (hidden in Add Effects, shows tooltip explaining why)
-- Auto-tests all shaders on first Add Effects open (one per frame, progress bar shown)
+- Blocks techniques from shaders that use depth; the list explains why they are unavailable
+- Checks available shaders in a separate process while building the technique list
 
 **Depth detection** uses SPIR-V call graph analysis: builds a per-function call graph from the compiled shader bytecode, then BFS from entry points to check if any reachable function loads the depth sampler. This correctly distinguishes shaders that merely *include* depth declarations (via `ReShade.fxh`) from those that actually *use* depth at runtime. Zero false positives, zero false negatives.
 
 ### ReShade Shader Support
 
-Download shader packs and point the Shader Manager at them:
+vkShade does not bundle effects. Download shader packs and point the Shader Manager at them:
 - https://github.com/crosire/reshade-shaders
 - https://github.com/HelelSingh/CRT-Guest-ReShade
 - https://github.com/kevinlekiller/reshade-steam-proton
@@ -145,27 +145,27 @@ nix-shell -p meson ninja pkg-config gcc wayland wayland-protocols wayland-scanne
 
 Add to launch options:
 ```
-vkshade-run %command%
+vkshade %command%
 ```
 
 Example with Proton optimizations and GameMode:
 ```
-PROTON_ENABLE_WAYLAND=1 PROTON_USE_NTSYNC=1 DXVK_ASYNC=1 PROTON_FSR4_UPGRADE=1 vkshade-run gamemoderun %command%
+PROTON_ENABLE_WAYLAND=1 PROTON_USE_NTSYNC=1 DXVK_ASYNC=1 PROTON_FSR4_UPGRADE=1 vkshade gamemoderun %command%
 ```
 
 ### Lutris
 
 1. Right-click game -> Configure
 2. System options -> Environment variables
-3. Set command prefix to `vkshade-run`
+3. Set command prefix to `vkshade`
 
 ### Debug Logging
 
 ```bash
-VKSHADE_LOG_LEVEL=debug vkshade-run ./game
+vkshade -v -- ./game
 ```
 
-Log levels: `trace`, `debug`, `info`, `warn`, `error`, `none`
+Use `VKSHADE_LOG_LEVEL` to select a different level: `trace`, `debug`, `info`, `warn`, `error`, or `none`.
 
 To log to a file: `VKSHADE_LOG_FILE=/tmp/vkshade.log`
 
@@ -174,7 +174,7 @@ To log to a file: `VKSHADE_LOG_FILE=/tmp/vkshade.log`
 For deeper device-lost diagnostics without Nsight Shader Debugger multi-GPU setup:
 
 ```bash
-VKSHADE_GPU_CRASH_DIAGNOSTICS=1 VKSHADE_LOG_LEVEL=debug vkshade-run ./game
+VKSHADE_GPU_CRASH_DIAGNOSTICS=1 VKSHADE_LOG_LEVEL=debug vkshade ./game
 ```
 
 When enabled, vkShade will try to use supported Vulkan diagnostics extensions (`VK_NV_device_diagnostic_checkpoints`, `VK_NV_device_diagnostics_config`, `VK_EXT_device_fault`) and emit extra logs on `VK_ERROR_DEVICE_LOST`.
@@ -216,7 +216,7 @@ overlayKey = Home
 
 # Startup behavior
 enableOnLaunch = true
-depthCapture = false
+depthCapture = on
 
 # Overlay options
 overlayBlockInput = false
@@ -225,7 +225,9 @@ autoApplyDelay = 200  # ms delay before auto-applying changes
 
 ### Per-Game Profiles
 
-When a game is detected, vkShade creates a config directory at `~/.config/vkShade/configs/<game>/`. Multiple named profiles can be created per game from the overlay UI. The active profile is stored in `~/.config/vkShade/configs/<game>/active_profile`.
+vkShade automatically selects and saves settings for the wrapped game. It uses a Steam app ID when available; otherwise it uses the wrapped executable path, or the Java main class or JAR when identifiable. Named profiles are optional. Existing executable-named profiles are copied to the detected game on first launch.
+
+The Depth tab contains settings shared by all effects and profiles for the current game. They are stored under `~/.config/vkShade/configs/.depth/`. FX shaders may use either `DEPTH_INPUT_IS_REVERSED` or `RESHADE_DEPTH_INPUT_IS_REVERSED`; the same aliasing applies to the other depth-input definitions. Matching legacy values are migrated automatically. Conflicting values are retained until resolved in the Depth tab.
 
 ### Shader Manager
 
@@ -251,7 +253,7 @@ vkShade is a **read-only visual filter** — it applies post-processing shaders 
 
 ## Known Limitations
 
-- Some ReShade shaders with multiple techniques may not work
+- Some ReShade shader features are not yet supported
 - Depth buffer access works but is experimental (depends on game's depth format)
 - Input blocking may cause issues in some games with custom input handling
 - Intel GPU usage is estimated from frequency ratio (not direct utilization)
@@ -272,8 +274,6 @@ Effects read from one image and write to another in a chain.
 
 ### Effect System
 
-Built-in effects: CAS (sharpening), DLS (denoised luma sharpening), FXAA, SMAA, Deband, LUT.
-
 ReShade FX effects are compiled at runtime using an embedded ReShade shader compiler. Parameters are managed through the `EffectRegistry` (single source of truth for all runtime parameter values).
 
 ### Wayland Interposition
@@ -284,7 +284,7 @@ Since `wl_pointer_add_listener` is a `static inline` function in `<wayland-clien
 2. Skips overlay-owned proxies (registered via `registerOverlayProxy()`)
 3. Wraps the game's listener with callbacks that check `isInputBlocked()` before forwarding
 
-For Wayland, use `vkshade-run` so these interposition symbols are injected early enough in all loader scopes (including `RTLD_LOCAL` clients).
+For Wayland, use `vkshade` so these interposition symbols are injected early enough in all loader scopes (including `RTLD_LOCAL` clients).
 
 ## Credits
 

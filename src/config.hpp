@@ -7,6 +7,7 @@
 #include <vector>
 #include <unordered_map>
 #include <chrono>
+#include <cstdint>
 #include <cstdlib>
 #include <sys/stat.h>
 
@@ -25,6 +26,15 @@ namespace vkShade
         void setFallback(Config* fallback)
         {
             pFallback = fallback;
+        }
+        Config* getFallback() const
+        {
+            return pFallback;
+        }
+        void               setGameName(std::string name);
+        const std::string& getGameName() const
+        {
+            return gameName;
         }
 
         template<typename T>
@@ -92,8 +102,13 @@ namespace vkShade
         std::unordered_map<std::string, std::string> options;
         std::unordered_map<std::string, std::string> overrides; // In-memory overrides
         std::string                                  configFilePath;
-        time_t                                       lastModifiedTime = 0;
-        Config*                                      pFallback        = nullptr;
+        std::string                                  gameName;
+        time_t                                       lastModifiedTime             = 0;
+        std::uint64_t                                lastDepthFileInode           = 0;
+        time_t                                       lastDepthModifiedTime        = 0;
+        long                                         lastDepthModifiedNanoseconds = 0;
+        bool                                         depthFileExists              = false;
+        Config*                                      pFallback                    = nullptr;
         std::chrono::steady_clock::time_point        lastConfigCheckTime{}; // Throttle stat() calls
 
         void readConfigLine(const std::string& line);

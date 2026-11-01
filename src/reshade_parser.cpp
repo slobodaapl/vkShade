@@ -142,9 +142,18 @@ namespace vkShade
                              "#define ddy_coarse(x) ddy(x)\n");
         }
 
-        void setupPreprocessor(reshadefx::preprocessor& pp)
+        void setupPreprocessor(reshadefx::preprocessor& pp, Config* config)
         {
             addStandardMacros(pp);
+
+            if (config)
+            {
+                for (const auto& [name, value] : ConfigSerializer::loadDepthDefinitions(config))
+                    applyDepthDefinition(pp, name, value);
+                for (const auto& path : config->getOption<std::vector<std::string>>("reshadeIncludePath", {}))
+                    if (!path.empty())
+                        pp.add_include_path(path);
+            }
 
             // Add all discovered shader paths from shader manager
             ShaderManagerConfig shaderMgrConfig = ConfigSerializer::loadShaderManagerConfig();
@@ -443,7 +452,7 @@ namespace vkShade
 
             // Setup preprocessor
             reshadefx::preprocessor preprocessor;
-            setupPreprocessor(preprocessor);
+            setupPreprocessor(preprocessor, pConfig);
 
             if (!preprocessor.append_file(effectPath))
             {
@@ -496,6 +505,9 @@ namespace vkShade
                 auto closedIt = findAnnotation(annotations, "ui_category_closed");
                 if (closedIt != annotations.end())
                     p->categoryClosed = closedIt->type.is_integral() ? (closedIt->value.as_int[0] != 0) : (closedIt->value.as_float[0] != 0.0f);
+                auto toggleIt = findAnnotation(annotations, "ui_category_toggle");
+                if (toggleIt != annotations.end())
+                    p->categoryToggle = toggleIt->type.is_integral() ? (toggleIt->value.as_int[0] != 0) : (toggleIt->value.as_float[0] != 0.0f);
             };
 
             // Process spec_constants
@@ -687,7 +699,12 @@ namespace vkShade
 
             // Mimic runtime-injected custom preprocessor definitions
             for (const auto& def : extraDefines)
-                preprocessor.add_macro_definition(def.first, def.second);
+            {
+                if (canonicalDepthDefinition(def.first).empty())
+                    preprocessor.add_macro_definition(def.first, def.second);
+                else
+                    applyDepthDefinition(preprocessor, def.first, def.second);
+            }
 
             // Try to load and preprocess the file
             if (!preprocessor.append_file(effectPath))
@@ -877,6 +894,27 @@ namespace vkShade
                 }
             }
 
+            for (const auto& technique : module.techniques)
+            {
+                ShaderTechniqueInfo info;
+                info.name        = technique.name;
+                info.label       = technique.name;
+                const auto label = findAnnotation(technique.annotations, "ui_label");
+                if (label != technique.annotations.end() && !label->value.string_data.empty())
+                    info.label = label->value.string_data;
+                const auto tooltip = findAnnotation(technique.annotations, "ui_tooltip");
+                if (tooltip != technique.annotations.end())
+                    info.tooltip = tooltip->value.string_data;
+                const auto flag = [&](const char* name) {
+                    const auto it = findAnnotation(technique.annotations, name);
+                    return it != technique.annotations.end() && (it->type.is_integral() || it->type.is_floating_point())
+                           && getAnnotationInt(*it) != 0;
+                };
+                info.hidden        = flag("hidden");
+                info.forcedEnabled = flag("enabled");
+                info.noEdit        = flag("noedit");
+                result.techniques.push_back(std::move(info));
+            }
             result.success = true;
         }
         catch (const std::exception& e)
@@ -918,7 +956,7 @@ namespace vkShade
         "__APPLICATION__",
     };
 
-    std::vector<PreprocessorDefinition> extractPreprocessorDefinitions(const std::string& effectName, const std::string& effectPath)
+    std::vector<PreprocessorDefinition> extractPreprocessorDefinitions(const std::string& effectName, const std::string& effectPath, Config* config)
     {
         std::vector<PreprocessorDefinition> defs;
 
@@ -926,7 +964,7 @@ namespace vkShade
         {
             // Setup preprocessor
             reshadefx::preprocessor preprocessor;
-            setupPreprocessor(preprocessor);
+            setupPreprocessor(preprocessor, config);
 
             if (!preprocessor.append_file(effectPath))
             {
@@ -940,7 +978,7 @@ namespace vkShade
             for (const auto& [name, value] : usedMacros)
             {
                 // Skip built-in macros
-                if (builtInMacros.count(name))
+                if (builtInMacros.count(name) || !canonicalDepthDefinition(name).empty() || name == "RESHADE_MIX_STAGE_DEPTH_MAP")
                     continue;
 
                 // Skip macros that start with underscore (internal/compiler)

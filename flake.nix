@@ -62,19 +62,19 @@
             ];
 
             postInstall = ''
-              # vkshade-run wrapper: sets ENABLE_VKSHADE and LD_AUDIT for Wine
+              # vkshade wrapper: sets ENABLE_VKSHADE and LD_AUDIT for Wine
               # Wayland input interposition (dlopen RTLD_LOCAL bypass).
               mkdir -p "$out/bin"
-              substitute ${./scripts/vkshade-run.sh} "$out/bin/vkshade-run" \
+              substitute ${./scripts/vkshade.sh} "$out/bin/vkshade" \
                 --subst-var out
-              chmod +x "$out/bin/vkshade-run"
+              chmod +x "$out/bin/vkshade"
             '';
 
             meta = with pkgs.lib; {
               description = "Vulkan post-processing layer with real-time overlay UI (Wayland + X11)";
               license = licenses.zlib;
               platforms = [ "x86_64-linux" ];
-              mainProgram = "vkshade-run";
+              mainProgram = "vkshade";
             };
           };
 

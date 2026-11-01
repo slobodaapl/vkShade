@@ -6,7 +6,9 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
+#include <optional>
 #include <array>
 
 #include "vulkan_include.hpp"
@@ -35,8 +37,10 @@ namespace vkShade
                       const std::vector<VkImage>&                outputImages,
                       EffectRegistry*                            pEffectRegistry,
                       std::string                                effectName,
-                      const std::string&                         effectPath = "",  // Optional: explicit path to .fx file
-                      const std::vector<PreprocessorDefinition>& customDefs = {}); // Custom preprocessor definitions
+                      const std::string&                         effectPath  = "", // Optional: explicit path to .fx file
+                      const std::vector<PreprocessorDefinition>& customDefs  = {}, // Custom preprocessor definitions
+                      const std::optional<std::string>&          technique   = std::nullopt,
+                      std::shared_ptr<ReshadeEffect>             sharedOwner = {});
         void virtual applyEffect(uint32_t imageIndex, VkCommandBuffer commandBuffer) override;
         void virtual updateEffect() override;
         void virtual useDepthImage(uint32_t imageIndex, VkImageView depthImageView, VkImageLayout depthImageLayout) override;
@@ -48,7 +52,7 @@ namespace vkShade
         virtual ~ReshadeEffect();
 
     private:
-        LogicalDevice*           pLogicalDevice;
+        LogicalDevice*           pLogicalDevice = nullptr;
         std::vector<VkImage>     inputImages;
         std::vector<VkImage>     outputImages;
         std::vector<VkImageView> inputImageViewsSRGB;
@@ -61,6 +65,7 @@ namespace vkShade
         std::unordered_map<std::string, std::vector<VkImageView>> textureImageViewsSRGB;
         std::unordered_map<std::string, std::vector<VkImageView>> renderImageViewsSRGB;
         std::unordered_map<std::string, std::vector<VkImageView>> renderImageViewsUNORM;
+        std::unordered_set<std::string>                           borrowedTextureNames;
 
         std::unordered_map<std::string, VkFormat>   textureFormatsUNORM;
         std::unordered_map<std::string, VkFormat>   textureFormatsSRGB;
@@ -89,42 +94,43 @@ namespace vkShade
         };
         std::vector<PassRuntime> passRuntimes;
 
-        VkDescriptorSetLayout               uniformDescriptorSetLayout;
-        VkDescriptorSetLayout               imageSamplerDescriptorSetLayout;
-        VkShaderModule                      shaderModule;
-        VkDescriptorPool                    descriptorPool;
-        VkPipelineLayout                    pipelineLayout;
-        VkExtent2D                          imageExtent;
+        VkDescriptorSetLayout               uniformDescriptorSetLayout      = VK_NULL_HANDLE;
+        VkDescriptorSetLayout               imageSamplerDescriptorSetLayout = VK_NULL_HANDLE;
+        VkShaderModule                      shaderModule                    = VK_NULL_HANDLE;
+        VkDescriptorPool                    descriptorPool                  = VK_NULL_HANDLE;
+        VkPipelineLayout                    pipelineLayout                  = VK_NULL_HANDLE;
+        VkExtent2D                          imageExtent                     = {};
         std::vector<VkSampler>              samplers;
-        EffectRegistry*                     pEffectRegistry;
+        EffectRegistry*                     pEffectRegistry = nullptr;
         std::string                         effectName;
         std::string                         effectPath;             // Path to .fx file (may differ from effectName)
         std::vector<PreprocessorDefinition> customPreprocessorDefs; // User-defined macros
         reshadefx::module                   module;
         std::vector<VkDeviceMemory>         textureMemory;
+        std::shared_ptr<ReshadeEffect>      sharedOwner;
 
-        VkFormat    inputOutputFormatUNORM;
-        VkFormat    inputOutputFormatSRGB;
-        VkFormat    stencilFormat;
-        VkImage     stencilImage;
-        VkImageView stencilImageView;
+        VkFormat    inputOutputFormatUNORM = VK_FORMAT_UNDEFINED;
+        VkFormat    inputOutputFormatSRGB  = VK_FORMAT_UNDEFINED;
+        VkFormat    stencilFormat          = VK_FORMAT_UNDEFINED;
+        VkImage     stencilImage           = VK_NULL_HANDLE;
+        VkImageView stencilImageView       = VK_NULL_HANDLE;
         // how often the shader writes to the reshade back buffer
         // we need to flip the "backbuffer" after each write if there is a next one
         int                      outputWrites = 0;
         std::vector<VkImage>     backBufferImages;
-        std::vector<bool>        outputImageInitialized;
         std::vector<VkImageView> backBufferImageViewsUNORM;
         std::vector<VkImageView> backBufferImageViewsSRGB;
-        VkBuffer                 stagingBuffer;
-        VkDeviceMemory           stagingBufferMemory;
-        uint32_t                 bufferSize;
-        void*                    stagingBufferMapped = nullptr; // Persistent map (HOST_COHERENT)
-        VkDescriptorSet          bufferDescriptorSet;
+        VkBuffer                 stagingBuffer                      = VK_NULL_HANDLE;
+        VkDeviceMemory           stagingBufferMemory                = VK_NULL_HANDLE;
+        uint32_t                 bufferSize                         = 0;
+        void*                    stagingBufferMapped                = nullptr; // Persistent map (HOST_COHERENT)
+        VkDescriptorSet          bufferDescriptorSet                = VK_NULL_HANDLE;
         bool                     disableComputePipelineOptimization = false;
 
         std::vector<std::shared_ptr<ReshadeUniform>> uniforms;
 
         void          createReshadeModule();
+        void          destroyResources();
         VkFormat      convertReshadeFormat(reshadefx::texture_format texFormat);
         VkCompareOp   convertReshadeCompareOp(reshadefx::pass_stencil_func compareOp);
         VkStencilOp   convertReshadeStencilOp(reshadefx::pass_stencil_op stencilOp);

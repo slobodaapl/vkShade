@@ -2,6 +2,7 @@
 #include "wayland_input_common.hpp"
 #include "wayland_interpose.hpp"
 #include "wayland_display.hpp"
+#include "mouse_input_wayland.hpp"
 #include "logger.hpp"
 
 #include <wayland-client.h>
@@ -155,8 +156,23 @@ namespace vkShade
 
     static void keyboardLeave(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t /*serial*/, wl_surface* /*surface*/)
     {
+        if (xkbState)
+        {
+            for (uint32_t key : pressedKeys)
+                xkb_state_update_key(xkbState, key + 8, XKB_KEY_UP);
+        }
         pressedKeys.clear();
         keyPressEvents.clear(); // Prevent stale keysyms surviving focus loss
+        typedCharsAccumulator.clear();
+        lastKeyNameAccumulator.clear();
+        backspacePressed = false;
+        deletePressed    = false;
+        enterPressed     = false;
+        leftPressed      = false;
+        rightPressed     = false;
+        homePressed      = false;
+        endPressed       = false;
+        resetWaylandMouseButtons();
     }
 
     static void keyboardKey(void* /*data*/, wl_keyboard* /*keyboard*/, uint32_t /*serial*/, uint32_t /*time*/, uint32_t key, uint32_t state)
@@ -264,9 +280,6 @@ namespace vkShade
         pressedKeys.clear();
         keyPressEvents.clear();
         initialized = false;
-
-        // Clean up shared resources (idempotent)
-        cleanupWaylandInputCommon();
     }
 
     uint32_t convertToKeySymWayland(const std::string& key)

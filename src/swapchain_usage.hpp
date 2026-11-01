@@ -13,6 +13,11 @@ namespace vkShade
         bool              passthrough = false;
     };
 
+    inline bool canUseDirectEffectOutput(bool mutableFormat, bool transferDestination)
+    {
+        return mutableFormat && transferDestination;
+    }
+
     inline SwapchainUsagePlan planSwapchainUsage(const VkSwapchainCreateInfoKHR& createInfo)
     {
         uint64_t requestedUsage   = createInfo.imageUsage;

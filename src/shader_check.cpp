@@ -1,6 +1,7 @@
 #include "reshade_parser.hpp"
 #include "config_serializer.hpp"
 #include "logger.hpp"
+#include "shader_metadata.hpp"
 
 #include <filesystem>
 #include <iostream>
@@ -25,13 +26,42 @@ int main(int argc, char** argv)
 
     std::string                                      shaderPath;
     std::string                                      effectName;
+    std::string                                      profileConfig;
+    std::string                                      baseConfig;
     std::vector<std::string>                         includePaths;
     std::vector<std::pair<std::string, std::string>> extraDefines;
     bool                                             dumpDefines = false;
+    bool                                             metadata    = false;
+    std::string                                      gameName;
 
     for (int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
+        if (arg == "--game-name")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value for --game-name\n";
+                return 1;
+            }
+            gameName = argv[++i];
+            continue;
+        }
+        if (arg == "--metadata")
+        {
+            metadata = true;
+            continue;
+        }
+        if (arg == "--profile-config" || arg == "--base-config")
+        {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value for " << arg << "\n";
+                return 1;
+            }
+            (arg == "--profile-config" ? profileConfig : baseConfig) = argv[++i];
+            continue;
+        }
         if (arg == "--effect-name")
         {
             if (i + 1 >= argc)
@@ -104,6 +134,29 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    if (!profileConfig.empty())
+    {
+        vkShade::Config config(profileConfig);
+        config.setGameName(gameName);
+        std::unique_ptr<vkShade::Config> fallback;
+        if (!baseConfig.empty() && baseConfig != profileConfig)
+        {
+            fallback = std::make_unique<vkShade::Config>(baseConfig);
+            config.setFallback(fallback.get());
+        }
+        auto requestedDefines = std::move(extraDefines);
+        extraDefines.clear();
+        for (const auto& [name, value] : vkShade::ConfigSerializer::loadDepthDefinitions(&config))
+            extraDefines.emplace_back(name, value);
+        extraDefines.insert(extraDefines.end(), requestedDefines.begin(), requestedDefines.end());
+        for (const auto& def : vkShade::extractPreprocessorDefinitions(effectName, shaderPath, &config))
+        {
+            const auto value = config.getOption<std::string>(effectName + "@" + def.name, "");
+            if (!value.empty() && value != def.defaultValue)
+                extraDefines.emplace_back(def.name, value);
+        }
+    }
+
     vkShade::ShaderTestResult result;
     if (includePaths.empty() && extraDefines.empty())
     {
@@ -117,6 +170,13 @@ int main(int argc, char** argv)
             includePaths        = smConfig.discoveredShaderPaths;
         }
         result = vkShade::testShaderCompilation(effectName, shaderPath, includePaths, extraDefines);
+    }
+
+    if (metadata)
+    {
+        const auto data = vkShade::encodeShaderMetadata(result);
+        std::cout.write(data.data(), static_cast<std::streamsize>(data.size()));
+        return result.success ? 0 : 2;
     }
 
     std::cout << "effect: " << result.effectName << "\n";

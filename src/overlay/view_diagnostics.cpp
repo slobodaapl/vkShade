@@ -553,9 +553,11 @@ namespace vkShade
         ImGui::Separator();
         if (!detectedGameName.empty())
         {
-            ImGui::Text("Executable: %s", detectedGameName.c_str());
-            if (!autoDetectedConfig.empty())
-                ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Config: %s.conf (auto-detected)", autoDetectedConfig.c_str());
+            ImGui::Text("Identity: %s", detectedGameName.c_str());
+            if (!activeProfilePath.empty())
+                ImGui::TextWrapped("Settings: %s", activeProfilePath.c_str());
+            else if (!autoDetectedConfig.empty())
+                ImGui::TextWrapped("Settings: %s", ConfigSerializer::getProfilePath(autoDetectedConfig).c_str());
             else
                 ImGui::TextDisabled("No per-game config found");
         }

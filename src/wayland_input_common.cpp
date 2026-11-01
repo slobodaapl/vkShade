@@ -1,17 +1,19 @@
 #include "wayland_input_common.hpp"
 #include "wayland_display.hpp"
 #include "logger.hpp"
+#include "relative-pointer-client-protocol.h"
 
 #include <cstring>
 #include <poll.h>
 
 namespace vkShade
 {
-    static wl_display*     displayWrapper    = nullptr;
-    static wl_event_queue* queue             = nullptr;
-    static wl_registry*    registry          = nullptr;
-    static wl_seat*        seat              = nullptr;
-    static bool            commonInitialized = false;
+    static wl_display*                      displayWrapper         = nullptr;
+    static wl_event_queue*                  queue                  = nullptr;
+    static wl_registry*                     registry               = nullptr;
+    static wl_seat*                         seat                   = nullptr;
+    static zwp_relative_pointer_manager_v1* relativePointerManager = nullptr;
+    static bool                             commonInitialized      = false;
 
     // Frame-level dispatch deduplication — tracks a monotonic counter so
     // multiple callers (getMouseState, getKeyboardState, isKeyPressed×N)
@@ -59,6 +61,13 @@ namespace vkShade
 
     static void registryGlobal(void* /*data*/, wl_registry* reg, uint32_t name, const char* interface, uint32_t version)
     {
+        if (std::strcmp(interface, zwp_relative_pointer_manager_v1_interface.name) == 0)
+        {
+            if (!relativePointerManager)
+                relativePointerManager =
+                    static_cast<zwp_relative_pointer_manager_v1*>(wl_registry_bind(reg, name, &zwp_relative_pointer_manager_v1_interface, 1));
+            return;
+        }
         if (std::strcmp(interface, wl_seat_interface.name) != 0)
             return;
         if (seat)
@@ -86,6 +95,11 @@ namespace vkShade
     wl_seat* getWaylandSeat()
     {
         return seat;
+    }
+
+    zwp_relative_pointer_manager_v1* getWaylandRelativePointerManager()
+    {
+        return relativePointerManager;
     }
 
     bool initWaylandInputCommon()
@@ -127,20 +141,25 @@ namespace vkShade
         else
         {
             Logger::warn("Wayland: no seat found");
+            if (relativePointerManager)
+            {
+                zwp_relative_pointer_manager_v1_destroy(relativePointerManager);
+                relativePointerManager = nullptr;
+            }
             if (registry)
             {
                 wl_registry_destroy(registry);
                 registry = nullptr;
             }
-            if (queue)
-            {
-                wl_event_queue_destroy(queue);
-                queue = nullptr;
-            }
             if (displayWrapper)
             {
                 wl_proxy_wrapper_destroy(displayWrapper);
                 displayWrapper = nullptr;
+            }
+            if (queue)
+            {
+                wl_event_queue_destroy(queue);
+                queue = nullptr;
             }
         }
 
@@ -186,6 +205,11 @@ namespace vkShade
 
     void cleanupWaylandInputCommon()
     {
+        if (relativePointerManager)
+        {
+            zwp_relative_pointer_manager_v1_destroy(relativePointerManager);
+            relativePointerManager = nullptr;
+        }
         if (seat)
         {
             wl_seat_destroy(seat);
@@ -196,15 +220,15 @@ namespace vkShade
             wl_registry_destroy(registry);
             registry = nullptr;
         }
-        if (queue)
-        {
-            wl_event_queue_destroy(queue);
-            queue = nullptr;
-        }
         if (displayWrapper)
         {
             wl_proxy_wrapper_destroy(displayWrapper);
             displayWrapper = nullptr;
+        }
+        if (queue)
+        {
+            wl_event_queue_destroy(queue);
+            queue = nullptr;
         }
 
         keyboardBind      = nullptr;

@@ -7,22 +7,26 @@ namespace vkShade
                                               const std::vector<VkImage>& images,
                                               VkImageViewType             viewType,
                                               VkImageAspectFlags          aspectMask,
-                                              uint32_t                    mipLevels)
+                                              uint32_t                    mipLevels,
+                                              VkImageUsageFlags           viewUsage)
     {
         std::vector<VkImageView> imageViews(images.size());
 
         VkImageViewCreateInfo imageViewCreateInfo;
 
-        imageViewCreateInfo.sType        = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        imageViewCreateInfo.pNext        = nullptr;
-        imageViewCreateInfo.flags        = 0;
-        imageViewCreateInfo.image        = VK_NULL_HANDLE;
-        imageViewCreateInfo.viewType     = viewType;
-        imageViewCreateInfo.format       = format;
-        imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-        imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+        VkImageViewUsageCreateInfo usageInfo = {};
+        usageInfo.sType                      = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+        usageInfo.usage                      = viewUsage;
+        imageViewCreateInfo.sType            = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        imageViewCreateInfo.pNext            = viewUsage ? &usageInfo : nullptr;
+        imageViewCreateInfo.flags            = 0;
+        imageViewCreateInfo.image            = VK_NULL_HANDLE;
+        imageViewCreateInfo.viewType         = viewType;
+        imageViewCreateInfo.format           = format;
+        imageViewCreateInfo.components.r     = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.g     = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.b     = VK_COMPONENT_SWIZZLE_IDENTITY;
+        imageViewCreateInfo.components.a     = VK_COMPONENT_SWIZZLE_IDENTITY;
 
         imageViewCreateInfo.subresourceRange.aspectMask     = aspectMask;
         imageViewCreateInfo.subresourceRange.baseMipLevel   = 0;

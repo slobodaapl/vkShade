@@ -3,6 +3,7 @@
 
 #include <string>
 #include <algorithm>
+#include <atomic>
 
 #include "config_serializer.hpp"
 
@@ -35,6 +36,10 @@ namespace vkShade
         {
             return std::clamp(settings.maxEffects, 1, 200);
         }
+        int getOverlayFontSize() const
+        {
+            return settings.overlayFontSize;
+        }
         bool getOverlayBlockInput() const
         {
             return settings.overlayBlockInput;
@@ -59,6 +64,10 @@ namespace vkShade
         {
             return settings.depthCapture;
         }
+        bool isDepthCaptureActive() const
+        {
+            return activeDepthCapture.load(std::memory_order_acquire);
+        }
         bool getAutoApply() const
         {
             return settings.autoApply;
@@ -80,6 +89,11 @@ namespace vkShade
         void setMaxEffects(int value)
         {
             settings.maxEffects = std::clamp(value, 1, 200);
+        }
+        void setOverlayFontSize(int value)
+        {
+            settings.overlayFontSize =
+                value <= AUTO_OVERLAY_FONT_SIZE ? AUTO_OVERLAY_FONT_SIZE : std::clamp(value, MIN_OVERLAY_FONT_SIZE, MAX_OVERLAY_FONT_SIZE);
         }
         void setOverlayBlockInput(bool value)
         {
@@ -103,6 +117,8 @@ namespace vkShade
         }
         void setDepthCapture(bool value)
         {
+            if (!value)
+                activeDepthCapture.store(false, std::memory_order_release);
             settings.depthCapture = value;
         }
         void setAutoApply(bool value)
@@ -119,6 +135,8 @@ namespace vkShade
         }
         void setSafeAntiCheat(bool value)
         {
+            if (value)
+                activeDepthCapture.store(false, std::memory_order_release);
             safeAntiCheat = value;
         }
 
@@ -129,9 +147,10 @@ namespace vkShade
         }
 
     private:
-        VkShadeSettings settings;
-        bool            initialized   = false;
-        bool            safeAntiCheat = false; // Runtime flag: layer hiding active
+        VkShadeSettings   settings;
+        std::atomic<bool> activeDepthCapture{false};
+        bool              initialized   = false;
+        bool              safeAntiCheat = false; // Runtime flag: layer hiding active
     };
 
     // Global settings manager instance (like effectRegistry)

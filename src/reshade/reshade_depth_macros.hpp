@@ -1,23 +1,26 @@
 #ifndef VKSHADE_RESHADE_DEPTH_MACROS_HPP_INCLUDED
 #define VKSHADE_RESHADE_DEPTH_MACROS_HPP_INCLUDED
 
+#include "depth_definitions.hpp"
 #include "reshade/effect_preprocessor.hpp"
 
 namespace vkShade
 {
-    inline void addReshadeDepthMacros(reshadefx::preprocessor& pp)
+    inline void applyDepthDefinition(reshadefx::preprocessor& pp, std::string_view name, const std::string& value)
     {
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_IS_UPSIDE_DOWN", "0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_IS_REVERSED", "0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_IS_LOGARITHMIC", "0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_X_SCALE", "1.0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_Y_SCALE", "1.0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_X_OFFSET", "0.0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_Y_OFFSET", "0.0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_X_PIXEL_OFFSET", "0");
-        pp.add_macro_definition("RESHADE_DEPTH_INPUT_Y_PIXEL_OFFSET", "0");
-        pp.add_macro_definition("RESHADE_DEPTH_LINEARIZATION_FAR_PLANE", "1000.0");
-        pp.add_macro_definition("RESHADE_DEPTH_MULTIPLIER", "1.0");
+        const auto canonical = canonicalDepthDefinition(name);
+        if (canonical.empty())
+            return;
+        pp.add_shared_macro_definition(std::string(canonical), value);
+        pp.add_shared_macro_definition("RESHADE_" + std::string(canonical), value);
+    }
+
+    inline void addReshadeDepthMacros(reshadefx::preprocessor& pp, const DepthDefinitionValues& values = {})
+    {
+        for (const auto& definition : depthDefinitions)
+            applyDepthDefinition(pp, definition.name, std::string(definition.defaultValue));
+        for (const auto& [name, value] : values)
+            applyDepthDefinition(pp, name, value);
         pp.add_macro_definition("RESHADE_MIX_STAGE_DEPTH_MAP", "0");
     }
 } // namespace vkShade

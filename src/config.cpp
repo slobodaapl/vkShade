@@ -1,5 +1,6 @@
 #include "config.hpp"
 #include "config_paths.hpp"
+#include "config_serializer.hpp"
 
 #include <sstream>
 #include <locale>
@@ -61,20 +62,36 @@ namespace vkShade
 
     Config::Config(const Config& other)
     {
-        this->options          = other.options;
-        this->overrides        = other.overrides;
-        this->configFilePath   = other.configFilePath;
-        this->lastModifiedTime = other.lastModifiedTime;
+        this->options                      = other.options;
+        this->overrides                    = other.overrides;
+        this->configFilePath               = other.configFilePath;
+        this->gameName                     = other.gameName;
+        this->lastModifiedTime             = other.lastModifiedTime;
+        this->lastDepthFileInode           = other.lastDepthFileInode;
+        this->lastDepthModifiedTime        = other.lastDepthModifiedTime;
+        this->lastDepthModifiedNanoseconds = other.lastDepthModifiedNanoseconds;
+        this->depthFileExists              = other.depthFileExists;
+    }
+
+    void Config::setGameName(std::string name)
+    {
+        gameName = std::move(name);
+        updateLastModifiedTime();
     }
 
     void Config::updateLastModifiedTime()
     {
-        if (configFilePath.empty())
-            return;
-
         struct stat fileStat;
-        if (stat(configFilePath.c_str(), &fileStat) == 0)
+        if (!configFilePath.empty() && stat(configFilePath.c_str(), &fileStat) == 0)
             lastModifiedTime = fileStat.st_mtime;
+        const auto depthPath = ConfigSerializer::getGameDepthPath(gameName);
+        depthFileExists      = !depthPath.empty() && stat(depthPath.c_str(), &fileStat) == 0;
+        if (depthFileExists)
+        {
+            lastDepthFileInode           = static_cast<std::uint64_t>(fileStat.st_ino);
+            lastDepthModifiedTime        = fileStat.st_mtim.tv_sec;
+            lastDepthModifiedNanoseconds = fileStat.st_mtim.tv_nsec;
+        }
     }
 
     bool Config::hasOptionKey(const std::string& option) const
@@ -97,10 +114,15 @@ namespace vkShade
         lastConfigCheckTime = now;
 
         struct stat fileStat;
-        if (stat(configFilePath.c_str(), &fileStat) != 0)
-            return false;
-
-        return fileStat.st_mtime != lastModifiedTime;
+        const bool  configChanged      = stat(configFilePath.c_str(), &fileStat) == 0 && fileStat.st_mtime != lastModifiedTime;
+        const auto  depthPath          = ConfigSerializer::getGameDepthPath(gameName);
+        const bool  currentDepthExists = !depthPath.empty() && stat(depthPath.c_str(), &fileStat) == 0;
+        const bool  depthChanged =
+            currentDepthExists != depthFileExists
+            || (currentDepthExists
+                && (static_cast<std::uint64_t>(fileStat.st_ino) != lastDepthFileInode || fileStat.st_mtim.tv_sec != lastDepthModifiedTime
+                    || fileStat.st_mtim.tv_nsec != lastDepthModifiedNanoseconds));
+        return configChanged || depthChanged;
     }
 
     void Config::reload()
@@ -152,11 +174,14 @@ namespace vkShade
                 key += c;
         };
 
-        for (const char& c : line)
+        for (size_t i = 0; i < line.size(); ++i)
         {
+            const char c = line[i];
             if (inQuotes)
             {
-                if (c == '"')
+                if (c == '\\' && i + 1 < line.size() && (line[i + 1] == '\\' || line[i + 1] == '"'))
+                    appendChar(line[++i]);
+                else if (c == '"')
                     inQuotes = false;
                 else
                     appendChar(c);
@@ -174,7 +199,7 @@ namespace vkShade
         }
 
     DONE:
-        const bool allowEmptyValue = (key == "effects" || key == "disabledEffects");
+        const bool allowEmptyValue = (key == "effects" || key == "disabledEffects" || key == "techniqueOrder" || key == "enabledTechniques");
         if (!key.empty() && (allowEmptyValue || !value.empty()))
         {
             Logger::info(key + " = " + value);
@@ -349,7 +374,8 @@ namespace vkShade
         std::unordered_map<std::string, std::string> effects;
         for (const auto& [key, value] : options)
         {
-            if (value.size() >= 3 && value.substr(value.size() - 3) == ".fx")
+            if (value.size() >= 3 && value[value.size() - 3] == '.' && (value[value.size() - 2] == 'f' || value[value.size() - 2] == 'F')
+                && (value[value.size() - 1] == 'x' || value[value.size() - 1] == 'X'))
                 effects[key] = value;
         }
         return effects;

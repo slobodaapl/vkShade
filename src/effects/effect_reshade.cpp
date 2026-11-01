@@ -1,4 +1,5 @@
 #include "effect_reshade.hpp"
+#include "technique_passes.hpp"
 
 #include <cstring>
 #include <climits>
@@ -9,6 +10,7 @@
 #include <algorithm>
 #include <filesystem>
 #include <unordered_map>
+#include <stdexcept>
 
 #include "image_view.hpp"
 #include "descriptor_set.hpp"
@@ -251,21 +253,50 @@ namespace vkShade
                                  EffectRegistry*                            pEffectRegistry,
                                  std::string                                effectName,
                                  const std::string&                         effectPath,
-                                 const std::vector<PreprocessorDefinition>& customDefs)
+                                 const std::vector<PreprocessorDefinition>& customDefs,
+                                 const std::optional<std::string>&          technique,
+                                 std::shared_ptr<ReshadeEffect>             sharedOwner)
     {
         Logger::debug("in creating ReshadeEffect");
 
         this->pLogicalDevice = pLogicalDevice;
-        this->imageExtent    = imageExtent;
-        this->inputImages    = inputImages;
-        this->outputImages   = outputImages;
-        outputImageInitialized.assign(outputImages.size(), false);
+        bool constructed     = false;
+        struct ConstructionGuard
+        {
+            ReshadeEffect& effect;
+            bool&          constructed;
+            ConstructionGuard(ReshadeEffect& effect, bool& constructed) : effect(effect), constructed(constructed)
+            {
+            }
+            ~ConstructionGuard()
+            {
+                if (!constructed)
+                    effect.destroyResources();
+            }
+        } constructionGuard{*this, constructed};
+
+        this->sharedOwner            = std::move(sharedOwner);
+        this->imageExtent            = imageExtent;
+        this->inputImages            = inputImages;
+        this->outputImages           = outputImages;
         this->pEffectRegistry        = pEffectRegistry;
         this->effectName             = effectName;
         this->effectPath             = effectPath;
         this->customPreprocessorDefs = customDefs;
         inputOutputFormatUNORM       = convertToUNORM(format);
         inputOutputFormatSRGB        = convertToSRGB(format);
+
+        if (this->sharedOwner)
+        {
+            module       = this->sharedOwner->module;
+            shaderModule = this->sharedOwner->shaderModule;
+        }
+        else
+            createReshadeModule();
+        auto selectedPasses = selectTechniquePasses(module, technique);
+        if (!selectedPasses)
+            throw std::runtime_error("Unknown ReShade technique: " + *technique);
+        std::vector<reshadefx::pass_info> allPasses = std::move(*selectedPasses);
 
         inputImageViewsSRGB  = createImageViews(pLogicalDevice, inputOutputFormatSRGB, inputImages);
         inputImageViewsUNORM = createImageViews(pLogicalDevice, inputOutputFormatUNORM, inputImages);
@@ -274,27 +305,35 @@ namespace vkShade
         outputImageViewsUNORM = createImageViews(pLogicalDevice, inputOutputFormatUNORM, outputImages);
         Logger::debug("created ImageViews");
 
-        createReshadeModule();
-
-        enumerateReshadeUniforms(module);
-
-        uniforms = createReshadeUniforms(module);
-
-        bufferSize = module.total_uniform_size;
-        if (bufferSize)
+        if (this->sharedOwner)
         {
-            createBuffer(pLogicalDevice,
-                         bufferSize,
-                         VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                         stagingBuffer,
-                         stagingBufferMemory);
-            // Persistent map — HOST_COHERENT means no flush needed, just write directly
-            VkResult mapResult = pLogicalDevice->vkd.MapMemory(pLogicalDevice->device, stagingBufferMemory, 0, bufferSize, 0, &stagingBufferMapped);
-            if (mapResult != VK_SUCCESS)
+            uniforms            = this->sharedOwner->uniforms;
+            bufferSize          = this->sharedOwner->bufferSize;
+            stagingBuffer       = this->sharedOwner->stagingBuffer;
+            stagingBufferMemory = this->sharedOwner->stagingBufferMemory;
+            stagingBufferMapped = this->sharedOwner->stagingBufferMapped;
+        }
+        else
+        {
+            enumerateReshadeUniforms(module);
+            uniforms   = createReshadeUniforms(module);
+            bufferSize = module.total_uniform_size;
+            if (bufferSize)
             {
-                Logger::err("MapMemory failed for effect " + effectName + ": " + std::to_string(mapResult));
-                stagingBufferMapped = nullptr;
+                createBuffer(pLogicalDevice,
+                             bufferSize,
+                             VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                             VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                             stagingBuffer,
+                             stagingBufferMemory);
+                // Persistent map — HOST_COHERENT means no flush needed, just write directly
+                VkResult mapResult =
+                    pLogicalDevice->vkd.MapMemory(pLogicalDevice->device, stagingBufferMemory, 0, bufferSize, 0, &stagingBufferMapped);
+                if (mapResult != VK_SUCCESS)
+                {
+                    Logger::err("MapMemory failed for effect " + effectName + ": " + std::to_string(mapResult));
+                    stagingBufferMapped = nullptr;
+                }
             }
         }
 
@@ -348,6 +387,19 @@ namespace vkShade
                 textureFormatsSRGB[module.textures[i].unique_name]  = inputOutputFormatSRGB;
                 continue;
             }
+            if (this->sharedOwner)
+            {
+                const auto& name = module.textures[i].unique_name;
+                borrowedTextureNames.insert(name);
+                textureImages[name]          = this->sharedOwner->textureImages.at(name);
+                textureImageViewsUNORM[name] = this->sharedOwner->textureImageViewsUNORM.at(name);
+                textureImageViewsSRGB[name]  = this->sharedOwner->textureImageViewsSRGB.at(name);
+                renderImageViewsUNORM[name]  = this->sharedOwner->renderImageViewsUNORM.at(name);
+                renderImageViewsSRGB[name]   = this->sharedOwner->renderImageViewsSRGB.at(name);
+                textureFormatsUNORM[name]    = this->sharedOwner->textureFormatsUNORM.at(name);
+                textureFormatsSRGB[name]     = this->sharedOwner->textureFormatsSRGB.at(name);
+                continue;
+            }
             VkExtent3D textureExtent = {module.textures[i].width, module.textures[i].height, textureDepth};
             // TODO handle mip map levels correctly
             // TODO handle pooled textures better
@@ -359,6 +411,7 @@ namespace vkShade
                     VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
                 if (!textureIs3D)
                     imageUsage |= VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+                const VkImageUsageFlags srgbViewUsage = imageUsage & (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
 
                 textureMemory.push_back(VK_NULL_HANDLE);
                 std::vector<VkImage> images = createImages(pLogicalDevice,
@@ -387,7 +440,8 @@ namespace vkShade
                                                               images,
                                                               textureViewType,
                                                               VK_IMAGE_ASPECT_COLOR_BIT,
-                                                              module.textures[i].levels)[0]);
+                                                              module.textures[i].levels,
+                                                              srgbViewUsage)[0]);
 
                 textureImageViewsUNORM[module.textures[i].unique_name] = imageViewsUNORM;
                 textureImageViewsSRGB[module.textures[i].unique_name]  = imageViewsSRGB;
@@ -411,7 +465,8 @@ namespace vkShade
                                                                   images,
                                                                   textureViewType,
                                                                   VK_IMAGE_ASPECT_COLOR_BIT,
-                                                                  module.textures[i].levels)[0]);
+                                                                  module.textures[i].levels,
+                                                                  srgbViewUsage)[0]);
                 }
                 else
                 {
@@ -453,7 +508,8 @@ namespace vkShade
                                               images,
                                               textureViewType,
                                               VK_IMAGE_ASPECT_COLOR_BIT,
-                                              module.textures[i].levels);
+                                              module.textures[i].levels,
+                                              VK_IMAGE_USAGE_SAMPLED_BIT);
 
                 std::vector<VkImageView> imageViewsSRGB = std::vector<VkImageView>(inputImages.size(), imageViews[0]);
 
@@ -614,7 +670,8 @@ namespace vkShade
 
             samplers.push_back(sampler);
 
-            imageViewVector.push_back(info.srgb ? textureImageViewsSRGB[info.texture_name] : textureImageViewsUNORM[info.texture_name]);
+            imageViewVector.push_back(info.srgb && !info.storage ? textureImageViewsSRGB[info.texture_name]
+                                                                 : textureImageViewsUNORM[info.texture_name]);
         }
 
         std::vector<VkDescriptorType> samplerBindingTypes(module.samplers.size(), VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
@@ -667,24 +724,10 @@ namespace vkShade
 
         Logger::debug("created Pipeline layout");
 
-        // Flatten the passes of ALL techniques into one ordered chain, instead
-        // of rendering only techniques[0]. ReShade effects routinely split work
-        // across techniques where an earlier (often offscreen) technique feeds a
-        // later one through a shared named texture — e.g. SuperDepth3D's
-        // 'Information_SD' writes Info_Tex which the main 'SuperDepth3D'
-        // technique samples. Textures resolve globally by unique_name, so
-        // cross-technique reads just work. Single-technique effects (cas,
-        // DisplayDepth, …) are unaffected. Limitation: there is no per-technique
-        // enable UI yet, so every technique in the file runs in declaration
-        // order (correct for helper+main; could double-composite a file built
-        // from several independent full-screen techniques).
-        std::vector<reshadefx::pass_info> allPasses;
-        for (const auto& technique : module.techniques)
-        {
-            Logger::debug("technique: " + technique.name + " (" + std::to_string(technique.passes.size()) + " passes)");
-            allPasses.insert(allPasses.end(), technique.passes.begin(), technique.passes.end());
-        }
-        Logger::debug("total passes across " + std::to_string(module.techniques.size()) + " technique(s): " + std::to_string(allPasses.size()));
+        for (const auto& entry : module.techniques)
+            if (!technique || entry.name == *technique)
+                Logger::debug("technique: " + entry.name + " (" + std::to_string(entry.passes.size()) + " passes)");
+        Logger::debug("selected ReShade passes: " + std::to_string(allPasses.size()));
 
         // count the back buffer writes
         for (const auto& pass : allPasses)
@@ -701,8 +744,13 @@ namespace vkShade
             bufferDescriptorSet = writeBufferDescriptorSet(pLogicalDevice, descriptorPool, uniformDescriptorSetLayout, stagingBuffer);
         }
 
-        inputDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
-            pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+        if (!module.samplers.empty())
+        {
+            inputDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
+                pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+            if (inputDescriptorSets.size() != inputImages.size())
+                throw std::runtime_error("Failed to create ReShade input descriptor sets for " + effectName);
+        }
 
         // if there is only one outputWrite, we can directly write to outputImages
         if (outputWrites > 1)
@@ -723,15 +771,25 @@ namespace vkShade
             std::replace(imageViewVector.begin(), imageViewVector.end(), inputImageViewsSRGB, backBufferImageViewsSRGB);
             std::replace(imageViewVector.begin(), imageViewVector.end(), inputImageViewsUNORM, backBufferImageViewsUNORM);
 
-            backBufferDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
-                pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+            if (!module.samplers.empty())
+            {
+                backBufferDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
+                    pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+                if (backBufferDescriptorSets.size() != inputImages.size())
+                    throw std::runtime_error("Failed to create ReShade backbuffer descriptor sets for " + effectName);
+            }
         }
         if (outputWrites > 2)
         {
             std::replace(imageViewVector.begin(), imageViewVector.end(), backBufferImageViewsSRGB, outputImageViewsSRGB);
             std::replace(imageViewVector.begin(), imageViewVector.end(), backBufferImageViewsUNORM, outputImageViewsUNORM);
-            outputDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
-                pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+            if (!module.samplers.empty())
+            {
+                outputDescriptorSets = allocateAndWriteImageSamplerDescriptorSets(
+                    pLogicalDevice, descriptorPool, imageSamplerDescriptorSetLayout, samplers, imageViewVector, samplerBindingTypes);
+                if (outputDescriptorSets.size() != inputImages.size())
+                    throw std::runtime_error("Failed to create ReShade output descriptor sets for " + effectName);
+            }
         }
 
         Logger::debug("after writing ImageSamplerDescriptorSets");
@@ -869,7 +927,8 @@ namespace vkShade
 
             if (isComputePass)
             {
-                PassRuntime runtime   = {};
+                passRuntimes.emplace_back();
+                PassRuntime& runtime  = passRuntimes.back();
                 runtime.isCompute     = true;
                 runtime.dispatchSizeX = std::max(pass.dispatch_size_x, 1u);
                 runtime.dispatchSizeY = std::max(pass.dispatch_size_y, 1u);
@@ -902,7 +961,6 @@ namespace vkShade
 
                 Logger::debug("compute  entry: " + pass.cs_entry_point + " dispatch(" + std::to_string(runtime.dispatchSizeX) + ", "
                               + std::to_string(runtime.dispatchSizeY) + ", " + std::to_string(runtime.dispatchSizeZ) + ")");
-                passRuntimes.push_back(std::move(runtime));
                 continue;
             }
 
@@ -1059,7 +1117,8 @@ namespace vkShade
             renderPassCreateInfo.dependencyCount = 2;
             renderPassCreateInfo.pDependencies   = subpassDependencies;
 
-            PassRuntime runtime   = {};
+            passRuntimes.emplace_back();
+            PassRuntime& runtime  = passRuntimes.back();
             runtime.renderTargets = std::move(currentRenderTargets);
             runtime.vertexCount   = pass.num_vertices == 0 ? 3 : pass.num_vertices;
 
@@ -1207,13 +1266,15 @@ namespace vkShade
 
             Logger::debug("vertex   entry: " + pass.vs_entry_point);
             Logger::debug("fragment entry: " + pass.ps_entry_point);
-            passRuntimes.push_back(std::move(runtime));
         }
         Logger::debug("finished creating Reshade effect");
+        constructed = true;
     }
 
     void ReshadeEffect::updateEffect()
     {
+        if (sharedOwner)
+            return;
         if (stagingBufferMapped)
         {
             for (const auto& uniform : module.uniforms)
@@ -1346,7 +1407,7 @@ namespace vkShade
 
         // Seed output image from current input so backbuffer/load-based passes never start from undefined data.
         memoryBarrier.image         = outputImages[imageIndex];
-        memoryBarrier.oldLayout     = outputImageInitialized[imageIndex] ? VK_IMAGE_LAYOUT_PRESENT_SRC_KHR : VK_IMAGE_LAYOUT_UNDEFINED;
+        memoryBarrier.oldLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
         memoryBarrier.newLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         memoryBarrier.srcAccessMask = 0;
         memoryBarrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
@@ -1360,7 +1421,6 @@ namespace vkShade
                                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                                          1,
                                          &fullCopyRegion);
-        outputImageInitialized[imageIndex] = true;
 
         if (outputWrites > 1)
         {
@@ -1454,15 +1514,16 @@ namespace vkShade
                                                    &memoryBarrier);
         }
 
-        VkDescriptorSet currentSamplerSet = inputDescriptorSets[imageIndex];
+        VkDescriptorSet currentSamplerSet = module.samplers.empty() ? VK_NULL_HANDLE : inputDescriptorSets[imageIndex];
         bool            backBufferNext    = outputWrites % 2 == 0;
         for (size_t i = 0; i < passRuntimes.size(); i++)
         {
             auto& runtime = passRuntimes[i];
             if (runtime.isCompute)
             {
-                pLogicalDevice->vkd.CmdBindDescriptorSets(
-                    commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 1, 1, &currentSamplerSet, 0, nullptr);
+                if (currentSamplerSet != VK_NULL_HANDLE)
+                    pLogicalDevice->vkd.CmdBindDescriptorSets(
+                        commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pipelineLayout, 1, 1, &currentSamplerSet, 0, nullptr);
                 if (bufferSize)
                 {
                     pLogicalDevice->vkd.CmdBindDescriptorSets(
@@ -1474,8 +1535,9 @@ namespace vkShade
             }
             else
             {
-                pLogicalDevice->vkd.CmdBindDescriptorSets(
-                    commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &currentSamplerSet, 0, nullptr);
+                if (currentSamplerSet != VK_NULL_HANDLE)
+                    pLogicalDevice->vkd.CmdBindDescriptorSets(
+                        commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 1, 1, &currentSamplerSet, 0, nullptr);
                 if (bufferSize)
                 {
                     pLogicalDevice->vkd.CmdBindDescriptorSets(
@@ -1497,11 +1559,11 @@ namespace vkShade
 
                 if (runtime.switchSamplers && outputWrites > 1)
                 {
-                    if (backBufferNext)
+                    if (currentSamplerSet != VK_NULL_HANDLE && backBufferNext)
                     {
                         currentSamplerSet = backBufferDescriptorSets[imageIndex];
                     }
-                    else if (outputWrites > 2)
+                    else if (currentSamplerSet != VK_NULL_HANDLE && outputWrites > 2)
                     {
                         currentSamplerSet = outputDescriptorSets[imageIndex];
                     }
@@ -1683,25 +1745,30 @@ namespace vkShade
 
     ReshadeEffect::~ReshadeEffect()
     {
+        destroyResources();
+    }
+
+    void ReshadeEffect::destroyResources()
+    {
         Logger::debug("destroying ReshadeEffect" + convertToString(this));
         for (auto& passRuntime : passRuntimes)
         {
             if (passRuntime.pipeline != VK_NULL_HANDLE)
                 pLogicalDevice->vkd.DestroyPipeline(pLogicalDevice->device, passRuntime.pipeline, nullptr);
-            if (passRuntime.renderPass != VK_NULL_HANDLE)
-                pLogicalDevice->vkd.DestroyRenderPass(pLogicalDevice->device, passRuntime.renderPass, nullptr);
             for (auto& framebuffer : passRuntime.framebuffers)
             {
                 pLogicalDevice->vkd.DestroyFramebuffer(pLogicalDevice->device, framebuffer, nullptr);
             }
+            if (passRuntime.renderPass != VK_NULL_HANDLE)
+                pLogicalDevice->vkd.DestroyRenderPass(pLogicalDevice->device, passRuntime.renderPass, nullptr);
         }
 
-        if (bufferSize)
+        if (!sharedOwner && bufferSize)
         {
             if (stagingBufferMapped)
                 pLogicalDevice->vkd.UnmapMemory(pLogicalDevice->device, stagingBufferMemory);
-            pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, stagingBufferMemory, nullptr);
             pLogicalDevice->vkd.DestroyBuffer(pLogicalDevice->device, stagingBuffer, nullptr);
+            pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, stagingBufferMemory, nullptr);
         }
 
         pLogicalDevice->vkd.DestroyPipelineLayout(pLogicalDevice->device, pipelineLayout, nullptr);
@@ -1709,7 +1776,8 @@ namespace vkShade
         pLogicalDevice->vkd.DestroyDescriptorSetLayout(pLogicalDevice->device, imageSamplerDescriptorSetLayout, nullptr);
         pLogicalDevice->vkd.DestroyDescriptorSetLayout(pLogicalDevice->device, uniformDescriptorSetLayout, nullptr);
 
-        pLogicalDevice->vkd.DestroyShaderModule(pLogicalDevice->device, shaderModule, nullptr);
+        if (!sharedOwner)
+            pLogicalDevice->vkd.DestroyShaderModule(pLogicalDevice->device, shaderModule, nullptr);
 
         pLogicalDevice->vkd.DestroyDescriptorPool(pLogicalDevice->device, descriptorPool, nullptr);
         for (auto& imageView : outputImageViewsSRGB)
@@ -1731,9 +1799,13 @@ namespace vkShade
         }
 
         std::set<VkImageView> imageViewSet;
+        imageViewSet.insert(inputImageViewsSRGB.begin(), inputImageViewsSRGB.end());
+        imageViewSet.insert(inputImageViewsUNORM.begin(), inputImageViewsUNORM.end());
 
         for (auto& it : textureImageViewsSRGB)
         {
+            if (borrowedTextureNames.count(it.first))
+                continue;
             for (auto imageView : it.second)
             {
                 imageViewSet.insert(imageView);
@@ -1741,6 +1813,8 @@ namespace vkShade
         }
         for (auto& it : textureImageViewsUNORM)
         {
+            if (borrowedTextureNames.count(it.first))
+                continue;
             for (auto imageView : it.second)
             {
                 imageViewSet.insert(imageView);
@@ -1749,6 +1823,8 @@ namespace vkShade
 
         for (auto& it : renderImageViewsSRGB)
         {
+            if (borrowedTextureNames.count(it.first))
+                continue;
             for (auto imageView : it.second)
             {
                 imageViewSet.insert(imageView);
@@ -1756,6 +1832,8 @@ namespace vkShade
         }
         for (auto& it : renderImageViewsUNORM)
         {
+            if (borrowedTextureNames.count(it.first))
+                continue;
             for (auto imageView : it.second)
             {
                 imageViewSet.insert(imageView);
@@ -1770,6 +1848,8 @@ namespace vkShade
 
         for (auto& it : textureImages)
         {
+            if (borrowedTextureNames.count(it.first))
+                continue;
             for (auto image : it.second)
             {
                 pLogicalDevice->vkd.DestroyImage(pLogicalDevice->device, image, nullptr);
@@ -1808,7 +1888,10 @@ namespace vkShade
         preprocessor.add_macro_definition("BUFFER_RCP_HEIGHT", "(1.0 / BUFFER_HEIGHT)");
         preprocessor.add_macro_definition("BUFFER_COLOR_DEPTH", (inputOutputFormatUNORM == VK_FORMAT_A2R10G10B10_UNORM_PACK32) ? "10" : "8");
         preprocessor.add_macro_definition("BUFFER_COLOR_BIT_DEPTH", "BUFFER_COLOR_DEPTH");
-        addReshadeDepthMacros(preprocessor);
+        const auto sharedDepthDefinitions = pEffectRegistry->getDepthDefinitions();
+        addReshadeDepthMacros(preprocessor, sharedDepthDefinitions);
+        for (const auto& [name, value] : sharedDepthDefinitions)
+            Logger::debug("  shared depth macro: " + name + " = " + value);
 
         // Keep runtime compilation behavior aligned with reshade_parser compatibility shims.
         preprocessor.append_string(
@@ -1902,6 +1985,10 @@ namespace vkShade
             preprocessor.add_macro_definition(def.name, def.value);
             Logger::debug("  custom macro: " + def.name + " = " + def.value);
         }
+
+        for (const auto& path : pEffectRegistry->getConfig()->getOption<std::vector<std::string>>("reshadeIncludePath", {}))
+            if (!path.empty())
+                preprocessor.add_include_path(path);
 
         // Add all discovered shader paths from shader manager
         ShaderManagerConfig shaderMgrConfig = ConfigSerializer::loadShaderManagerConfig();

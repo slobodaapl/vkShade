@@ -1,15 +1,21 @@
 #include "logical_swapchain.hpp"
+#include "depth_copy_submission.hpp"
 
 namespace vkShade
 {
-    void destroyDepthResolveResources(LogicalSwapchain* pLogicalSwapchain);
-
     void LogicalSwapchain::destroy()
     {
         if (imageCount > 0)
         {
             // Wait for GPU to finish before destroying resources
             pLogicalDevice->vkd.QueueWaitIdle(pLogicalDevice->queue);
+
+            for (auto& submission : depthCopySubmissions)
+                releaseDepthCopySubmission(pLogicalDevice, submission);
+            depthCopySubmissions.clear();
+            for (auto& submission : retiredDepthCopySubmissions)
+                releaseDepthCopySubmission(pLogicalDevice, submission);
+            retiredDepthCopySubmissions.clear();
 
             effects.clear();
             defaultTransfer.reset();
@@ -22,12 +28,13 @@ namespace vkShade
 
             destroyDepthResolveResources(this);
 
-            pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, fakeImageMemory, nullptr);
-
             for (uint32_t i = 0; i < fakeImages.size(); i++)
             {
                 pLogicalDevice->vkd.DestroyImage(pLogicalDevice->device, fakeImages[i], nullptr);
             }
+            pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, fakeImageMemory, nullptr);
+            for (auto memory : extraFakeImageMemory)
+                pLogicalDevice->vkd.FreeMemory(pLogicalDevice->device, memory, nullptr);
 
             for (unsigned int i = 0; i < imageCount; i++)
             {

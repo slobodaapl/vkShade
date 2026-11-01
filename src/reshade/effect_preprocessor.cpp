@@ -126,6 +126,8 @@ bool reshadefx::preprocessor::add_macro_definition(const std::string &name, cons
 {
 	assert(!name.empty());
 	const auto res = _macros.emplace(name, macro);
+	if (!res.second && res.first->second.is_shared && !macro.is_shared)
+		return true;
 	if (!res.second && res.first->second.is_predefined)
 	{
 		// Externally injected macros are defaults; the effect file's own
@@ -497,7 +499,9 @@ void reshadefx::preprocessor::parse_undef()
 	else if (_token.literal_as_string == "defined")
 		return warning(_token.location, "macro name 'defined' is reserved");
 
-	_macros.erase(_token.literal_as_string);
+	const auto it = _macros.find(_token.literal_as_string);
+	if (it != _macros.end() && !it->second.is_shared)
+		_macros.erase(it);
 }
 
 void reshadefx::preprocessor::parse_if()

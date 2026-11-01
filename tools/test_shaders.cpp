@@ -31,6 +31,7 @@
 #include "reshade/effect_parser.hpp"
 #include "reshade/effect_codegen.hpp"
 #include "reshade/effect_module.hpp"
+#include "reshade/reshade_depth_macros.hpp"
 
 namespace fs = std::filesystem;
 
@@ -78,6 +79,7 @@ static void addStandardMacros(reshadefx::preprocessor& pp)
     pp.add_macro_definition("BUFFER_RCP_HEIGHT", "(1.0 / BUFFER_HEIGHT)");
     pp.add_macro_definition("BUFFER_COLOR_DEPTH", "8");
     pp.add_macro_definition("BUFFER_COLOR_BIT_DEPTH", "BUFFER_COLOR_DEPTH");
+    vkShade::addReshadeDepthMacros(pp);
 
     // Function-like macros must use append_string (raw struct lacks parameter substitution markers)
     pp.append_string("#define tex2DgatherR(s, coords) tex2Dgather(s, coords, 0)\n"

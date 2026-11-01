@@ -4,10 +4,14 @@
 
 namespace vkShade
 {
-    MouseState getMouseStateWayland();
+    MouseState getMouseStateWayland(uint32_t framebufferWidth, uint32_t framebufferHeight);
 
     // Initialize Wayland mouse from a captured wl_display
     bool initWaylandMouse();
+
+    void setWaylandOverlayMouseActive(bool active);
+
+    void resetWaylandMouseButtons();
 
     // Cleanup
     void cleanupWaylandMouse();

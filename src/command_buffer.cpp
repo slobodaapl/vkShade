@@ -37,7 +37,7 @@ namespace vkShade
 
     static bool hasDepthState(const DepthState& state)
     {
-        return state.image != VK_NULL_HANDLE && state.imageView != VK_NULL_HANDLE && state.format != VK_FORMAT_UNDEFINED;
+        return state.capturable && state.image != VK_NULL_HANDLE && state.imageView != VK_NULL_HANDLE && state.format != VK_FORMAT_UNDEFINED;
     }
 
     static VkImageLayout getObservedDepthAttachmentLayout(const DepthState& depthState)
@@ -268,16 +268,6 @@ namespace vkShade
 
             VkResult result = pLogicalDevice->vkd.BeginCommandBuffer(commandBuffers[i], &beginInfo);
             ASSERT_VULKAN(result);
-
-            if (pLogicalDevice->activeDepthStatePresentTimeFallback && hasDepthResolveTarget)
-            {
-                // [DEBUG-TAG: present-depth-fallback-20260424]
-                if (isDepthResolveTraceEnabled())
-                    Logger::debug("depth resolve trace present fallback record: cb=" + convertToString(commandBuffers[i])
-                                  + " imageIndex=" + std::to_string(i) + " depthImage=" + convertToString(pLogicalDevice->activeDepthState.image)
-                                  + " depthView=" + convertToString(pLogicalDevice->activeDepthState.imageView));
-                recordDepthResolveSnapshot(pLogicalDevice, pLogicalSwapchain, commandBuffers[i], i, pLogicalDevice->activeDepthState);
-            }
 
             for (uint32_t j = 0; j < effects.size(); j++)
             {

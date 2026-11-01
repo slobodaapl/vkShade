@@ -7,6 +7,7 @@ git rev-parse --show-toplevel >/dev/null
 source scripts/files.sh
 
 failed=0
+build_dir=${VKSHADE_CHECK_BUILD_DIR:-build}
 run_check() {
   local label=$1
   shift
@@ -35,16 +36,16 @@ for file in "${json_files[@]}"; do
   run_check "JSON syntax: $file" jq empty "$file"
 done
 
-if [[ ! -f build/build.ninja ]]; then
-  run_check 'Meson setup' meson setup build
+if [[ ! -f $build_dir/build.ninja ]]; then
+  run_check 'Meson setup' meson setup "$build_dir"
 fi
-run_check 'Build and shader compilation' meson compile -C build
-run_check 'Meson tests' meson test -C build --print-errorlogs
+run_check 'Build and shader compilation' meson compile -C "$build_dir"
+run_check 'Meson tests' meson test -C "$build_dir" --print-errorlogs
 run_check 'Standalone shader tester type check' c++ -std=c++20 -Isrc -Isrc/reshade -fsyntax-only tools/test_shaders.cpp
 # Cppcheck does not infer compiler or Vulkan calling-convention macros from system headers.
-run_check 'C and C++ static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --project=build/compile_commands.json \
+run_check 'C and C++ static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --project="$build_dir/compile_commands.json" \
   -D__GNUC__=4 -DVKAPI_ATTR= -DVKAPI_CALL= --enable=warning,performance,portability --error-exitcode=1 \
-  --suppress=missingIncludeSystem '--suppress=*:src/reshade/*' '--suppress=*:src/imgui/*' '--suppress=*:build/*' \
+  --suppress=missingIncludeSystem '--suppress=*:src/reshade/*' '--suppress=*:src/imgui/*' "--suppress=*:$build_dir/*" \
   -i src/imgui -i src/reshade -i src/stb_image.c -i src/stb_image_resize.c
 run_check 'Standalone shader tester static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --std=c++20 -Isrc -Isrc/reshade \
   --enable=warning,performance,portability --error-exitcode=1 --suppress=missingIncludeSystem \

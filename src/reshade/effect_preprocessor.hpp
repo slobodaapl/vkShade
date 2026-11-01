@@ -29,6 +29,7 @@ namespace reshadefx
 			// Those act as defaults: an in-file #define overrides them silently
 			// (unguarded internal defines would otherwise be "redefinition" errors).
 			bool is_predefined = false;
+			bool is_shared = false;
 		};
 
 		// Define constructor explicitly because lexer class is not included here
@@ -58,6 +59,13 @@ namespace reshadefx
 		{
 			macro m { std::move(value), {} };
 			m.is_predefined = true;
+			return add_macro_definition(name, m);
+		}
+		bool add_shared_macro_definition(const std::string &name, std::string value)
+		{
+			macro m { std::move(value), {} };
+			m.is_predefined = true;
+			m.is_shared = true;
 			return add_macro_definition(name, m);
 		}
 

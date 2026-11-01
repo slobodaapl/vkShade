@@ -1,5 +1,7 @@
 #include "config_serializer.hpp"
+#include "config.hpp"
 #include "config_paths.hpp"
+#include "game_identity.hpp"
 #include "logger.hpp"
 
 #include <fstream>
@@ -12,6 +14,9 @@
 #include <array>
 #include <unistd.h>
 #include <climits>
+#include <cerrno>
+#include <fcntl.h>
+#include <sys/file.h>
 
 namespace vkShade
 {
@@ -19,6 +24,61 @@ namespace vkShade
     {
         constexpr int MIN_MAX_EFFECTS = 1;
         constexpr int MAX_MAX_EFFECTS = 200;
+
+        class FileLock
+        {
+        public:
+            explicit FileLock(const std::string& path) : fd(open(path.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600))
+            {
+                if (fd < 0)
+                    return;
+                while (flock(fd, LOCK_EX) != 0)
+                {
+                    if (errno == EINTR)
+                        continue;
+                    close(fd);
+                    fd = -1;
+                    break;
+                }
+            }
+            ~FileLock()
+            {
+                if (fd >= 0)
+                    close(fd);
+            }
+            explicit operator bool() const
+            {
+                return fd >= 0;
+            }
+            FileLock(const FileLock&)            = delete;
+            FileLock& operator=(const FileLock&) = delete;
+
+        private:
+            int fd;
+        };
+
+        std::string makeTempFile(const std::string& path)
+        {
+            const auto        pattern = path + ".tmp.XXXXXX";
+            std::vector<char> name(pattern.begin(), pattern.end());
+            name.push_back('\0');
+            const int fd = mkstemp(name.data());
+            if (fd < 0)
+                return {};
+            struct stat original;
+            if (stat(path.c_str(), &original) == 0 && fchmod(fd, original.st_mode & 07777) != 0)
+            {
+                close(fd);
+                std::remove(name.data());
+                return {};
+            }
+            if (close(fd) != 0)
+            {
+                std::remove(name.data());
+                return {};
+            }
+            return name.data();
+        }
     } // namespace
 
     std::string ConfigSerializer::getBaseConfigDir()
@@ -76,12 +136,27 @@ namespace vkShade
         return result;
     }
 
+    static std::string quotePath(const std::string& path)
+    {
+        std::string result = "\"";
+        for (char c : path)
+        {
+            if (c == '\\' || c == '"')
+                result += '\\';
+            result += c;
+        }
+        return result + '"';
+    }
+
     bool ConfigSerializer::saveConfig(const std::string&                         configName,
                                       const std::vector<std::string>&            effects,
                                       const std::vector<std::string>&            disabledEffects,
                                       const std::vector<ConfigParam>&            params,
                                       const std::map<std::string, std::string>&  effectPaths,
-                                      const std::vector<PreprocessorDefinition>& preprocessorDefs)
+                                      const std::vector<PreprocessorDefinition>& preprocessorDefs,
+                                      const ProfileSettings&                     profileSettings,
+                                      const std::set<std::string>&               unresolvedEffects,
+                                      const std::string&                         sourcePath)
     {
         std::string configsDir = getConfigsDir();
         if (configsDir.empty())
@@ -93,7 +168,8 @@ namespace vkShade
         mkdir(configsDir.c_str(), 0755);
 
         std::string filePath = configsDir + "/" + configName + ".conf";
-        bool        result   = saveToPath(filePath, effects, disabledEffects, params, effectPaths, preprocessorDefs);
+        bool        result =
+            saveToPath(filePath, effects, disabledEffects, params, effectPaths, preprocessorDefs, profileSettings, unresolvedEffects, sourcePath);
         if (result)
             Logger::info("Saved config to: " + filePath);
         return result;
@@ -239,6 +315,23 @@ namespace vkShade
             }
             else if (key == "overlayBlockInput")
                 settings.overlayBlockInput = (value == "true" || value == "1");
+            else if (key == "overlayFontSize")
+            {
+                try
+                {
+                    const int parsed = std::stoi(value);
+                    if (parsed < 0)
+                        Logger::err("invalid overlayFontSize value: " + value);
+                    else
+                        settings.overlayFontSize = parsed == AUTO_OVERLAY_FONT_SIZE
+                                                       ? AUTO_OVERLAY_FONT_SIZE
+                                                       : std::clamp(parsed, MIN_OVERLAY_FONT_SIZE, MAX_OVERLAY_FONT_SIZE);
+                }
+                catch (...)
+                {
+                    Logger::err("invalid overlayFontSize value: " + value);
+                }
+            }
             else if (key == "toggleKey")
                 settings.toggleKey = value;
             else if (key == "reloadKey")
@@ -295,6 +388,11 @@ namespace vkShade
         const int clampedMaxEffects = std::clamp(settings.maxEffects, MIN_MAX_EFFECTS, MAX_MAX_EFFECTS);
 
         file << "overlayBlockInput = " << (settings.overlayBlockInput ? "true" : "false") << "\n";
+        file << "overlayFontSize = "
+             << (settings.overlayFontSize <= AUTO_OVERLAY_FONT_SIZE
+                     ? AUTO_OVERLAY_FONT_SIZE
+                     : std::clamp(settings.overlayFontSize, MIN_OVERLAY_FONT_SIZE, MAX_OVERLAY_FONT_SIZE))
+             << "\n";
         file << "maxEffects = " << clampedMaxEffects << "\n";
         file << "autoApply = " << (settings.autoApply ? "true" : "false") << "\n";
         file << "autoApplyDelay = " << settings.autoApplyDelay << "\n";
@@ -337,7 +435,7 @@ namespace vkShade
         Logger::info("Created default vkShade.conf");
     }
 
-    std::string ConfigSerializer::detectGameName()
+    std::string ConfigSerializer::detectExecutableName()
     {
         char    buf[PATH_MAX];
         ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
@@ -355,6 +453,31 @@ namespace vkShade
         return exePath.substr(lastSlash + 1);
     }
 
+    std::string ConfigSerializer::detectGameName()
+    {
+        for (const char* variable : {"SteamAppId", "SteamGameId"})
+        {
+            const char* value = std::getenv(variable);
+            if (value)
+            {
+                auto identity = gameIdentity({}, value, {}, {});
+                if (!identity.empty())
+                    return identity;
+            }
+        }
+
+        const char*              command   = std::getenv("VKSHADE_WRAPPED_COMMAND");
+        const char*              directory = std::getenv("VKSHADE_WRAPPED_CWD");
+        std::error_code          error;
+        const auto               workingDirectory = directory && *directory ? std::filesystem::path(directory) : std::filesystem::current_path(error);
+        std::vector<std::string> args;
+        std::ifstream            cmdline("/proc/self/cmdline", std::ios::binary);
+        for (std::string arg; std::getline(cmdline, arg, '\0');)
+            args.push_back(std::move(arg));
+        auto identity = gameIdentity(command ? command : "", "", args, workingDirectory);
+        return identity.empty() ? detectExecutableName() : identity;
+    }
+
     std::string ConfigSerializer::autoDetectConfig()
     {
         std::string gameName = detectGameName();
@@ -365,7 +488,7 @@ namespace vkShade
         if (configsDir.empty())
             return "";
 
-        std::string configPath = configsDir + "/" + gameName + ".conf";
+        std::string configPath = getProfilePath(gameName);
         struct stat st;
         if (stat(configPath.c_str(), &st) != 0)
             return "";
@@ -520,10 +643,31 @@ namespace vkShade
         if (configsDir.empty() || gameName.empty())
             return "";
 
+        if (profileName.find_first_of("/\n\r") != std::string::npos)
+            return "";
+        if (usesGameIdentityDirectory(gameName))
+        {
+            const auto path = std::filesystem::path(gameName).lexically_normal();
+            if (path.is_absolute() || path.string().starts_with("../"))
+                return "";
+            const auto filename = profileName.empty() || profileName == "default" ? "default.conf" : "@" + profileName + ".conf";
+            return (std::filesystem::path(configsDir) / path / filename).string();
+        }
         if (profileName.empty() || profileName == "default")
             return configsDir + "/" + gameName + ".conf";
 
         return configsDir + "/" + gameName + "@" + profileName + ".conf";
+    }
+
+    std::string ConfigSerializer::getGameDepthPath(const std::string& gameName)
+    {
+        const auto configsDir = getConfigsDir();
+        if (configsDir.empty() || gameName.empty())
+            return {};
+        const auto path = std::filesystem::path(gameName).lexically_normal();
+        if (path.is_absolute() || path == "." || path == ".." || path.string().starts_with("../"))
+            return {};
+        return (std::filesystem::path(configsDir) / ".depth" / path / "settings.conf").string();
     }
 
     std::string ConfigSerializer::ensureGameProfile(const std::string& gameName)
@@ -535,36 +679,88 @@ namespace vkShade
         if (configsDir.empty())
             return "";
 
-        mkdir(configsDir.c_str(), 0755);
-
         std::string profilePath = getProfilePath(gameName);
-
-        struct stat st;
-        if (stat(profilePath.c_str(), &st) == 0)
+        if (profilePath.empty())
+            return "";
+        std::error_code error;
+        std::filesystem::create_directories(std::filesystem::path(profilePath).parent_path(), error);
+        if (error)
         {
-            Logger::info("Found existing profile for " + gameName);
-            return profilePath;
-        }
-
-        // Create default profile with empty effects
-        std::ofstream file(profilePath);
-        if (!file.is_open())
-        {
-            Logger::err("Could not create profile for " + gameName + ": " + profilePath);
+            Logger::err("Could not create profile directory: " + error.message());
             return "";
         }
 
-        file << "# vkShade profile for " << gameName << "\n";
-        file << "# Auto-created on first launch\n\n";
-        file << "effects = \n";
-
-        file.close();
+        const int fd = open(profilePath.c_str(), O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0666);
+        if (fd < 0)
+        {
+            if (errno == EEXIST)
+                return profilePath;
+            Logger::err("Could not create profile for " + gameName + ": " + profilePath);
+            return "";
+        }
+        const std::string contents = "# vkShade profile for " + gameName + "\n# Auto-created on first launch\n\neffects = \n";
+        size_t            written  = 0;
+        while (written < contents.size())
+        {
+            const ssize_t count = write(fd, contents.data() + written, contents.size() - written);
+            if (count < 0 && errno == EINTR)
+                continue;
+            if (count <= 0)
+                break;
+            written += static_cast<size_t>(count);
+        }
+        const bool closed = close(fd) == 0;
+        if (written != contents.size() || !closed)
+        {
+            Logger::err("Could not write profile for " + gameName + ": " + profilePath);
+            return "";
+        }
         Logger::info("Created default profile for " + gameName + ": " + profilePath);
 
-        // Also set as active profile
-        setActiveProfile(gameName, "default");
-
         return profilePath;
+    }
+
+    void ConfigSerializer::migrateGameProfiles(const std::string& gameName, const std::string& legacyGameName)
+    {
+        if (!usesGameIdentityDirectory(gameName) || legacyGameName.empty())
+            return;
+        const auto targetDefault = getProfilePath(gameName);
+        if (targetDefault.empty())
+            return;
+        std::error_code error;
+        std::filesystem::create_directories(std::filesystem::path(targetDefault).parent_path(), error);
+        if (error)
+        {
+            Logger::warn("Could not create migrated profile directory: " + error.message());
+            return;
+        }
+        FileLock lock((std::filesystem::path(targetDefault).parent_path() / ".migration.lock").string());
+        if (!lock)
+        {
+            Logger::warn("Could not lock game profile migration");
+            return;
+        }
+        if (!listProfilesForGame(gameName).empty())
+            return;
+        const auto profiles = listProfilesForGame(legacyGameName);
+        if (profiles.empty())
+            return;
+        for (const auto& profile : profiles)
+        {
+            const auto source = getProfilePath(legacyGameName, profile);
+            const auto target = getProfilePath(gameName, profile);
+            if (source.empty() || target.empty())
+                continue;
+            std::filesystem::copy_file(source, target, std::filesystem::copy_options::skip_existing, error);
+            if (error)
+            {
+                Logger::warn("Could not migrate game profile: " + error.message());
+                return;
+            }
+        }
+        const auto active = getActiveProfile(legacyGameName);
+        if (active != "default" && std::filesystem::exists(getProfilePath(gameName, active), error))
+            setActiveProfile(gameName, active);
     }
 
     std::vector<std::string> ConfigSerializer::listProfilesForGame(const std::string& gameName)
@@ -579,13 +775,15 @@ namespace vkShade
 
         // Check for default profile: <gameName>.conf
         struct stat st;
-        std::string defaultPath = configsDir + "/" + gameName + ".conf";
+        std::string defaultPath = getProfilePath(gameName);
         if (stat(defaultPath.c_str(), &st) == 0)
             profiles.push_back("default");
 
         // Check for named profiles: <gameName>@<name>.conf
-        std::string prefix = gameName + "@";
-        DIR*        d      = opendir(configsDir.c_str());
+        const bool  separateDirectory = usesGameIdentityDirectory(gameName);
+        std::string prefix            = separateDirectory ? "@" : gameName + "@";
+        std::string searchDir         = separateDirectory ? configsDir + "/" + gameName : configsDir;
+        DIR*        d                 = opendir(searchDir.c_str());
         if (!d)
             return profiles;
 
@@ -641,7 +839,16 @@ namespace vkShade
         if (gameName.empty())
             return;
 
-        std::string activePath = getConfigsDir() + "/.active_profiles";
+        const auto configsDir = getConfigsDir();
+        if (configsDir.empty())
+            return;
+        std::string activePath = configsDir + "/.active_profiles";
+        FileLock    lock(activePath + ".lock");
+        if (!lock)
+        {
+            Logger::warn("Could not lock active profiles");
+            return;
+        }
 
         // Read existing entries
         std::map<std::string, std::string> entries;
@@ -662,17 +869,22 @@ namespace vkShade
         entries[gameName] = profileName;
 
         // Write back atomically
-        std::string   tmpPath = activePath + ".tmp";
+        std::string tmpPath = makeTempFile(activePath);
+        if (tmpPath.empty())
+            return;
         std::ofstream file(tmpPath);
         if (!file.is_open())
+        {
+            std::remove(tmpPath.c_str());
             return;
+        }
 
         for (const auto& [key, value] : entries)
             file << key << "=" << value << "\n";
 
         file.close();
-        if (!file.fail())
-            std::rename(tmpPath.c_str(), activePath.c_str());
+        if (file.fail() || std::rename(tmpPath.c_str(), activePath.c_str()) != 0)
+            std::remove(tmpPath.c_str());
     }
 
     bool ConfigSerializer::createProfile(const std::string& gameName, const std::string& profileName, const std::string& copyFromProfile)
@@ -742,8 +954,11 @@ namespace vkShade
 
     ProfileSettings ConfigSerializer::loadProfileSettings(const std::string& filePath)
     {
-        ProfileSettings settings;
-        std::ifstream   file(filePath);
+        ProfileSettings                              settings;
+        DepthDefinitionValues                        canonicalDepthValues;
+        DepthDefinitionValues                        reshadeDepthValues;
+        std::map<std::string, std::set<std::string>> legacyDepthValues;
+        std::ifstream                                file(filePath);
         if (!file.is_open())
             return settings;
 
@@ -771,8 +986,55 @@ namespace vkShade
             trim(key);
             trim(value);
 
+            const auto separator = key.rfind('@');
+            const auto macroName = separator == std::string::npos ? std::string_view(key) : std::string_view(key).substr(separator + 1);
+            const auto canonical = canonicalDepthDefinition(macroName);
+            if (!canonical.empty() && !value.empty())
+            {
+                const std::string name(canonical);
+                settings.hasDepthDefinitions = true;
+                if (separator != std::string::npos)
+                    legacyDepthValues[name].insert(value);
+                else if (macroName.starts_with("RESHADE_"))
+                    reshadeDepthValues[name] = value;
+                else
+                    canonicalDepthValues[name] = value;
+                continue;
+            }
+
             if (key == "safeAntiCheat")
                 settings.safeAntiCheat = (value == "true" || value == "on" || value == "1");
+            else if (key == "depthCopyBeforeClears")
+                settings.depthCopyBeforeClears = (value == "true" || value == "on" || value == "1");
+            else if (key == "depthClearIndex")
+            {
+                try
+                {
+                    settings.depthClearIndex = std::stoi(value);
+                }
+                catch (...)
+                {
+                    Logger::warn("invalid depthClearIndex value: " + value);
+                }
+            }
+            else if (key == "techniqueOrder" || key == "enabledTechniques")
+            {
+                auto& entries = key == "techniqueOrder" ? settings.techniqueOrder : settings.enabledTechniques;
+                entries.clear();
+                size_t start = 0;
+                while (start < value.size())
+                {
+                    const size_t end = value.find(':', start);
+                    entries.push_back(value.substr(start, end == std::string::npos ? end : end - start));
+                    if (end == std::string::npos)
+                        break;
+                    start = end + 1;
+                }
+                if (key == "techniqueOrder")
+                    settings.hasTechniqueOrder = true;
+                else
+                    settings.hasEnabledTechniques = true;
+            }
             else if (key == "depthSourceIndex")
             {
                 try
@@ -787,7 +1049,149 @@ namespace vkShade
             }
         }
 
+        for (const auto& definition : depthDefinitions)
+        {
+            const std::string name(definition.name);
+            const auto        canonical = canonicalDepthValues.find(name);
+            const auto        reshade   = reshadeDepthValues.find(name);
+            if (canonical != canonicalDepthValues.end())
+            {
+                settings.depthDefinitions[name] = canonical->second;
+                if (reshade != reshadeDepthValues.end() && reshade->second != canonical->second)
+                    settings.conflictingDepthDefinitions.insert(name);
+            }
+            else if (reshade != reshadeDepthValues.end())
+                settings.depthDefinitions[name] = reshade->second;
+            else if (auto legacy = legacyDepthValues.find(name); legacy != legacyDepthValues.end())
+            {
+                if (legacy->second.size() == 1)
+                    settings.depthDefinitions[name] = *legacy->second.begin();
+                else if (!legacy->second.empty())
+                    settings.conflictingDepthDefinitions.insert(name);
+            }
+        }
+
         return settings;
+    }
+
+    ProfileSettings ConfigSerializer::loadGameDepthSettings(const std::string& gameName, const std::string& activeProfilePath)
+    {
+        ProfileSettings result;
+        if (gameName.empty())
+            return loadProfileSettings(activeProfilePath);
+
+        const auto shared = loadProfileSettings(getGameDepthPath(gameName));
+        if (shared.depthDefinitions.size() == depthDefinitions.size() && shared.conflictingDepthDefinitions.empty())
+            return shared;
+
+        std::map<std::string, std::set<std::string>> legacyValues;
+        std::set<std::string>                        legacyConflicts;
+        std::vector<std::string>                     paths;
+        for (const auto& profile : listProfilesForGame(gameName))
+            paths.push_back(getProfilePath(gameName, profile));
+        if (!activeProfilePath.empty() && std::find(paths.begin(), paths.end(), activeProfilePath) == paths.end())
+            paths.push_back(activeProfilePath);
+        for (const auto& path : paths)
+        {
+            const auto settings = loadProfileSettings(path);
+            for (const auto& [name, value] : settings.depthDefinitions)
+                legacyValues[name].insert(value);
+            legacyConflicts.insert(settings.conflictingDepthDefinitions.begin(), settings.conflictingDepthDefinitions.end());
+        }
+        for (const auto& definition : depthDefinitions)
+        {
+            const std::string name(definition.name);
+            if (auto value = shared.depthDefinitions.find(name); value != shared.depthDefinitions.end())
+                result.depthDefinitions[name] = value->second;
+            else if (auto legacy = legacyValues.find(name);
+                     legacy != legacyValues.end() && legacy->second.size() == 1 && !legacyConflicts.count(name))
+                result.depthDefinitions[name] = *legacy->second.begin();
+            if (shared.conflictingDepthDefinitions.count(name))
+                result.conflictingDepthDefinitions.insert(name);
+            else if (!shared.depthDefinitions.count(name)
+                     && (legacyConflicts.count(name) || (legacyValues.count(name) && legacyValues[name].size() > 1)))
+                result.conflictingDepthDefinitions.insert(name);
+        }
+        result.hasDepthDefinitions = !result.depthDefinitions.empty() || !result.conflictingDepthDefinitions.empty();
+        return result;
+    }
+
+    bool
+    ConfigSerializer::saveGameDepthSettings(const std::string& gameName, const DepthDefinitionValues& values, const std::set<std::string>& conflicts)
+    {
+        const auto path = getGameDepthPath(gameName);
+        if (path.empty())
+            return false;
+        std::error_code error;
+        std::filesystem::create_directories(std::filesystem::path(path).parent_path(), error);
+        if (error)
+            return false;
+        FileLock lock(path + ".lock");
+        if (!lock)
+            return false;
+        std::vector<std::string> preserved;
+        std::ifstream            previous(path);
+        for (std::string line; std::getline(previous, line);)
+        {
+            const auto equals = line.find('=');
+            if (equals == std::string::npos)
+            {
+                preserved.push_back(line);
+                continue;
+            }
+            auto key = line.substr(0, equals);
+            key.erase(std::remove_if(key.begin(), key.end(), [](char c) { return c == ' ' || c == '\t'; }), key.end());
+            const auto canonical = canonicalDepthDefinition(key);
+            if (canonical.empty() || conflicts.count(std::string(canonical)))
+                preserved.push_back(line);
+        }
+        const auto temporary = makeTempFile(path);
+        if (temporary.empty())
+            return false;
+        std::ofstream file(temporary);
+        if (!file.is_open())
+        {
+            std::remove(temporary.c_str());
+            return false;
+        }
+        for (const auto& definition : depthDefinitions)
+            if (!conflicts.count(std::string(definition.name)))
+                file << definition.name << " = " << depthDefinitionValue(values, definition) << '\n';
+        for (const auto& line : preserved)
+            file << line << '\n';
+        file.close();
+        if (file.fail() || std::rename(temporary.c_str(), path.c_str()) != 0)
+        {
+            std::remove(temporary.c_str());
+            return false;
+        }
+        return true;
+    }
+
+    EffectiveDepthDefinitions ConfigSerializer::loadEffectiveDepthDefinitions(Config* config)
+    {
+        if (!config)
+            return {};
+        auto       result   = loadEffectiveDepthDefinitions(config->getFallback());
+        const auto settings = config->getGameName().empty() ? loadProfileSettings(config->getConfigFilePath())
+                                                            : loadGameDepthSettings(config->getGameName(), config->getConfigFilePath());
+        for (const auto& [name, value] : settings.depthDefinitions)
+        {
+            result.values[name] = value;
+            result.conflicts.erase(name);
+        }
+        for (const auto& name : settings.conflictingDepthDefinitions)
+        {
+            result.conflicts.insert(name);
+            if (!settings.depthDefinitions.count(name))
+                result.values.erase(name);
+        }
+        return result;
+    }
+
+    DepthDefinitionValues ConfigSerializer::loadDepthDefinitions(Config* config)
+    {
+        return loadEffectiveDepthDefinitions(config).values;
     }
 
     bool ConfigSerializer::saveToPath(const std::string&                         filePath,
@@ -796,14 +1200,73 @@ namespace vkShade
                                       const std::vector<ConfigParam>&            params,
                                       const std::map<std::string, std::string>&  effectPaths,
                                       const std::vector<PreprocessorDefinition>& preprocessorDefs,
-                                      const ProfileSettings&                     profileSettings)
+                                      const ProfileSettings&                     profileSettings,
+                                      const std::set<std::string>&               unresolvedEffects,
+                                      const std::string&                         sourcePath)
     {
+        std::vector<std::string> preservedLines;
+        const auto&              previousPath = sourcePath.empty() ? filePath : sourcePath;
+        ProfileSettings          savedProfile = profileSettings;
+        if (!savedProfile.hasDepthDefinitions)
+        {
+            const auto previousSettings              = loadProfileSettings(previousPath);
+            savedProfile.hasDepthDefinitions         = previousSettings.hasDepthDefinitions;
+            savedProfile.depthDefinitions            = previousSettings.depthDefinitions;
+            savedProfile.conflictingDepthDefinitions = previousSettings.conflictingDepthDefinitions;
+        }
+        std::ifstream previous(previousPath);
+        if (previous)
+        {
+            Config                   oldConfig(previousPath);
+            const auto               definitions = oldConfig.getEffectDefinitions();
+            const auto               oldEffects  = oldConfig.getOption<std::vector<std::string>>("effects", {});
+            std::vector<std::string> owners      = oldEffects;
+            owners.insert(owners.end(), effects.begin(), effects.end());
+            for (const auto& [name, _] : definitions)
+                owners.push_back(name);
+            std::sort(owners.begin(), owners.end(), [](const auto& a, const auto& b) { return a.size() > b.size(); });
+            for (std::string line; std::getline(previous, line);)
+            {
+                const auto equals  = line.find('=');
+                const auto comment = line.find('#');
+                if (equals == std::string::npos || (comment != std::string::npos && comment < equals))
+                    continue;
+                auto key = line.substr(0, equals);
+                key.erase(std::remove_if(key.begin(), key.end(), [](char c) { return c == ' ' || c == '\t' || c == '"'; }), key.end());
+                const auto separator = key.rfind('@');
+                const auto macroName = separator == std::string::npos ? std::string_view(key) : std::string_view(key).substr(separator + 1);
+                if (const auto canonical = canonicalDepthDefinition(macroName); !canonical.empty())
+                {
+                    if (savedProfile.conflictingDepthDefinitions.count(std::string(canonical)))
+                        preservedLines.push_back(line);
+                    continue;
+                }
+                for (const auto& owner : owners)
+                {
+                    if (key != owner && !key.starts_with(owner + '.') && !key.starts_with(owner + '@'))
+                        continue;
+                    const bool unused     = definitions.count(owner) && std::find(oldEffects.begin(), oldEffects.end(), owner) == oldEffects.end()
+                                            && std::find(effects.begin(), effects.end(), owner) == effects.end();
+                    const bool unresolved = unresolvedEffects.count(owner) && (key != owner || !effectPaths.count(owner));
+                    if (unused || unresolved)
+                        preservedLines.push_back(line);
+                    break;
+                }
+            }
+        }
+
         // Atomic write: write to temp file then rename to prevent corruption
-        std::string   tmpPath = filePath + ".tmp";
+        std::string tmpPath = makeTempFile(filePath);
+        if (tmpPath.empty())
+        {
+            Logger::err("Could not create temporary config for: " + filePath);
+            return false;
+        }
         std::ofstream file(tmpPath);
         if (!file.is_open())
         {
             Logger::err("Could not open for writing: " + tmpPath);
+            std::remove(tmpPath.c_str());
             return false;
         }
 
@@ -812,6 +1275,19 @@ namespace vkShade
             file << "safeAntiCheat = true\n\n";
         if (profileSettings.hasDepthSourceIndex || profileSettings.depthSourceIndex != -1)
             file << "depthSourceIndex = " << profileSettings.depthSourceIndex << "\n\n";
+        if (profileSettings.depthCopyBeforeClears)
+            file << "depthCopyBeforeClears = true\n";
+        if (profileSettings.depthClearIndex != 0)
+            file << "depthClearIndex = " << profileSettings.depthClearIndex << "\n";
+        if (profileSettings.hasTechniqueOrder)
+            file << "techniqueOrder = " << joinEffects(profileSettings.techniqueOrder) << "\n";
+        if (profileSettings.hasEnabledTechniques)
+            file << "enabledTechniques = " << joinEffects(profileSettings.enabledTechniques) << "\n";
+        for (const auto& [name, value] : savedProfile.depthDefinitions)
+            if (!savedProfile.conflictingDepthDefinitions.count(name))
+                file << name << " = " << value << "\n";
+        for (const auto& line : preservedLines)
+            file << line << '\n';
 
         // Group params by effect
         std::map<std::string, std::vector<const ConfigParam*>> paramsByEffect;
@@ -829,7 +1305,7 @@ namespace vkShade
             file << "# " << effectName << "\n";
             auto pathIt = effectPaths.find(effectName);
             if (pathIt != effectPaths.end() && !pathIt->second.empty())
-                file << effectName << " = " << pathIt->second << "\n";
+                file << effectName << " = " << quotePath(pathIt->second) << "\n";
             for (const auto* param : effectParams)
                 file << param->effectName << "." << param->paramName << " = " << param->value << "\n";
             auto defsIt = defsByEffect.find(effectName);
@@ -854,7 +1330,7 @@ namespace vkShade
             file << "# " << effectName << "\n";
             auto pathIt = effectPaths.find(effectName);
             if (pathIt != effectPaths.end() && !pathIt->second.empty())
-                file << effectName << " = " << pathIt->second << "\n";
+                file << effectName << " = " << quotePath(pathIt->second) << "\n";
             for (const auto* def : effectDefs)
                 if (def->value != def->defaultValue) // see comment above
                     file << def->effectName << "@" << def->name << " = " << def->value << "\n";
@@ -867,15 +1343,14 @@ namespace vkShade
             if (!path.empty() && paramsByEffect.find(effectName) == paramsByEffect.end() && defsByEffect.find(effectName) == defsByEffect.end())
             {
                 file << "# " << effectName << "\n";
-                file << effectName << " = " << path << "\n\n";
+                file << effectName << " = " << quotePath(path) << "\n\n";
             }
         }
 
         // Write effects list
         file << "effects = " << joinEffects(effects) << "\n";
 
-        if (!disabledEffects.empty())
-            file << "disabledEffects = " << joinEffects(disabledEffects) << "\n";
+        file << "disabledEffects = " << joinEffects(disabledEffects) << "\n";
 
         file.close();
 

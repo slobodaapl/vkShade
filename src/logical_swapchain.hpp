@@ -12,6 +12,7 @@
 #include "vulkan_include.hpp"
 
 #include "logical_device.hpp"
+#include "depth_resolve_resources.hpp"
 
 namespace vkShade
 {
@@ -22,6 +23,7 @@ namespace vkShade
     {
         LogicalDevice*                       pLogicalDevice = nullptr;
         VkSwapchainCreateInfoKHR             swapchainCreateInfo;
+        std::vector<uint32_t>                queueFamilyIndices;
         VkExtent2D                           imageExtent;
         VkFormat                             format;
         uint32_t                             imageCount             = 0;
@@ -38,29 +40,45 @@ namespace vkShade
         std::vector<VkSemaphore>             overlaySemaphores;
         std::vector<std::shared_ptr<Effect>> effects;
         std::shared_ptr<Effect>              defaultTransfer;
-        VkDeviceMemory                       fakeImageMemory;
+        VkDeviceMemory                       fakeImageMemory = VK_NULL_HANDLE;
+        std::vector<VkDeviceMemory>          extraFakeImageMemory;
         std::vector<VkImage>                 depthResolveImages;
         std::vector<VkImageView>             depthResolveImageViews;
         std::vector<VkDeviceMemory>          depthResolveMemories;
         std::vector<bool>                    depthResolveInitialized;
-        VkFormat                             depthResolveFormat              = VK_FORMAT_UNDEFINED;
-        VkExtent3D                           depthResolveExtent              = {0, 0, 1};
-        bool                                 depthResolveUsesShader          = false;
-        VkImage                              depthResolveSourceImage         = VK_NULL_HANDLE;
-        VkImageView                          depthResolveSourceImageView     = VK_NULL_HANDLE;
-        uint64_t                             depthResolveSourceId            = 0;
-        VkSampler                            depthResolveSampler             = VK_NULL_HANDLE;
-        VkDescriptorSetLayout                depthResolveDescriptorSetLayout = VK_NULL_HANDLE;
-        VkDescriptorPool                     depthResolveDescriptorPool      = VK_NULL_HANDLE;
-        std::vector<VkDescriptorSet>         depthResolveDescriptorSets;
-        VkRenderPass                         depthResolveRenderPass     = VK_NULL_HANDLE;
-        VkPipelineLayout                     depthResolvePipelineLayout = VK_NULL_HANDLE;
-        VkPipeline                           depthResolvePipeline       = VK_NULL_HANDLE;
-        std::vector<VkFramebuffer>           depthResolveFramebuffers;
+        std::vector<uint64_t>                depthResolveVersions;
+        std::optional<uint32_t>              depthResolveLatest;
+        uint64_t                             depthResolveVersion = 0;
+
+        struct DepthCopySubmission
+        {
+            VkCommandBuffer              commandBuffer = VK_NULL_HANDLE;
+            VkFence                      fence         = VK_NULL_HANDLE;
+            std::shared_ptr<DepthBackup> backup;
+            bool                         pending         = false;
+            bool                         referencesDepth = false;
+        };
+        std::vector<DepthCopySubmission> depthCopySubmissions;
+        std::vector<DepthCopySubmission> retiredDepthCopySubmissions;
+        VkFormat                         depthResolveFormat              = VK_FORMAT_UNDEFINED;
+        VkExtent3D                       depthResolveExtent              = {0, 0, 1};
+        bool                             depthResolveUsesShader          = false;
+        VkImage                          depthResolveSourceImage         = VK_NULL_HANDLE;
+        VkImageView                      depthResolveSourceImageView     = VK_NULL_HANDLE;
+        uint64_t                         depthResolveSourceId            = 0;
+        VkSampler                        depthResolveSampler             = VK_NULL_HANDLE;
+        VkDescriptorSetLayout            depthResolveDescriptorSetLayout = VK_NULL_HANDLE;
+        VkDescriptorPool                 depthResolveDescriptorPool      = VK_NULL_HANDLE;
+        std::vector<VkDescriptorSet>     depthResolveDescriptorSets;
+        VkRenderPass                     depthResolveRenderPass     = VK_NULL_HANDLE;
+        VkPipelineLayout                 depthResolvePipelineLayout = VK_NULL_HANDLE;
+        VkPipeline                       depthResolvePipeline       = VK_NULL_HANDLE;
+        std::vector<VkFramebuffer>       depthResolveFramebuffers;
 
         void destroy();
         void reloadEffects(Config* pConfig);
     };
+
 } // namespace vkShade
 
 #endif // LOGICAL_SWAPCHAIN_HPP_INCLUDED

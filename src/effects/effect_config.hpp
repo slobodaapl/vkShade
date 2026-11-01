@@ -4,18 +4,13 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <map>
 #include <filesystem>
 
 #include "params/effect_param.hpp"
 
 namespace vkShade
 {
-    enum class EffectType
-    {
-        BuiltIn, // cas, dls, fxaa, smaa, deband, lut
-        ReShade  // .fx files
-    };
-
     // Preprocessor definition extracted from ReShade shader
     // These are user-configurable compile-time constants (#define macros)
     struct PreprocessorDefinition
@@ -28,15 +23,14 @@ namespace vkShade
 
     struct EffectConfig
     {
-        std::string                               name;       // Instance name: "cas", "cas.2", "Clarity", etc.
-        std::string                               effectType; // Base type: "cas", "Clarity" (for finding shader/identifying built-in)
-        std::string                               filePath;   // For ReShade: path to .fx file, empty for built-in
-        EffectType                                type    = EffectType::BuiltIn;
+        std::string                               name;
+        std::string                               filePath;
         bool                                      enabled = true;
         std::vector<std::unique_ptr<EffectParam>> parameters;
         std::vector<PreprocessorDefinition>       preprocessorDefs; // ReShade: user-configurable macros
         std::string                               compileError;     // Empty if compiled successfully, error message if failed
-        std::filesystem::file_time_type           fileModTime{};    // Last modification time of .fx file when parsed
+        std::map<std::string, std::string>        techniqueErrors;
+        std::filesystem::file_time_type           fileModTime{}; // Last modification time of .fx file when parsed
         bool                                      hasFailed() const
         {
             return !compileError.empty();

@@ -1,10 +1,12 @@
 #include "imgui_overlay.hpp"
+#include "technique_id.hpp"
 #include "depth_selection.hpp"
 #include "effects/effect_registry.hpp"
 #include "settings_manager.hpp"
 #include "reshade_parser.hpp"
 #include "logger.hpp"
 #include "mouse_input.hpp"
+#include "mouse_input_wayland.hpp"
 #include "keyboard_input.hpp"
 #include "input_blocker.hpp"
 #include "config_serializer.hpp"
@@ -15,10 +17,14 @@
 #include "wayland_interpose.hpp"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
+#include <limits>
 #include <numeric>
+#include <unordered_map>
 #include <vector>
 
 #include "imgui/imgui.h"
@@ -27,6 +33,24 @@
 
 namespace vkShade
 {
+    VKAPI_ATTR VkResult VKAPI_CALL vkShade_QueueSubmit(VkQueue queue, uint32_t submitCount, const VkSubmitInfo* submits, VkFence fence);
+
+    static std::mutex                                   imguiDeviceMutex;
+    static std::unordered_map<VkDevice, LogicalDevice*> imguiDevices;
+
+    static VkResult VKAPI_CALL imguiAllocateCommandBuffers(VkDevice device, const VkCommandBufferAllocateInfo* info, VkCommandBuffer* buffers)
+    {
+        std::lock_guard<std::mutex> lock(imguiDeviceMutex);
+        const auto                  it = imguiDevices.find(device);
+        if (it == imguiDevices.end())
+            return VK_ERROR_INITIALIZATION_FAILED;
+        const auto result = it->second->vkd.AllocateCommandBuffers(device, info, buffers);
+        if (result == VK_SUCCESS)
+            for (uint32_t i = 0; i < info->commandBufferCount; ++i)
+                initializeDispatchTable(buffers[i], device);
+        return result;
+    }
+
     // No-op dummy for Vulkan functions ImGui requests but vkShade doesn't intercept.
     // ImGui's LoadFunctions treats nullptr returns as failures, so we need a valid pointer.
     static void VKAPI_CALL dummyVulkanFunc()
@@ -43,7 +67,8 @@ namespace vkShade
     if (strcmp(function_name, "vk" #name) == 0) \
     return (PFN_vkVoidFunction) device->vkd.name
 
-        CHECK_FUNC(AllocateCommandBuffers);
+        if (strcmp(function_name, "vkAllocateCommandBuffers") == 0)
+            return reinterpret_cast<PFN_vkVoidFunction>(imguiAllocateCommandBuffers);
         CHECK_FUNC(AllocateDescriptorSets);
         CHECK_FUNC(AllocateMemory);
         CHECK_FUNC(BeginCommandBuffer);
@@ -127,8 +152,12 @@ namespace vkShade
     }
 
     ImGuiOverlay::ImGuiOverlay(LogicalDevice* device, VkFormat swapchainFormat, uint32_t imageCount, OverlayPersistentState* persistentState) :
-        pLogicalDevice(device), pPersistentState(persistentState)
+        pLogicalDevice(device), pPersistentState(persistentState), textureUploads(device->device, device->queue, device->vkd, vkShade_QueueSubmit)
     {
+        {
+            std::lock_guard<std::mutex> lock(imguiDeviceMutex);
+            imguiDevices[device->device] = device;
+        }
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
         ImGuiIO& io                          = ImGui::GetIO();
@@ -154,6 +183,7 @@ namespace vkShade
         // Restore UI preferences from persistent state
         if (pPersistentState)
             visible = pPersistentState->visible;
+        setWaylandOverlayMouseActive(visible);
         setInputBlocked(visible);
 
         initialized = true;
@@ -162,6 +192,11 @@ namespace vkShade
 
     ImGuiOverlay::~ImGuiOverlay()
     {
+        {
+            std::lock_guard<std::mutex> lock(imguiDeviceMutex);
+            imguiDevices.erase(pLogicalDevice->device);
+        }
+        setWaylandOverlayMouseActive(false);
         if (!initialized)
             return;
 
@@ -170,6 +205,7 @@ namespace vkShade
             autoSaveProfile();
 
         pLogicalDevice->vkd.QueueWaitIdle(pLogicalDevice->queue);
+        textureUploads.clearAfterIdle();
 
         // Clean up Wayland resources before destroying the event queue
         if (isWayland())
@@ -202,9 +238,72 @@ namespace vkShade
         Logger::info("ImGui overlay destroyed");
     }
 
+    void ImGuiOverlay::setEffectRegistry(EffectRegistry* registry)
+    {
+        pEffectRegistry                   = registry;
+        Config* config                    = registry ? registry->getConfig() : nullptr;
+        auto    inherited                 = ConfigSerializer::loadEffectiveDepthDefinitions(config ? config->getFallback() : nullptr);
+        inheritedDepthDefinitions         = std::move(inherited.values);
+        inheritedDepthDefinitionConflicts = std::move(inherited.conflicts);
+    }
+
+    DepthDefinitionValues ImGuiOverlay::effectiveDepthDefinitions() const
+    {
+        auto values = inheritedDepthDefinitions;
+        for (const auto& name : gameDepthSettings.conflictingDepthDefinitions)
+            if (!gameDepthSettings.depthDefinitions.count(name))
+                values.erase(name);
+        for (const auto& [name, value] : gameDepthSettings.depthDefinitions)
+            values[name] = value;
+        return values;
+    }
+
+    std::set<std::string> ImGuiOverlay::effectiveDepthDefinitionConflicts() const
+    {
+        auto conflicts = inheritedDepthDefinitionConflicts;
+        for (const auto& entry : gameDepthSettings.depthDefinitions)
+            conflicts.erase(entry.first);
+        conflicts.insert(gameDepthSettings.conflictingDepthDefinitions.begin(), gameDepthSettings.conflictingDepthDefinitions.end());
+        return conflicts;
+    }
+
+    bool ImGuiOverlay::refreshDepthDefinitionsFromConfig()
+    {
+        if (!pEffectRegistry || profileDirty || paramsDirty || !pendingConfigPath.empty())
+            return false;
+        Config* config = pEffectRegistry->getConfig();
+        if (!config)
+            return false;
+        auto settings                                 = ConfigSerializer::loadGameDepthSettings(activeGameName, config->getConfigFilePath());
+        auto inherited                                = ConfigSerializer::loadEffectiveDepthDefinitions(config->getFallback());
+        inheritedDepthDefinitions                     = std::move(inherited.values);
+        inheritedDepthDefinitionConflicts             = std::move(inherited.conflicts);
+        gameDepthSettings.hasDepthDefinitions         = settings.hasDepthDefinitions;
+        gameDepthSettings.depthDefinitions            = std::move(settings.depthDefinitions);
+        gameDepthSettings.conflictingDepthDefinitions = std::move(settings.conflictingDepthDefinitions);
+        auto       values                             = effectiveDepthDefinitions();
+        const bool changed                            = pEffectRegistry->getDepthDefinitions() != values;
+        if (changed)
+        {
+            pEffectRegistry->setDepthDefinitions(std::move(values));
+            shaderMetadata.clear();
+        }
+        return changed;
+    }
+
+    bool ImGuiOverlay::takeDepthDefinitionsChanged()
+    {
+        if (profileDirty || paramsDirty)
+            return false;
+        const bool changed      = depthDefinitionsChanged;
+        depthDefinitionsChanged = false;
+        return changed;
+    }
+
     void ImGuiOverlay::toggle()
     {
         visible = !visible;
+        setWaylandOverlayMouseActive(visible);
         setInputBlocked(visible);
 
         // Pointer confinement was removed: the overlay renders inside the game's
@@ -225,6 +324,16 @@ namespace vkShade
 
     void ImGuiOverlay::updateState(OverlayState newState)
     {
+        if (pendingConfigPath.empty() && techniqueSettingsPath != newState.configPath)
+        {
+            techniqueSettings     = ConfigSerializer::loadProfileSettings(newState.configPath);
+            techniqueSettingsPath = newState.configPath;
+            if (!gameDepthNeedsSave)
+                gameDepthSettings = ConfigSerializer::loadGameDepthSettings(activeGameName, newState.configPath);
+            shaderMetadata.clear();
+        }
+        else if (state.effectFiles != newState.effectFiles || state.shaderIncludePaths != newState.shaderIncludePaths)
+            shaderMetadata.clear();
         {
             std::lock_guard<std::mutex> lock(depthStateMutex);
             depthState = std::move(newState.depth);
@@ -254,19 +363,24 @@ namespace vkShade
         if (!pEffectRegistry)
             return;
 
-        ShaderManagerConfig smConfig        = ConfigSerializer::loadShaderManagerConfig();
-        const auto&         selectedEffects = pEffectRegistry->getSelectedEffects();
+        const auto& selectedEffects = pEffectRegistry->getSelectedEffects();
 
         for (const auto& effectName : selectedEffects)
         {
-            auto it = state.effectPaths.find(effectName);
-            if (it == state.effectPaths.end())
+            auto path = pEffectRegistry->getEffectFilePath(effectName);
+            if (path.empty())
+            {
+                auto it = state.effectPaths.find(effectName);
+                if (it != state.effectPaths.end())
+                    path = it->second;
+            }
+            if (path.empty())
                 continue;
 
             bool usesDepth = depthShaders.count(effectName) > 0;
             if (!usesDepth && !shaderTestComplete)
             {
-                if (checkShaderUsesDepth(effectName, it->second, smConfig.discoveredShaderPaths))
+                if (checkShaderUsesDepth(effectName, path, state.shaderIncludePaths))
                 {
                     depthShaders.insert(effectName);
                     usesDepth = true;
@@ -275,6 +389,15 @@ namespace vkShade
             if (usesDepth && pEffectRegistry->isEffectEnabled(effectName))
             {
                 pEffectRegistry->setEffectEnabled(effectName, false);
+                auto& enabled = techniqueSettings.enabledTechniques;
+                enabled.erase(std::remove_if(enabled.begin(),
+                                             enabled.end(),
+                                             [&](const std::string& entry) {
+                                                 auto id = decodeTechniqueId(entry);
+                                                 return id && id->owner == TechniqueOwner::Instance && id->effect == effectName;
+                                             }),
+                              enabled.end());
+                profileDirty = true;
                 Logger::info("Safe Anti-Cheat: disabled depth effect '" + effectName + "'");
             }
         }
@@ -311,12 +434,14 @@ namespace vkShade
                                        std::vector<std::string>&            disabledEffects,
                                        std::vector<ConfigParam>&            params,
                                        std::map<std::string, std::string>&  effectPaths,
-                                       std::vector<PreprocessorDefinition>& allDefs)
+                                       std::vector<PreprocessorDefinition>& allDefs,
+                                       std::set<std::string>&               unresolvedEffects)
     {
         if (!pEffectRegistry)
             return;
 
-        effects = pEffectRegistry->getSelectedEffects();
+        effects                = pEffectRegistry->getSelectedEffects();
+        const auto oldDisabled = pEffectRegistry->getConfig()->getOption<std::vector<std::string>>("disabledEffects", {});
 
         for (const auto& effectName : effects)
         {
@@ -336,62 +461,120 @@ namespace vkShade
                 }
             }
 
-            if (!pEffectRegistry->isEffectEnabled(effectName))
+            const bool registered = pEffectRegistry->hasEffect(effectName);
+            bool       enabled    = pEffectRegistry->isEffectEnabled(effectName);
+            if (!registered)
+            {
+                unresolvedEffects.insert(effectName);
+                enabled = std::find(oldDisabled.begin(), oldDisabled.end(), effectName) == oldDisabled.end();
+                if (techniqueSettings.hasEnabledTechniques)
+                {
+                    enabled = false;
+                    for (const auto& entry : techniqueSettings.enabledTechniques)
+                    {
+                        auto id = decodeTechniqueId(entry);
+                        if (id && id->owner != TechniqueOwner::File && id->effect == effectName)
+                            enabled = true;
+                    }
+                }
+            }
+            if (!enabled)
                 disabledEffects.push_back(effectName);
 
-            if (pEffectRegistry->isEffectBuiltIn(effectName))
+            std::string path = pEffectRegistry->getEffectFilePath(effectName);
+            if (path.empty())
             {
-                std::string effectType = pEffectRegistry->getEffectType(effectName);
-                if (!effectType.empty())
-                    effectPaths[effectName] = effectType;
+                auto found = state.effectPaths.find(effectName);
+                if (found != state.effectPaths.end())
+                    path = found->second;
             }
-            else
-            {
-                std::string path = pEffectRegistry->getEffectFilePath(effectName);
-                if (!path.empty())
-                    effectPaths[effectName] = path;
+            if (!path.empty())
+                effectPaths[effectName] = path;
 
-                const auto& defs = pEffectRegistry->getPreprocessorDefs(effectName);
-                for (const auto& def : defs)
-                    allDefs.push_back(def);
-            }
+            const auto& defs = pEffectRegistry->getPreprocessorDefs(effectName);
+            for (const auto& def : defs)
+                allDefs.push_back(def);
         }
+    }
+
+    bool ImGuiOverlay::saveGameDepthIfNeeded()
+    {
+        if (activeGameName.empty())
+            return true;
+        const auto      path = ConfigSerializer::getGameDepthPath(activeGameName);
+        std::error_code error;
+        const bool      exists = !path.empty() && std::filesystem::exists(path, error);
+        if (error || path.empty())
+            return false;
+        if (gameDepthNeedsSave || !exists)
+        {
+            if (!ConfigSerializer::saveGameDepthSettings(activeGameName, effectiveDepthDefinitions(), effectiveDepthDefinitionConflicts()))
+            {
+                depthDefinitionNotice = "Could not save shared depth settings.";
+                return false;
+            }
+            gameDepthNeedsSave = false;
+        }
+        return true;
     }
 
     void ImGuiOverlay::saveCurrentConfig()
     {
         if (!pEffectRegistry)
             return;
-
-        std::vector<std::string>            effects, disabledEffects;
-        std::vector<ConfigParam>            params;
-        std::map<std::string, std::string>  effectPaths;
-        std::vector<PreprocessorDefinition> allDefs;
-        collectSaveData(effects, disabledEffects, params, effectPaths, allDefs);
-
-        ConfigSerializer::saveConfig(saveConfigName, effects, disabledEffects, params, effectPaths, allDefs);
-        profileDirty = false;
-    }
-
-    void ImGuiOverlay::autoSaveProfile()
-    {
-        if (!pEffectRegistry || activeProfilePath.empty())
+        if (!saveGameDepthIfNeeded())
             return;
 
         std::vector<std::string>            effects, disabledEffects;
         std::vector<ConfigParam>            params;
         std::map<std::string, std::string>  effectPaths;
         std::vector<PreprocessorDefinition> allDefs;
-        collectSaveData(effects, disabledEffects, params, effectPaths, allDefs);
+        std::set<std::string>               unresolvedEffects;
+        collectSaveData(effects, disabledEffects, params, effectPaths, allDefs, unresolvedEffects);
 
-        ProfileSettings profileSettings;
+        auto savedSettings = techniqueSettings;
+        if (!activeGameName.empty())
+        {
+            savedSettings.hasDepthDefinitions = true;
+            savedSettings.depthDefinitions.clear();
+            savedSettings.conflictingDepthDefinitions = effectiveDepthDefinitionConflicts();
+        }
+        if (ConfigSerializer::saveConfig(
+                saveConfigName, effects, disabledEffects, params, effectPaths, allDefs, savedSettings, unresolvedEffects, state.configPath))
+            profileDirty = false;
+    }
+
+    void ImGuiOverlay::autoSaveProfile()
+    {
+        if (!pEffectRegistry || activeProfilePath.empty())
+            return;
+        if (!saveGameDepthIfNeeded())
+            return;
+
+        std::vector<std::string>            effects, disabledEffects;
+        std::vector<ConfigParam>            params;
+        std::map<std::string, std::string>  effectPaths;
+        std::vector<PreprocessorDefinition> allDefs;
+        std::set<std::string>               unresolvedEffects;
+        collectSaveData(effects, disabledEffects, params, effectPaths, allDefs, unresolvedEffects);
+
+        ProfileSettings profileSettings     = techniqueSettings;
         profileSettings.safeAntiCheat       = profileSafeAntiCheat;
         profileSettings.depthSourceIndex    = profileDepthSourceIndex;
         profileSettings.hasDepthSourceIndex = profileDepthSourceIndexSet;
+        if (!activeGameName.empty())
+        {
+            profileSettings.hasDepthDefinitions = true;
+            profileSettings.depthDefinitions.clear();
+            profileSettings.conflictingDepthDefinitions = effectiveDepthDefinitionConflicts();
+        }
 
-        if (ConfigSerializer::saveToPath(activeProfilePath, effects, disabledEffects, params, effectPaths, allDefs, profileSettings))
+        if (ConfigSerializer::saveToPath(
+                activeProfilePath, effects, disabledEffects, params, effectPaths, allDefs, profileSettings, unresolvedEffects))
         {
             profileDirty = false;
+            if (depthDefinitionsChanged && !paramsDirty)
+                applyRequested = true;
             Logger::debug("Auto-saved profile: " + activeProfilePath);
         }
     }
@@ -446,13 +629,107 @@ namespace vkShade
             return;
         }
 
+        if (ImGui::CollapsingHeader("Depth input settings", ImGuiTreeNodeFlags_DefaultOpen))
+        {
+            ImGui::TextDisabled("Shared by all effects and profiles for this game.");
+            auto depthValues        = effectiveDepthDefinitions();
+            auto conflicts          = effectiveDepthDefinitionConflicts();
+            auto setDepthDefinition = [this, &depthValues, &conflicts](const DepthDefinition& definition, const std::string& value) {
+                const std::string name(definition.name);
+                if (depthDefinitionValue(depthValues, definition) == value && !conflicts.count(name))
+                    return;
+                gameDepthSettings.hasDepthDefinitions    = true;
+                gameDepthSettings.depthDefinitions[name] = value;
+                depthValues[name]                        = value;
+                gameDepthSettings.conflictingDepthDefinitions.erase(name);
+                conflicts.erase(name);
+                pEffectRegistry->setDepthDefinitions(depthValues);
+                depthDefinitionsChanged = true;
+                gameDepthNeedsSave      = true;
+                depthDefinitionNotice.clear();
+                paramsDirty    = true;
+                profileDirty   = true;
+                lastChangeTime = std::chrono::steady_clock::now();
+            };
+
+            ImGui::BeginDisabled(preprocessorEdit.pending());
+            if (!conflicts.empty())
+            {
+                ImGui::TextWrapped("Conflicting old per-effect depth settings were kept. Choose shared values to resolve them.");
+                for (const auto& name : conflicts)
+                    ImGui::TextDisabled("%s", name.c_str());
+                if (ImGui::Button("Use displayed values"))
+                {
+                    for (const auto& definition : depthDefinitions)
+                    {
+                        const std::string name(definition.name);
+                        if (conflicts.count(name))
+                            gameDepthSettings.depthDefinitions[name] = depthDefinitionValue(depthValues, definition);
+                    }
+                    gameDepthSettings.hasDepthDefinitions = true;
+                    gameDepthSettings.conflictingDepthDefinitions.clear();
+                    pEffectRegistry->setDepthDefinitions(effectiveDepthDefinitions());
+                    depthDefinitionsChanged = true;
+                    gameDepthNeedsSave      = true;
+                    paramsDirty             = true;
+                    profileDirty            = true;
+                    lastChangeTime          = std::chrono::steady_clock::now();
+                }
+            }
+
+            static constexpr std::array labels = {"Upside down",
+                                                  "Reversed",
+                                                  "Mirrored",
+                                                  "Logarithmic",
+                                                  "X scale",
+                                                  "Y scale",
+                                                  "X offset",
+                                                  "Y offset",
+                                                  "X pixel offset",
+                                                  "Y pixel offset",
+                                                  "Far plane",
+                                                  "Depth multiplier"};
+            static_assert(labels.size() == depthDefinitions.size());
+            for (size_t i = 0; i < depthDefinitions.size(); ++i)
+            {
+                if (i == 4 && !ImGui::TreeNode("Advanced depth settings"))
+                    break;
+                if (i < 4 && i % 2 != 0)
+                    ImGui::SameLine();
+                const auto& definition = depthDefinitions[i];
+                const auto  value      = depthDefinitionValue(depthValues, definition);
+                ImGui::PushID(static_cast<int>(i));
+                if (auto edited = renderDepthDefinitionInput(definition, labels[i], value, false, depthDefinitionNotice))
+                    setDepthDefinition(definition, *edited);
+                ImGui::PopID();
+                if (i + 1 == depthDefinitions.size())
+                    ImGui::TreePop();
+            }
+            ImGui::EndDisabled();
+            if (!depthDefinitionNotice.empty())
+                ImGui::TextWrapped("%s", depthDefinitionNotice.c_str());
+            if (!settingsManager.getAutoApply() && paramsDirty && ImGui::Button("Apply depth settings"))
+            {
+                applyRequested = true;
+                paramsDirty    = false;
+                profileDirty   = true;
+            }
+        }
+
         const auto& candidates        = depth.candidates;
         const int   selectedIndex     = depth.sourceIndex;
-        const auto  selectedCandidate = resolveDepthSource(candidates,
+        auto        selectedCandidate = resolveDepthSource(candidates,
                                                            selectedIndex,
                                                            depth.sourceFromEnvironment ? DepthState{} : depth.pinnedSource,
                                                            !depth.sourceFromEnvironment && depth.pinnedSourceDestroyed);
-        bool        trackDrawRank     = selectedIndex <= DEPTH_SOURCE_DRAW_RANK_BASE;
+        if (selectedIndex == DEPTH_SOURCE_AUTO)
+            for (size_t i = 0; i < candidates.size(); ++i)
+                if (sameDepthSource(candidates[i].depthState, depth.activeSource))
+                {
+                    selectedCandidate = i;
+                    break;
+                }
+        bool trackDrawRank = selectedIndex <= DEPTH_SOURCE_DRAW_RANK_BASE;
 
         auto select = [this](int index, const DepthState& source = DepthState{}) {
             profileDepthSourceIndex    = index;
@@ -460,6 +737,14 @@ namespace vkShade
             requestDepthSource(index, source);
             profileDirty = true;
         };
+
+        if (ImGui::Checkbox("Copy depth before clear operations", &techniqueSettings.depthCopyBeforeClears))
+        {
+            requestDepthCopy();
+            profileDirty = true;
+        }
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Preserve depth before a selected clear. Capture starts when the game records that command buffer again.");
 
         if (depth.sourceFromEnvironment)
             ImGui::TextWrapped("Selection is controlled by VKSHADE_DEPTH_SOURCE_INDEX.");
@@ -481,6 +766,7 @@ namespace vkShade
         }
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("Follow a draw-call rank instead of a specific image. The image can change as the ranking changes.");
+        ImGui::EndDisabled();
 
         ImGui::Separator();
         if (selectedIndex != DEPTH_SOURCE_AUTO && !selectedCandidate)
@@ -490,16 +776,15 @@ namespace vkShade
             else
                 ImGui::TextWrapped("The selected depth source is not available in the current candidate list.");
         }
-        if (candidates.empty())
+        if (std::none_of(candidates.begin(), candidates.end(), [](const auto& candidate) { return candidate.depthState.image != VK_NULL_HANDLE; }))
         {
-            ImGui::TextWrapped("No matching depth buffers observed. Only single-sample buffers matching the swapchain size are listed.");
-            ImGui::EndDisabled();
+            ImGui::TextWrapped("No depth buffers with submitted work observed.");
             return;
         }
 
-        ImGui::TextDisabled("Draw counts are collected when command buffers are recorded.");
+        ImGui::TextDisabled("Draws in last active frame");
         if (ImGui::IsItemHovered())
-            ImGui::SetTooltip("Reused command buffers may not appear in the current list.");
+            ImGui::SetTooltip("Indirect-count commands report their maximum possible draw count.");
         std::vector<size_t> order(candidates.size());
         std::iota(order.begin(), order.end(), size_t{0});
         std::sort(order.begin(), order.end(), [&candidates](size_t lhs, size_t rhs) {
@@ -513,27 +798,30 @@ namespace vkShade
                 return left.sourceId < right.sourceId;
             return lhs < rhs;
         });
-        ImGuiTableFlags tableFlags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingStretchProp | ImGuiTableFlags_ScrollY;
+        ImGuiTableFlags tableFlags =
+            ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY;
         if (ImGui::BeginTable("DepthSourceTable", 7, tableFlags, ImVec2(0, 0)))
         {
-            ImGui::TableSetupColumn("", ImGuiTableColumnFlags_WidthFixed, 32.0f);
-            ImGui::TableSetupColumn("Index", ImGuiTableColumnFlags_WidthFixed, 48.0f);
+            ImGui::TableSetupColumn("");
+            ImGui::TableSetupColumn("Index");
             ImGui::TableSetupColumn("Image");
-            ImGui::TableSetupColumn("Size", ImGuiTableColumnFlags_WidthFixed, 90.0f);
-            ImGui::TableSetupColumn("Format", ImGuiTableColumnFlags_WidthFixed, 70.0f);
-            ImGui::TableSetupColumn("Draws", ImGuiTableColumnFlags_WidthFixed, 80.0f);
-            ImGui::TableSetupColumn("Status", ImGuiTableColumnFlags_WidthFixed, 120.0f);
+            ImGui::TableSetupColumn("Size");
+            ImGui::TableSetupColumn("Format");
+            ImGui::TableSetupColumn("Draws");
+            ImGui::TableSetupColumn("Status");
             ImGui::TableHeadersRow();
 
             for (size_t i : order)
             {
                 const auto& candidate = candidates[i];
+                if (candidate.depthState.image == VK_NULL_HANDLE)
+                    continue;
                 ImGui::TableNextRow();
                 ImGui::TableSetColumnIndex(0);
-                const std::string sourceId = std::to_string(candidate.depthState.sourceId) + ":" + convertToString(candidate.depthState.imageView)
-                                             + ":" + std::to_string(static_cast<int>(candidate.depthState.observedLayout));
+                const std::string sourceId = std::to_string(candidate.depthState.sourceId);
                 ImGui::PushID(sourceId.c_str());
-                if (ImGui::RadioButton("##select", selectedCandidate && *selectedCandidate == i))
+                ImGui::BeginDisabled(depth.sourceFromEnvironment || !candidate.depthState.capturable || (trackDrawRank && candidate.stale));
+                if (ImGui::RadioButton("##select", selectedIndex != DEPTH_SOURCE_AUTO && selectedCandidate && *selectedCandidate == i))
                 {
                     if (trackDrawRank)
                         select(DEPTH_SOURCE_DRAW_RANK_BASE - static_cast<int>(depthSourceDrawRank(candidates, i)));
@@ -541,7 +829,10 @@ namespace vkShade
                         select(static_cast<int>(i), candidate.depthState);
                 }
                 if (ImGui::IsItemHovered() && !trackDrawRank)
-                    ImGui::SetTooltip("Follow this image for this session. The saved index may refer to another image after restart.");
+                    ImGui::SetTooltip(candidate.stale
+                                          ? "Select this image when the game uses it again. The saved index may change after restart."
+                                          : "Follow this image for this session. The saved index may refer to another image after restart.");
+                ImGui::EndDisabled();
                 ImGui::PopID();
 
                 ImGui::TableSetColumnIndex(1);
@@ -558,20 +849,81 @@ namespace vkShade
                 ImGui::TableSetColumnIndex(5);
                 ImGui::Text("%llu", static_cast<unsigned long long>(candidate.stats.drawcalls) + candidate.stats.drawcallsIndirect);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Vertices: %llu\nDirect: %u\nIndirect: %u",
+                    ImGui::SetTooltip("Vertices / indices: %llu\nDirect: %u\nIndirect: %u",
                                       static_cast<unsigned long long>(candidate.stats.vertices),
                                       candidate.stats.drawcalls,
                                       candidate.stats.drawcallsIndirect);
                 ImGui::TableSetColumnIndex(6);
-                const bool active    = sameDepthSourceLayout(candidate.depthState, depth.activeSource);
-                const bool automatic = sameDepthSourceLayout(candidate.depthState, depth.automaticSource);
-                ImGui::TextUnformatted(active && automatic ? "Active / Candidate" : active ? "Active" : automatic ? "Candidate" : "");
+                const bool  active    = sameDepthSourceLayout(candidate.depthState, depth.activeSource);
+                const bool  automatic = sameDepthSourceLayout(candidate.depthState, depth.automaticSource);
+                const char* status    = !candidate.depthState.capturable
+                                            ? (candidate.depthState.samples != VK_SAMPLE_COUNT_1_BIT ? "Multisampled" : "Unsupported")
+                                        : candidate.stale     ? "Not used this frame"
+                                        : active && automatic ? "Active / Candidate"
+                                        : active              ? "Active"
+                                        : automatic           ? "Candidate"
+                                                              : "";
+                ImGui::TextUnformatted(status);
                 if (ImGui::IsItemHovered())
-                    ImGui::SetTooltip("Active is the selected source. Candidate is the current automatic candidate.");
+                    ImGui::SetTooltip(!candidate.depthState.capturable
+                                          ? "This image or its view cannot be copied for depth effects."
+                                          : "Active is the selected source. Candidate is the current automatic candidate.");
+
+                if (techniqueSettings.depthCopyBeforeClears && selectedCandidate && *selectedCandidate == i)
+                {
+                    const auto    selectedClear = techniqueSettings.depthClearIndex == 0 && sameDepthSource(candidate.depthState, depth.activeSource)
+                                                      ? depth.automaticClear
+                                                      : selectDepthClear(candidate.clears, techniqueSettings.depthClearIndex);
+                    const int64_t manualClear   = techniqueSettings.depthClearIndex > 0
+                                                      ? static_cast<int64_t>(techniqueSettings.depthClearIndex) - 1
+                                                      : static_cast<int64_t>(candidate.clears.size()) + techniqueSettings.depthClearIndex;
+                    auto          selectClear   = [this](int index) {
+                        techniqueSettings.depthClearIndex = index;
+                        requestDepthCopy();
+                        profileDirty = true;
+                    };
+                    ImGui::PushID(sourceId.c_str());
+                    ImGui::TableNextRow();
+                    ImGui::TableSetColumnIndex(0);
+                    if (ImGui::RadioButton("##auto-clear", techniqueSettings.depthClearIndex == 0))
+                        selectClear(0);
+                    ImGui::TableSetColumnIndex(2);
+                    ImGui::TextUnformatted("  Automatic clear");
+                    for (size_t clearIndex = 0; clearIndex < candidate.clears.size(); ++clearIndex)
+                    {
+                        const auto& clear    = candidate.clears[clearIndex];
+                        const bool  selected = selectedClear && *selectedClear == clearIndex;
+                        ImGui::PushID(static_cast<int>(clearIndex));
+                        ImGui::TableNextRow();
+                        ImGui::TableSetColumnIndex(0);
+                        ImGui::BeginDisabled(!clear.copyPossible);
+                        if (ImGui::RadioButton("##clear", techniqueSettings.depthClearIndex != 0 && manualClear == static_cast<int64_t>(clearIndex)))
+                            selectClear(static_cast<int>(clearIndex) + 1);
+                        ImGui::EndDisabled();
+                        ImGui::TableSetColumnIndex(2);
+                        ImGui::Text("  Clear %zu", clearIndex + 1);
+                        ImGui::TableSetColumnIndex(5);
+                        ImGui::Text("%llu", static_cast<unsigned long long>(clear.stats.drawcalls) + clear.stats.drawcallsIndirect);
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip("Draws since previous clear\nVertices / indices: %llu\nDirect: %u\nIndirect: %u",
+                                              static_cast<unsigned long long>(clear.stats.vertices),
+                                              clear.stats.drawcalls,
+                                              clear.stats.drawcallsIndirect);
+                        ImGui::TableSetColumnIndex(6);
+                        ImGui::TextUnformatted(!clear.copyPossible ? "Unavailable" : selected ? (clear.copied ? "Copied" : "Waiting") : "Available");
+                        if (ImGui::IsItemHovered())
+                            ImGui::SetTooltip(!clear.copyPossible ? "Requires a known pre-clear layout and a primary command buffer in the graphics "
+                                                                    "queue family. Reused buffers require one graphics queue that also presents. "
+                                                                    "Clears inside a render pass cannot be copied."
+                                              : selected && !clear.copied ? "Waiting for the game to record this clear again."
+                                                                          : "Statistics cover draws since the previous clear.");
+                        ImGui::PopID();
+                    }
+                    ImGui::PopID();
+                }
             }
             ImGui::EndTable();
         }
-        ImGui::EndDisabled();
     }
 
     void ImGuiOverlay::initVulkanBackend(VkFormat swapchainFormat, uint32_t imageCount)
@@ -629,7 +981,7 @@ namespace vkShade
         dependencies[0].srcStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         dependencies[0].dstStageMask        = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         dependencies[0].srcAccessMask       = 0;
-        dependencies[0].dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependencies[0].dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
         // Dependency for outgoing: ensure overlay writes + layout transition complete
         // and are VISIBLE to presentation engine and DMA-BUF screen capture readers.
@@ -670,6 +1022,14 @@ namespace vkShade
         initInfo.MinImageCount               = 2;
         initInfo.ImageCount                  = 2;
         initInfo.PipelineInfoMain.RenderPass = renderPass;
+        initInfo.TextureUploadUserData       = this;
+        initInfo.SubmitTextureUploadFn =
+            [](VkCommandPool pool, VkCommandBuffer buffer, VkBuffer staging, VkDeviceMemory memory, ImTextureData* texture, void* userData) {
+                return static_cast<ImGuiOverlay*>(userData)->textureUploads.submit(pool, buffer, staging, memory, texture);
+            };
+        initInfo.CanDestroyTextureFn = [](ImTextureData* texture, void* userData) {
+            return !static_cast<ImGuiOverlay*>(userData)->textureUploads.pending(texture);
+        };
 
         ImGui_ImplVulkan_Init(&initInfo);
 
@@ -748,6 +1108,8 @@ namespace vkShade
             return;
         }
         commandBuffersAllocated = true;
+        for (auto commandBuffer : commandBuffers)
+            initializeDispatchTable(commandBuffer, pLogicalDevice->device);
 
         // Create fences for command buffer synchronization (signaled initially so first frame doesn't wait)
         commandBufferFences.resize(imageCount);
@@ -799,12 +1161,22 @@ namespace vkShade
             Logger::err("ImGui fence wait failed: " + std::to_string(fenceResult));
             return VK_NULL_HANDLE;
         }
-        VkResult resetResult = pLogicalDevice->vkd.ResetFences(pLogicalDevice->device, 1, &fence);
-        if (resetResult != VK_SUCCESS)
+        const size_t  nextRenderBuffer = (renderBufferIndex + 1) % renderBufferFences.size();
+        const VkFence renderFence      = renderBufferFences[nextRenderBuffer];
+        if (renderFence != VK_NULL_HANDLE && renderFence != fence)
         {
-            Logger::err("Failed to reset ImGui fence: " + std::to_string(resetResult));
-            return VK_NULL_HANDLE;
+            fenceResult = pLogicalDevice->vkd.WaitForFences(pLogicalDevice->device, 1, &renderFence, VK_TRUE, timeoutNs);
+            if (fenceResult != VK_SUCCESS)
+            {
+                if (fenceResult != VK_TIMEOUT)
+                    Logger::err("ImGui render buffer fence wait failed: " + std::to_string(fenceResult));
+                return VK_NULL_HANDLE;
+            }
         }
+
+        const VkResult uploadResult = textureUploads.collect();
+        if (uploadResult != VK_SUCCESS)
+            Logger::err("ImGui texture upload fence failed: " + std::to_string(uploadResult));
 
         VkCommandBuffer cmd = commandBuffers[imageIndex];
 
@@ -857,9 +1229,17 @@ namespace vkShade
 
         VkFramebuffer framebuffer = framebuffers[imageIndex];
 
-        // Set display size and frame timing BEFORE NewFrame
-        ImGuiIO& io    = ImGui::GetIO();
-        io.DisplaySize = ImVec2((float) width, (float) height);
+        // Set logical display size and frame timing BEFORE NewFrame
+        const MouseState mouse     = getMouseState(width, height);
+        ImGuiIO&         io        = ImGui::GetIO();
+        io.DisplayFramebufferScale = ImVec2(static_cast<float>(mouse.framebufferScaleX), static_cast<float>(mouse.framebufferScaleY));
+        const auto logicalExtent   = [](uint32_t extent, float scale) {
+            const float size = static_cast<float>(extent) / scale;
+            return size * scale < static_cast<float>(extent) ? std::nextafter(size, std::numeric_limits<float>::infinity()) : size;
+        };
+        io.DisplaySize     = ImVec2(logicalExtent(width, io.DisplayFramebufferScale.x), logicalExtent(height, io.DisplayFramebufferScale.y));
+        const int fontSize = settingsManager.getOverlayFontSize();
+        ImGui::GetStyle().FontSizeBase = static_cast<float>(fontSize == AUTO_OVERLAY_FONT_SIZE ? DEFAULT_OVERLAY_FONT_SIZE : fontSize);
 
         // DeltaTime for ImGui's internal timing (drag thresholds, animations).
         // Uses last known good value as fallback instead of hardcoded 1/60.
@@ -881,14 +1261,13 @@ namespace vkShade
         }
 
         // Mouse input for interactivity
-        MouseState mouse = getMouseState();
-        io.MousePos      = ImVec2((float) mouse.x, (float) mouse.y);
+        io.MousePos = ImVec2(static_cast<float>(mouse.x / io.DisplayFramebufferScale.x), static_cast<float>(mouse.y / io.DisplayFramebufferScale.y));
 
         io.MouseDown[0]    = mouse.leftButton;
         io.MouseDown[1]    = mouse.rightButton;
         io.MouseDown[2]    = mouse.middleButton;
         io.MouseWheel      = mouse.scrollDelta;
-        io.MouseDrawCursor = isWayland() && isWaylandGameCursorHidden();
+        io.MouseDrawCursor = isWayland() && (isWaylandGamePointerLocked() || isWaylandGameCursorHidden());
 
         // Keyboard input for text fields
         // Keys are one-shot events, so we send press and release in same frame
@@ -990,9 +1369,7 @@ namespace vkShade
         {
             if (ImGui::BeginTabItem("Effects"))
             {
-                if (inSelectionMode)
-                    renderAddEffectsView();
-                else if (inConfigManageMode)
+                if (inConfigManageMode)
                     renderConfigManagerView();
                 else
                     renderMainView(keyboard);
@@ -1011,7 +1388,7 @@ namespace vkShade
                 ImGui::EndTabItem();
             }
 
-            if (ImGui::BeginTabItem("Depth"))
+            if (settingsManager.isDepthCaptureActive() && ImGui::BeginTabItem("Depth"))
             {
                 renderDepthView();
                 ImGui::EndTabItem();
@@ -1072,6 +1449,8 @@ namespace vkShade
 
         pLogicalDevice->vkd.CmdBeginRenderPass(cmd, &rpBegin, VK_SUBPASS_CONTENTS_INLINE);
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
+        renderBufferIndex                    = nextRenderBuffer;
+        renderBufferFences[nextRenderBuffer] = VK_NULL_HANDLE;
         pLogicalDevice->vkd.CmdEndRenderPass(cmd);
 
         vr = pLogicalDevice->vkd.EndCommandBuffer(cmd);
@@ -1080,6 +1459,14 @@ namespace vkShade
             Logger::err("Failed to end ImGui command buffer: " + std::to_string(vr));
             return VK_NULL_HANDLE;
         }
+
+        VkResult resetResult = pLogicalDevice->vkd.ResetFences(pLogicalDevice->device, 1, &fence);
+        if (resetResult != VK_SUCCESS)
+        {
+            Logger::err("Failed to reset ImGui fence: " + std::to_string(resetResult));
+            return VK_NULL_HANDLE;
+        }
+        renderBufferFences[nextRenderBuffer] = fence;
 
         return cmd;
     }

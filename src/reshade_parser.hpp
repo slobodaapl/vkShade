@@ -12,14 +12,25 @@
 
 namespace vkShade
 {
+    struct ShaderTechniqueInfo
+    {
+        std::string name;
+        std::string label;
+        std::string tooltip;
+        bool        hidden        = false;
+        bool        forcedEnabled = false;
+        bool        noEdit        = false;
+    };
+
     // Result of testing a shader for compilation errors
     struct ShaderTestResult
     {
-        std::string effectName;        // Effect name (filename without extension)
-        std::string filePath;          // Full path to .fx file
-        bool        success   = false; // True if shader compiled without errors
-        bool        usesDepth = false; // True if shader uses depth buffer (DEPTH semantic texture)
-        std::string errorMessage;      // Error message if failed
+        std::string                      effectName;        // Effect name (filename without extension)
+        std::string                      filePath;          // Full path to .fx file
+        bool                             success   = false; // True if shader compiled without errors
+        bool                             usesDepth = false; // True if shader uses depth buffer (DEPTH semantic texture)
+        std::string                      errorMessage;      // Error message if failed
+        std::vector<ShaderTechniqueInfo> techniques;
     };
 
     // Parse a ReShade .fx file and extract its parameters without creating Vulkan resources.
@@ -44,7 +55,8 @@ namespace vkShade
     // Extract user-configurable preprocessor definitions from a ReShade shader.
     // These are macros used via #ifndef/#ifdef that aren't built-in (like __RESHADE__).
     // Returns empty vector for built-in effects or if no user macros are found.
-    std::vector<PreprocessorDefinition> extractPreprocessorDefinitions(const std::string& effectName, const std::string& effectPath);
+    std::vector<PreprocessorDefinition>
+    extractPreprocessorDefinitions(const std::string& effectName, const std::string& effectPath, Config* config = nullptr);
 
 } // namespace vkShade
 

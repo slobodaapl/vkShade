@@ -2,6 +2,8 @@
 
 #include <wayland-client.h>
 
+struct zwp_relative_pointer_manager_v1;
+
 namespace vkShade
 {
     // Shared Wayland input state — single wl_seat and event queue used by both
@@ -31,6 +33,8 @@ namespace vkShade
 
     // Access the shared seat (for pointer constraints, etc.)
     wl_seat* getWaylandSeat();
+
+    zwp_relative_pointer_manager_v1* getWaylandRelativePointerManager();
 
     // Call once at the start of each frame to allow a fresh dispatch.
     // Without this, dispatchWaylandInputEvents() deduplicates within a frame.

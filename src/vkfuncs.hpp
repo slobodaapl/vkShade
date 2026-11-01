@@ -5,6 +5,7 @@
     FORVKFUNC(GetPhysicalDeviceFeatures2) \
     FORVKFUNC(GetInstanceProcAddr) \
     FORVKFUNC(GetPhysicalDeviceFormatProperties) \
+    FORVKFUNC(GetPhysicalDeviceImageFormatProperties) \
     FORVKFUNC(GetPhysicalDeviceMemoryProperties) \
     FORVKFUNC(GetPhysicalDeviceQueueFamilyProperties) \
     FORVKFUNC(GetPhysicalDeviceProperties)
@@ -31,6 +32,7 @@
     FORVKFUNC(CmdCopyImage) \
     FORVKFUNC(CmdExecuteCommands) \
     FORVKFUNC(CmdClearColorImage) \
+    FORVKFUNC(CmdClearAttachments) \
     FORVKFUNC(CmdClearDepthStencilImage) \
     FORVKFUNC(CmdDispatch) \
     FORVKFUNC(CmdDraw) \
@@ -46,7 +48,12 @@
     FORVKFUNC(CmdEndRenderPass2KHR) \
     FORVKFUNC(CmdEndRendering) \
     FORVKFUNC(CmdEndRenderingKHR) \
+    FORVKFUNC(CmdNextSubpass) \
+    FORVKFUNC(CmdNextSubpass2) \
+    FORVKFUNC(CmdNextSubpass2KHR) \
     FORVKFUNC(CmdPipelineBarrier) \
+    FORVKFUNC(CmdPipelineBarrier2) \
+    FORVKFUNC(CmdPipelineBarrier2KHR) \
     FORVKFUNC(CmdPushConstants) \
     FORVKFUNC(CmdSetScissor) \
     FORVKFUNC(CmdSetViewport) \
@@ -102,8 +109,11 @@
     FORVKFUNC(CmdSetCheckpointNV) \
     FORVKFUNC(QueuePresentKHR) \
     FORVKFUNC(QueueSubmit) \
+    FORVKFUNC(QueueSubmit2) \
+    FORVKFUNC(QueueSubmit2KHR) \
     FORVKFUNC(QueueWaitIdle) \
     FORVKFUNC(ResetCommandPool) \
+    FORVKFUNC(ResetCommandBuffer) \
     FORVKFUNC(ResetFences) \
     FORVKFUNC(UnmapMemory) \
     FORVKFUNC(UpdateDescriptorSets) \

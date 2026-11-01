@@ -11,7 +11,7 @@ javascript_files=()
 while IFS= read -r -d '' file; do
   [[ -f "$file" ]] || continue
   case "$file" in
-  src/imgui/* | src/reshade/* | src/shader/*.h | src/stb_image* | src/AreaTex.h | src/SearchTex.h) ;;
+  src/imgui/* | src/reshade/* | src/shader/*.h | src/stb_image*) ;;
   *.c | *.cc | *.cpp | *.cxx | *.h | *.hh | *.hpp | *.hxx) native_files+=("$file") ;;
   esac
 
@@ -21,7 +21,7 @@ while IFS= read -r -d '' file; do
   esac
 
   case "$file" in
-  *.sh | scripts/vkshade-run.in) shell_files+=("$file") ;;
+  *.sh | scripts/vkshade.in) shell_files+=("$file") ;;
   esac
   case "$file" in
   *.nix) nix_files+=("$file") ;;

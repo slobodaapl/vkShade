@@ -551,8 +551,12 @@ void ImGui_ImplVulkan_RenderDrawData(ImDrawData* draw_data, VkCommandBuffer comm
     // (This almost always points to ImGui::GetPlatformIO().Textures[] but is part of ImDrawData to allow overriding or disabling texture updates).
     if (draw_data->Textures != nullptr)
         for (ImTextureData* tex : *draw_data->Textures)
+        {
             if (tex->Status != ImTextureStatus_OK)
                 ImGui_ImplVulkan_UpdateTexture(tex);
+            if (tex->Status == ImTextureStatus_WantCreate || tex->Status == ImTextureStatus_WantUpdates)
+                return;
+        }
 
     ImGui_ImplVulkan_Data* bd = ImGui_ImplVulkan_GetBackendData();
     ImGui_ImplVulkan_InitInfo* v = &bd->VulkanInitInfo;
@@ -837,15 +841,47 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
             vkUnmapMemory(v->Device, upload_buffer_memory);
         }
 
+        const bool async_upload = v->SubmitTextureUploadFn != nullptr;
+        VkCommandBuffer upload_cmd = async_upload ? VK_NULL_HANDLE : bd->TexCommandBuffer;
+        auto discard_upload = [&]()
+        {
+            if (async_upload && upload_cmd != VK_NULL_HANDLE)
+                vkFreeCommandBuffers(v->Device, bd->TexCommandPool, 1, &upload_cmd);
+            vkDestroyBuffer(v->Device, upload_buffer, v->Allocator);
+            vkFreeMemory(v->Device, upload_buffer_memory, v->Allocator);
+            if (tex->Status == ImTextureStatus_WantCreate)
+                ImGui_ImplVulkan_DestroyTexture(tex);
+        };
+
         // Start command buffer
         {
-            err = vkResetCommandPool(v->Device, bd->TexCommandPool, 0);
+            if (async_upload)
+            {
+                VkCommandBufferAllocateInfo alloc_info = {};
+                alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+                alloc_info.commandPool = bd->TexCommandPool;
+                alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+                alloc_info.commandBufferCount = 1;
+                err = vkAllocateCommandBuffers(v->Device, &alloc_info, &upload_cmd);
+            }
+            else
+                err = vkResetCommandPool(v->Device, bd->TexCommandPool, 0);
             check_vk_result(err);
+            if (async_upload && err != VK_SUCCESS)
+            {
+                discard_upload();
+                return;
+            }
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            err = vkBeginCommandBuffer(bd->TexCommandBuffer, &begin_info);
+            err = vkBeginCommandBuffer(upload_cmd, &begin_info);
             check_vk_result(err);
+            if (async_upload && err != VK_SUCCESS)
+            {
+                discard_upload();
+                return;
+            }
         }
 
         // Copy to Image:
@@ -871,7 +907,7 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
             copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             copy_barrier[0].subresourceRange.levelCount = 1;
             copy_barrier[0].subresourceRange.layerCount = 1;
-            vkCmdPipelineBarrier(bd->TexCommandBuffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1, upload_barrier, 1, copy_barrier);
+            vkCmdPipelineBarrier(upload_cmd, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT | VK_PIPELINE_STAGE_HOST_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 1, upload_barrier, 1, copy_barrier);
 
             VkBufferImageCopy region = {};
             region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -881,7 +917,7 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
             region.imageExtent.depth = 1;
             region.imageOffset.x = upload_x;
             region.imageOffset.y = upload_y;
-            vkCmdCopyBufferToImage(bd->TexCommandBuffer, upload_buffer, backend_tex->Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+            vkCmdCopyBufferToImage(upload_cmd, upload_buffer, backend_tex->Image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
             VkImageMemoryBarrier use_barrier[1] = {};
             use_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -895,7 +931,7 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
             use_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
             use_barrier[0].subresourceRange.levelCount = 1;
             use_barrier[0].subresourceRange.layerCount = 1;
-            vkCmdPipelineBarrier(bd->TexCommandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, use_barrier);
+            vkCmdPipelineBarrier(upload_cmd, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr, 0, nullptr, 1, use_barrier);
         }
 
         // End command buffer
@@ -903,22 +939,39 @@ void ImGui_ImplVulkan_UpdateTexture(ImTextureData* tex)
             VkSubmitInfo end_info = {};
             end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
             end_info.commandBufferCount = 1;
-            end_info.pCommandBuffers = &bd->TexCommandBuffer;
-            err = vkEndCommandBuffer(bd->TexCommandBuffer);
+            end_info.pCommandBuffers = &upload_cmd;
+            err = vkEndCommandBuffer(upload_cmd);
             check_vk_result(err);
-            err = vkQueueSubmit(v->Queue, 1, &end_info, VK_NULL_HANDLE);
+            if (async_upload && err != VK_SUCCESS)
+            {
+                discard_upload();
+                return;
+            }
+            if (async_upload)
+                err = v->SubmitTextureUploadFn(bd->TexCommandPool, upload_cmd, upload_buffer, upload_buffer_memory, tex, v->TextureUploadUserData);
+            else
+                err = vkQueueSubmit(v->Queue, 1, &end_info, VK_NULL_HANDLE);
             check_vk_result(err);
+            if (async_upload && err != VK_SUCCESS)
+            {
+                discard_upload();
+                return;
+            }
         }
 
-        err = vkQueueWaitIdle(v->Queue); // FIXME-OPT: Suboptimal!
-        check_vk_result(err);
-        vkDestroyBuffer(v->Device, upload_buffer, v->Allocator);
-        vkFreeMemory(v->Device, upload_buffer_memory, v->Allocator);
+        if (!async_upload)
+        {
+            err = vkQueueWaitIdle(v->Queue); // FIXME-OPT: Suboptimal!
+            check_vk_result(err);
+            vkDestroyBuffer(v->Device, upload_buffer, v->Allocator);
+            vkFreeMemory(v->Device, upload_buffer_memory, v->Allocator);
+        }
 
         tex->SetStatus(ImTextureStatus_OK);
     }
 
-    if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames >= (int)bd->VulkanInitInfo.ImageCount)
+    if (tex->Status == ImTextureStatus_WantDestroy && tex->UnusedFrames >= (int)bd->VulkanInitInfo.ImageCount
+        && (!v->CanDestroyTextureFn || v->CanDestroyTextureFn(tex, v->TextureUploadUserData)))
         ImGui_ImplVulkan_DestroyTexture(tex);
 }
 

@@ -80,6 +80,27 @@ namespace vkShade
         ImGui::Text("Overlay Options");
         ImGui::Separator();
 
+        const int savedFontSize = settingsManager.getOverlayFontSize();
+        int       fontSize      = savedFontSize == AUTO_OVERLAY_FONT_SIZE ? DEFAULT_OVERLAY_FONT_SIZE : savedFontSize;
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 10.0f);
+        if (ImGui::SliderInt("Font size", &fontSize, MIN_OVERLAY_FONT_SIZE, MAX_OVERLAY_FONT_SIZE, "%d px"))
+            settingsManager.setOverlayFontSize(fontSize);
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            settingsManager.save();
+        if (ImGui::IsItemHovered())
+            ImGui::SetTooltip("Font size in logical pixels. Automatic uses %d px.", DEFAULT_OVERLAY_FONT_SIZE);
+        ImGui::SameLine();
+        if (ImGui::Button("Auto##fontSize"))
+        {
+            settingsManager.setOverlayFontSize(AUTO_OVERLAY_FONT_SIZE);
+            settingsManager.save();
+        }
+        if (settingsManager.getOverlayFontSize() == AUTO_OVERLAY_FONT_SIZE)
+        {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(automatic)");
+        }
+
         bool blockInput = settingsManager.getOverlayBlockInput();
         if (ImGui::Checkbox("Block Input When Overlay Open", &blockInput))
         {
@@ -107,13 +128,13 @@ namespace vkShade
         }
         ImGui::SetNextItemWidth(100);
         int maxEffectsVal = settingsManager.getMaxEffects();
-        if (ImGui::InputInt("##maxEffects", &maxEffectsVal))
+        if (ImGui::SliderInt("##maxEffects", &maxEffectsVal, 1, 200))
         {
-            maxEffectsVal = std::clamp(maxEffectsVal, 1, 200);
             settingsManager.setMaxEffects(maxEffectsVal);
             maxEffects = static_cast<size_t>(maxEffectsVal);
-            saveSettings();
         }
+        if (ImGui::IsItemDeactivatedAfterEdit())
+            saveSettings();
 
         // Show VRAM estimate based on current resolution (2 images per slot, 4 bytes per pixel)
         float bytesPerSlot    = 2.0f * currentWidth * currentHeight * 4.0f;
@@ -162,6 +183,25 @@ namespace vkShade
         if (ImGui::IsItemHovered())
             ImGui::SetTooltip("If enabled, effects are active when the game starts.\nIf disabled, effects start off and must be toggled on.");
 
+        if (!activeGameName.empty())
+        {
+            if (ImGui::Checkbox("Safe Anti-Cheat (current profile)", &profileSafeAntiCheat))
+            {
+                settingsManager.setSafeAntiCheat(profileSafeAntiCheat);
+                if (profileSafeAntiCheat)
+                {
+                    settingsManager.setDepthCapture(false);
+                    disableDepthEffects();
+                    paramsDirty = true;
+                }
+                profileDirty   = true;
+                lastChangeTime = std::chrono::steady_clock::now();
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Disables depth capture and depth effects for this profile, blocks adding depth effects,\n"
+                                  "and suppresses vkShade's layer-enumeration response.");
+        }
+
         bool depthCapture = settingsManager.getDepthCapture();
         if (profileSafeAntiCheat)
             ImGui::BeginDisabled();
@@ -178,7 +218,7 @@ namespace vkShade
         }
         if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
             ImGui::SetTooltip("Enable depth buffer capture for effects that use depth.\nMay impact performance. Most effects don't need "
-                              "this.\nChanges require restarting the application.");
+                              "this.\nDisabling takes effect immediately; enabling requires an application restart.");
 
         ImGui::Spacing();
         ImGui::Text("Debug");

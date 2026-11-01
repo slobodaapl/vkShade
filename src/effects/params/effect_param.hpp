@@ -44,6 +44,7 @@ namespace vkShade
         std::string uiType;                 // ui_type - "slider", "drag", "combo", etc.
         std::string category;               // ui_category - groups controls under a header
         bool        categoryClosed = false; // ui_category_closed - start collapsed
+        bool        categoryToggle = false;
 
         virtual ParamType                                        getType() const     = 0;
         virtual const char*                                      getTypeName() const = 0;
@@ -97,6 +98,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->value          = value;
             p->defaultValue   = defaultValue;
             p->minValue       = minValue;
@@ -162,6 +164,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->componentCount = componentCount;
             for (uint32_t i = 0; i < 4; i++)
             {
@@ -220,6 +223,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->value          = value;
             p->defaultValue   = defaultValue;
             p->minValue       = minValue;
@@ -286,6 +290,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->componentCount = componentCount;
             for (uint32_t i = 0; i < 4; i++)
             {
@@ -343,6 +348,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->value          = value;
             p->defaultValue   = defaultValue;
             p->minValue       = minValue;
@@ -408,6 +414,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->componentCount = componentCount;
             for (uint32_t i = 0; i < 4; i++)
             {
@@ -462,6 +469,7 @@ namespace vkShade
             p->uiType         = uiType;
             p->category       = category;
             p->categoryClosed = categoryClosed;
+            p->categoryToggle = categoryToggle;
             p->value          = value;
             p->defaultValue   = defaultValue;
             return p;

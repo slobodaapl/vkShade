@@ -16,10 +16,10 @@ namespace vkShade
         }
     }
 
-    MouseState getMouseState()
+    MouseState getMouseState(uint32_t framebufferWidth, uint32_t framebufferHeight)
     {
         if (isWayland())
-            return getMouseStateWayland();
+            return getMouseStateWayland(framebufferWidth, framebufferHeight);
 
         warnNonWaylandMouseOnce("non-Wayland Vulkan surface: mouse polling disabled; returning default state");
         return MouseState();

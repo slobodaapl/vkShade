@@ -4,11 +4,19 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <set>
 
+#include "depth_definitions.hpp"
 #include "effects/effect_config.hpp"
 
 namespace vkShade
 {
+    class Config;
+    constexpr int AUTO_OVERLAY_FONT_SIZE    = 0;
+    constexpr int DEFAULT_OVERLAY_FONT_SIZE = 16;
+    constexpr int MIN_OVERLAY_FONT_SIZE     = 12;
+    constexpr int MAX_OVERLAY_FONT_SIZE     = 40;
+
     // Serialized parameter format for config files
     struct ConfigParam
     {
@@ -21,12 +29,13 @@ namespace vkShade
     struct VkShadeSettings
     {
         int         maxEffects        = 10;
+        int         overlayFontSize   = AUTO_OVERLAY_FONT_SIZE;
         bool        overlayBlockInput = true;
         std::string toggleKey         = "End";
         std::string reloadKey         = "F10";
         std::string overlayKey        = "Home";
         bool        enableOnLaunch    = true;
-        bool        depthCapture      = false;
+        bool        depthCapture      = true;
         bool        autoApply         = true;  // Auto-apply changes without clicking Apply
         int         autoApplyDelay    = 200;   // ms delay before auto-applying changes
         bool        showDebugWindow   = false; // Show debug window with raw effect registry data
@@ -35,9 +44,18 @@ namespace vkShade
     // Per-profile settings (stored in per-game .conf files)
     struct ProfileSettings
     {
-        bool safeAntiCheat       = false; // Force-disable depth capture for anti-cheat safety
-        int  depthSourceIndex    = -1;
-        bool hasDepthSourceIndex = false;
+        bool                     safeAntiCheat         = false; // Force-disable depth capture for anti-cheat safety
+        int                      depthSourceIndex      = -1;
+        bool                     hasDepthSourceIndex   = false;
+        bool                     depthCopyBeforeClears = false;
+        int                      depthClearIndex       = 0;
+        bool                     hasTechniqueOrder     = false;
+        bool                     hasEnabledTechniques  = false;
+        std::vector<std::string> techniqueOrder;
+        std::vector<std::string> enabledTechniques;
+        bool                     hasDepthDefinitions = false;
+        DepthDefinitionValues    depthDefinitions;
+        std::set<std::string>    conflictingDepthDefinitions;
     };
 
     // Shader Manager configuration (from shader_manager.conf)
@@ -61,8 +79,11 @@ namespace vkShade
                                const std::vector<std::string>&            effects,
                                const std::vector<std::string>&            disabledEffects,
                                const std::vector<ConfigParam>&            params,
-                               const std::map<std::string, std::string>&  effectPaths      = {},
-                               const std::vector<PreprocessorDefinition>& preprocessorDefs = {});
+                               const std::map<std::string, std::string>&  effectPaths       = {},
+                               const std::vector<PreprocessorDefinition>& preprocessorDefs  = {},
+                               const ProfileSettings&                     profileSettings   = {},
+                               const std::set<std::string>&               unresolvedEffects = {},
+                               const std::string&                         sourcePath        = "");
 
         // Get the base config directory path (~/.config/vkShade/)
         static std::string getBaseConfigDir();
@@ -92,8 +113,9 @@ namespace vkShade
         // Ensure vkShade.conf exists with defaults (call early at startup)
         static void ensureConfigExists();
 
-        // Detect the game executable name from /proc/self/exe
+        // Detect the wrapped game, falling back to the current executable.
         static std::string detectGameName();
+        static std::string detectExecutableName();
 
         // Check if a per-game config exists and return the game name if so.
         // Returns empty string if no per-game config was found.
@@ -105,10 +127,12 @@ namespace vkShade
         // profileName "default" or "" → configs/<gameName>.conf
         // profileName "foo"           → configs/<gameName>@foo.conf
         static std::string getProfilePath(const std::string& gameName, const std::string& profileName = "");
+        static std::string getGameDepthPath(const std::string& gameName);
 
         // Ensure the default profile for a game exists (creates with empty
         // effects list if missing). Returns the profile path.
         static std::string ensureGameProfile(const std::string& gameName);
+        static void        migrateGameProfiles(const std::string& gameName, const std::string& legacyGameName);
 
         // List all profile names for a game ("default", "performance", etc.)
         static std::vector<std::string> listProfilesForGame(const std::string& gameName);
@@ -125,15 +149,21 @@ namespace vkShade
 
         // Load per-profile settings from a config file
         static ProfileSettings loadProfileSettings(const std::string& filePath);
+        static ProfileSettings loadGameDepthSettings(const std::string& gameName, const std::string& activeProfilePath = "");
+        static bool saveGameDepthSettings(const std::string& gameName, const DepthDefinitionValues& values, const std::set<std::string>& conflicts);
+        static EffectiveDepthDefinitions loadEffectiveDepthDefinitions(Config* config);
+        static DepthDefinitionValues     loadDepthDefinitions(Config* config);
 
         // Save directly to a profile path (bypasses config name lookup)
         static bool saveToPath(const std::string&                         filePath,
                                const std::vector<std::string>&            effects,
                                const std::vector<std::string>&            disabledEffects,
                                const std::vector<ConfigParam>&            params,
-                               const std::map<std::string, std::string>&  effectPaths      = {},
-                               const std::vector<PreprocessorDefinition>& preprocessorDefs = {},
-                               const ProfileSettings&                     profileSettings  = {});
+                               const std::map<std::string, std::string>&  effectPaths       = {},
+                               const std::vector<PreprocessorDefinition>& preprocessorDefs  = {},
+                               const ProfileSettings&                     profileSettings   = {},
+                               const std::set<std::string>&               unresolvedEffects = {},
+                               const std::string&                         sourcePath        = "");
     };
 
 } // namespace vkShade

@@ -11,6 +11,7 @@
 
 #include "effect_config.hpp"
 #include "config.hpp"
+#include "depth_definitions.hpp"
 
 namespace vkShade
 {
@@ -63,9 +64,8 @@ namespace vkShade
         {
             return pConfig;
         }
-
-        // Check if an effect is a built-in effect
-        static bool isBuiltInEffect(const std::string& name);
+        DepthDefinitionValues getDepthDefinitions() const;
+        void                  setDepthDefinitions(DepthDefinitionValues definitions);
 
         // Add an effect if not already present (for dynamically added effects).
         // If the shader file changed on disk since last load, re-parses automatically.
@@ -80,12 +80,6 @@ namespace vkShade
         // Get the file path for an effect (for ReShade effects)
         std::string getEffectFilePath(const std::string& name) const;
 
-        // Get the effect type for an effect (base type name, e.g., "cas" for "cas.2")
-        std::string getEffectType(const std::string& name) const;
-
-        // Check if an effect is a built-in effect (by instance name)
-        bool isEffectBuiltIn(const std::string& name) const;
-
         // Check if an effect failed to compile
         bool hasEffectFailed(const std::string& name) const;
 
@@ -93,7 +87,10 @@ namespace vkShade
         std::string getEffectError(const std::string& name) const;
 
         // Set compilation error for an effect (marks it as failed)
-        void setEffectError(const std::string& name, const std::string& error);
+        void        setEffectError(const std::string& name, const std::string& error);
+        void        clearEffectError(const std::string& name);
+        void        setTechniqueError(const std::string& name, const std::string& technique, const std::string& error);
+        std::string getTechniqueError(const std::string& name, const std::string& technique) const;
 
         // Get preprocessor definitions for an effect (ReShade only)
         std::vector<PreprocessorDefinition>&       getPreprocessorDefs(const std::string& effectName);
@@ -124,10 +121,8 @@ namespace vkShade
         std::vector<std::string>  selectedEffects;               // Ordered list of selected effects for UI
         bool                      initializedFromConfig = false; // True once first load from config is complete
         Config*                   pConfig               = nullptr;
+        DepthDefinitionValues     depthDefinitions;
         mutable std::mutex        mutex;
-
-        // Initialize built-in effect configs
-        void initBuiltInEffect(const std::string& instanceName, const std::string& effectType);
 
         // Initialize ReShade effect config
         void initReshadeEffect(const std::string& name, const std::string& path);

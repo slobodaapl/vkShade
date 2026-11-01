@@ -11,7 +11,8 @@ namespace vkShade
         if (initialized)
             return;
 
-        settings    = ConfigSerializer::loadSettings();
+        settings = ConfigSerializer::loadSettings();
+        activeDepthCapture.store(settings.depthCapture && !safeAntiCheat, std::memory_order_release);
         initialized = true;
         Logger::info("SettingsManager initialized");
     }

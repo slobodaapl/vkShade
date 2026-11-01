@@ -18,7 +18,10 @@ int main()
     createInfo.presentMode              = VK_PRESENT_MODE_FIFO_KHR;
     createInfo.imageUsage               = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-    bool ok   = true;
+    bool ok = true;
+    ok &= check(!canUseDirectEffectOutput(true, false), "Color-only swapchains must not receive transfer-based effect output");
+    ok &= check(canUseDirectEffectOutput(true, true), "Mutable swapchains with transfer-destination usage may receive effect output directly");
+    ok &= check(!canUseDirectEffectOutput(false, true), "Non-mutable swapchains must receive effect output through an intermediate image");
     auto plan = planSwapchainUsage(createInfo);
     ok &= check(!plan.passthrough && !plan.useTransfer && plan.imageUsage == VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
                 "Color-only swapchains need a render copy");

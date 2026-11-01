@@ -1,5 +1,6 @@
 #include "overlay/imgui_overlay.hpp"
 #include "descriptor_set.hpp"
+#include "image_view.hpp"
 #include "shader.hpp"
 
 #include <cstdint>
@@ -19,7 +20,9 @@ namespace
     unsigned int          calls   = 0;
     bool                  aligned = false;
     std::vector<uint32_t> captured;
-    unsigned int          allocations = 0;
+    unsigned int          allocations       = 0;
+    bool                  hasViewUsage      = false;
+    VkImageUsageFlags     capturedViewUsage = 0;
 
     struct DescriptorWrite
     {
@@ -54,6 +57,15 @@ namespace
         ++allocations;
         for (uint32_t i = 0; i < info->descriptorSetCount; ++i)
             sets[i] = handle<VkDescriptorSet>(i + 1);
+        return VK_SUCCESS;
+    }
+
+    VKAPI_ATTR VkResult VKAPI_CALL captureImageView(VkDevice, const VkImageViewCreateInfo* info, const VkAllocationCallbacks*, VkImageView* view)
+    {
+        const auto* usage = static_cast<const VkImageViewUsageCreateInfo*>(info->pNext);
+        hasViewUsage      = usage && usage->sType == VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO;
+        capturedViewUsage = hasViewUsage ? usage->usage : 0;
+        *view             = handle<VkImageView>(31);
         return VK_SUCCESS;
     }
 
@@ -128,6 +140,26 @@ int main()
             std::cerr << "Descriptor writes did not preserve the image, binding, sampler, or layout\n";
             return 1;
         }
+    }
+    device.vkd.CreateImageView        = captureImageView;
+    const std::vector<VkImage> images = {handle<VkImage>(41)};
+    vkShade::createImageViews(&device, VK_FORMAT_R8G8B8A8_UNORM, images);
+    if (hasViewUsage)
+    {
+        std::cerr << "Default image views must retain the image's usage\n";
+        return 1;
+    }
+    vkShade::createImageViews(&device,
+                              VK_FORMAT_R8G8B8A8_SRGB,
+                              images,
+                              VK_IMAGE_VIEW_TYPE_2D,
+                              VK_IMAGE_ASPECT_COLOR_BIT,
+                              1,
+                              VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+    if (!hasViewUsage || capturedViewUsage != (VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT))
+    {
+        std::cerr << "Image views must pass their requested usage to Vulkan\n";
+        return 1;
     }
     return 0;
 }

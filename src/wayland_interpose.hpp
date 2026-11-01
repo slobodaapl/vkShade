@@ -9,11 +9,9 @@ namespace vkShade
     void registerOverlayProxy(wl_proxy* proxy);
     void unregisterOverlayProxy(wl_proxy* proxy);
 
-    // Send synthetic keyboard leave/enter to wrapped game keyboards.
-    // Called when overlay blocking state changes — makes the game release
-    // all held keys (leave) or re-acquire focus (enter).
-    // Only works when wl_proxy_add_listener interposition is active.
-    void notifyGameKeyboardFocus(bool hasFocus);
+    void notifyGameInputBlocked(bool blocked);
 
     bool isWaylandGameCursorHidden();
+
+    bool isWaylandGamePointerLocked();
 } // namespace vkShade

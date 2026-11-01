@@ -10,8 +10,10 @@ imgui_src = [
 ]
 
 overlay_src = [
+    'overlay/async_texture_upload.cpp',
     'overlay/imgui_overlay.cpp',
-    'overlay/view_add_effects.cpp',
+    'overlay/preprocessor_edit.cpp',
+    'overlay/shader_metadata_loader.cpp',
     'overlay/view_configs.cpp',
     'overlay/view_debug.cpp',
     'overlay/view_diagnostics.cpp',
@@ -19,6 +21,7 @@ overlay_src = [
     'overlay/view_shader_manager.cpp',
     'overlay/view_shader_test.cpp',
     'overlay/view_main.cpp',
+    'overlay/view_techniques.cpp',
     'overlay/params/field_editor.cpp',
     'overlay/params/fields/field_bool.cpp',
     'overlay/params/fields/field_float.cpp',
@@ -33,23 +36,23 @@ vkShade_src = [
     'vkshade.cpp',
     'buffer.cpp',
     'command_buffer.cpp',
+    'depth_resolve_resources.cpp',
+    'depth_copy_submission.cpp',
     'config.cpp',
     'config_serializer.cpp',
     'settings_manager.cpp',
+    'technique_id.cpp',
+    'technique_order.cpp',
+    'technique_plan.cpp',
     'descriptor_set.cpp',
     'effects/effect.cpp',
     'effects/effect_registry.cpp',
     'effects/effect_reshade.cpp',
+    'effects/technique_passes.cpp',
     'effects/effect_simple.cpp',
     'effects/effect_transfer.cpp',
-    'effects/builtin/builtin_effects.cpp',
-    'effects/builtin/effect_cas.cpp',
-    'effects/builtin/effect_deband.cpp',
-    'effects/builtin/effect_dls.cpp',
-    'effects/builtin/effect_fxaa.cpp',
-    'effects/builtin/effect_lut.cpp',
-    'effects/builtin/effect_smaa.cpp',
     'reshade_parser.cpp',
+    'shader_metadata.cpp',
     'fake_swapchain.cpp',
     'format.cpp',
     'framebuffer.cpp',
@@ -59,7 +62,6 @@ vkShade_src = [
     'keyboard_input.cpp',
     'logger.cpp',
     'logical_swapchain.cpp',
-    'lut_cube.cpp',
     'memory.cpp',
     'renderpass.cpp',
     'reshade_uniforms.cpp',
@@ -67,16 +69,22 @@ vkShade_src = [
     'shader.cpp',
     'stb_image.c',
     'stb_image_resize.c',
+    'depth_image_capture.cpp',
+    'depth_frame_tracker.cpp',
+    'depth_clear_capture.cpp',
     'util.cpp',
     'vkdispatch.cpp',
+    'wayland_pointer_geometry.cpp',
 ]
 
 x11_dep = dependency('x11')
 xi_dep = dependency('xi')
 wayland_client_dep = dependency('wayland-client')
+wayland_server_dep = dependency('wayland-server')
 xkbcommon_dep = dependency('xkbcommon')
 wayland_protocols_dep = dependency('wayland-protocols')
 wayland_scanner = find_program('wayland-scanner')
+dl_dep = cpp.find_library('dl')
 
 # Generate pointer-constraints-unstable-v1 protocol code
 wl_protocols_dir = wayland_protocols_dep.get_variable('pkgdatadir')
@@ -101,6 +109,50 @@ pointer_constraints_code = custom_target(
     command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
 )
 
+relative_pointer_xml = join_paths(
+    wl_protocols_dir,
+    'unstable',
+    'relative-pointer',
+    'relative-pointer-unstable-v1.xml',
+)
+relative_pointer_client_h = custom_target(
+    'relative-pointer-client-header',
+    input: relative_pointer_xml,
+    output: 'relative-pointer-client-protocol.h',
+    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+relative_pointer_code = custom_target(
+    'relative-pointer-code',
+    input: relative_pointer_xml,
+    output: 'relative-pointer-protocol.c',
+    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+relative_pointer_server_h = custom_target(
+    'relative-pointer-server-header',
+    input: relative_pointer_xml,
+    output: 'relative-pointer-server-protocol.h',
+    command: [wayland_scanner, 'server-header', '@INPUT@', '@OUTPUT@'],
+)
+
+viewporter_xml = join_paths(
+    wl_protocols_dir,
+    'stable',
+    'viewporter',
+    'viewporter.xml',
+)
+viewporter_client_h = custom_target(
+    'viewporter-client-header',
+    input: viewporter_xml,
+    output: 'viewporter-client-protocol.h',
+    command: [wayland_scanner, 'client-header', '@INPUT@', '@OUTPUT@'],
+)
+viewporter_code = custom_target(
+    'viewporter-code',
+    input: viewporter_xml,
+    output: 'viewporter-protocol.c',
+    command: [wayland_scanner, 'private-code', '@INPUT@', '@OUTPUT@'],
+)
+
 conf_paths = configuration_data()
 conf_paths.set_quoted(
     'SYSCONFDIR',
@@ -109,6 +161,10 @@ conf_paths.set_quoted(
 conf_paths.set_quoted(
     'DATADIR',
     join_paths(get_option('prefix'), get_option('datadir')),
+)
+conf_paths.set_quoted(
+    'BINDIR',
+    join_paths(get_option('prefix'), get_option('bindir')),
 )
 
 configure_file(output: 'config_paths.hpp', configuration: conf_paths)
@@ -128,6 +184,8 @@ wayland_input_common_lib = static_library(
     'wayland_input_common',
     'wayland_input_common.cpp',
     'wayland_display.cpp',
+    relative_pointer_code,
+    relative_pointer_client_h,
     dependencies: [wayland_client_dep],
 )
 keyboard_input_wayland_lib = static_library(
@@ -139,6 +197,7 @@ keyboard_input_wayland_lib = static_library(
 mouse_input_wayland_lib = static_library(
     'mouse_input_wayland',
     'mouse_input_wayland.cpp',
+    relative_pointer_client_h,
     link_with: [wayland_input_common_lib],
     dependencies: [wayland_client_dep],
 )
@@ -156,6 +215,9 @@ wayland_pointer_constraints_lib = static_library(
 wayland_interpose_lib = static_library(
     'wayland_interpose',
     'wayland_interpose.cpp',
+    viewporter_client_h,
+    pointer_constraints_client_h,
+    relative_pointer_client_h,
     dependencies: [wayland_client_dep],
     c_args: ['-fvisibility=default'],
     cpp_args: ['-fvisibility=default'],
@@ -164,10 +226,9 @@ wayland_interpose_lib = static_library(
 imgui_inc = include_directories('imgui')
 overlay_inc = include_directories('overlay')
 effects_inc = include_directories('effects')
-effects_builtin_inc = include_directories('effects/builtin')
 effects_params_inc = include_directories('effects/params')
 
-shared_library(
+vkshade_library = shared_library(
     'vkshade',
     vkShade_src,
     overlay_src,
@@ -188,7 +249,6 @@ shared_library(
         imgui_inc,
         overlay_inc,
         effects_inc,
-        effects_builtin_inc,
         effects_params_inc,
     ],
     cpp_args: ['-DIMGUI_IMPL_VULKAN_NO_PROTOTYPES'],
@@ -204,9 +264,10 @@ shared_library(
     install_dir: lib_dir,
 )
 
-executable(
+shader_checker = executable(
     'vkshade-shader-check',
     'shader_check.cpp',
+    'shader_metadata.cpp',
     'reshade_parser.cpp',
     'config.cpp',
     'config_serializer.cpp',
@@ -216,31 +277,210 @@ executable(
         imgui_inc,
         overlay_inc,
         effects_inc,
-        effects_builtin_inc,
         effects_params_inc,
     ],
     dependencies: [reshade_dep],
     install: true,
 )
 
+shader_metadata_loader_test = executable(
+    'shader-metadata-loader-test',
+    '../tests/shader_metadata_loader.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+    dependencies: [dl_dep],
+)
+test(
+    'shader-metadata-loader',
+    shader_metadata_loader_test,
+    args: [
+        join_paths(
+            meson.current_source_dir(),
+            '..',
+            'tests',
+            'fixtures',
+            'multiple_techniques.fx',
+        ),
+    ],
+    depends: [shader_checker],
+)
+
 depth_selection_test = executable(
     'depth-selection-test',
     '../tests/depth_selection.cpp',
+    'config.cpp',
     'config_serializer.cpp',
     'logger.cpp',
     include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
 )
-swapchain_usage_test = executable(
-    'swapchain-usage-test',
-    '../tests/swapchain_usage.cpp',
+depth_frame_tracker_test = executable(
+    'depth-frame-tracker-test',
+    '../tests/depth_frame_tracker.cpp',
+    'depth_frame_tracker.cpp',
     include_directories: [vkShade_include_path],
 )
-test('swapchain-usage', swapchain_usage_test)
-vulkan_helpers_test = executable(
-    'vulkan-helpers-test',
-    '../tests/vulkan_helpers.cpp',
-    'descriptor_set.cpp',
-    'shader.cpp',
+test('depth-frame-tracker', depth_frame_tracker_test)
+depth_copy_submission_test = executable(
+    'depth-copy-submission-test',
+    '../tests/depth_copy_submission.cpp',
+    'depth_copy_submission.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    'logger.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+    dependencies: [dl_dep],
+)
+test('depth-copy-submission', depth_copy_submission_test)
+depth_resolve_copy_test = executable(
+    'depth-resolve-copy-test',
+    '../tests/depth_resolve_copy.cpp',
+    'depth_resolve_resources.cpp',
+    'format.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    'logger.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+    dependencies: [dl_dep],
+)
+test('depth-resolve-copy', depth_resolve_copy_test)
+effect_profile_persistence_test = executable(
+    'effect-profile-persistence-test',
+    '../tests/effect_profile_persistence.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'logger.cpp',
+    'technique_id.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+)
+test(
+    'effect-profile-persistence',
+    effect_profile_persistence_test,
+    args: [meson.current_build_dir()],
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+effect_registry_test = executable(
+    'effect-registry-test',
+    '../tests/effect_registry.cpp',
+    'effects/effect_registry.cpp',
+    'reshade_parser.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'logger.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+    dependencies: [reshade_dep],
+)
+test(
+    'effect-registry',
+    effect_registry_test,
+    args: [
+        meson.current_build_dir(),
+        files('../tests/fixtures/multiple_techniques.fx'),
+    ],
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+game_identity_test = executable(
+    'game-identity-test',
+    '../tests/game_identity.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'logger.cpp',
+    'technique_id.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+)
+test(
+    'game-identity',
+    game_identity_test,
+    args: [meson.current_build_dir()],
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+reshade_technique_metadata_test = executable(
+    'reshade-technique-metadata-test',
+    '../tests/reshade_technique_metadata.cpp',
+    'reshade_parser.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'logger.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_params_inc,
+    ],
+    dependencies: [reshade_dep],
+)
+test(
+    'reshade-technique-metadata',
+    reshade_technique_metadata_test,
+    args: files('../tests/fixtures/multiple_techniques.fx'),
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+technique_id_test = executable(
+    'technique-id-test',
+    '../tests/technique_id.cpp',
+    'technique_id.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('technique-id', technique_id_test)
+technique_order_test = executable(
+    'technique-order-test',
+    '../tests/technique_order.cpp',
+    'technique_id.cpp',
+    'technique_order.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('technique-order', technique_order_test)
+technique_plan_test = executable(
+    'technique-plan-test',
+    '../tests/technique_plan.cpp',
+    'technique_id.cpp',
+    'technique_plan.cpp',
+    include_directories: [vkShade_include_path, effects_inc, effects_params_inc],
+)
+test('technique-plan', technique_plan_test)
+technique_passes_test = executable(
+    'technique-passes-test',
+    '../tests/technique_passes.cpp',
+    'effects/technique_passes.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('technique-passes', technique_passes_test)
+depth_capture_settings_test = executable(
+    'depth-capture-settings-test',
+    '../tests/depth_capture_settings.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'settings_manager.cpp',
+    'logger.cpp',
+    include_directories: [vkShade_include_path],
+)
+test(
+    'depth-capture-settings',
+    depth_capture_settings_test,
+    args: [meson.current_build_dir()],
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+overlay_font_settings_test = executable(
+    'overlay-font-settings-test',
+    '../tests/overlay_font_settings.cpp',
+    'config.cpp',
+    'config_serializer.cpp',
+    'settings_manager.cpp',
+    'logger.cpp',
+    include_directories: [vkShade_include_path],
+)
+test(
+    'overlay-font-settings',
+    overlay_font_settings_test,
+    args: [meson.current_build_dir()],
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+depth_image_capture_test = executable(
+    'depth-image-capture-test',
+    '../tests/depth_image_capture.cpp',
+    'depth_image_capture.cpp',
+    'format.cpp',
     'logger.cpp',
     include_directories: [
         vkShade_include_path,
@@ -250,7 +490,165 @@ vulkan_helpers_test = executable(
         effects_params_inc,
     ],
 )
+test(
+    'depth-image-capture',
+    depth_image_capture_test,
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+swapchain_usage_test = executable(
+    'swapchain-usage-test',
+    '../tests/swapchain_usage.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('swapchain-usage', swapchain_usage_test)
+wayland_pointer_geometry_test = executable(
+    'wayland-pointer-geometry-test',
+    '../tests/wayland_pointer_geometry.cpp',
+    'wayland_pointer_geometry.cpp',
+    include_directories: [vkShade_include_path],
+    dependencies: [wayland_client_dep],
+)
+test('wayland-pointer-geometry', wayland_pointer_geometry_test)
+preprocessor_edit_test = executable(
+    'preprocessor-edit-test',
+    '../tests/preprocessor_edit.cpp',
+    'overlay/preprocessor_edit.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    'imgui/imgui.cpp',
+    'imgui/imgui_draw.cpp',
+    'imgui/imgui_tables.cpp',
+    'imgui/imgui_widgets.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+    ],
+    dependencies: [dl_dep],
+)
+test(
+    'preprocessor-edit',
+    preprocessor_edit_test,
+    args: files(
+        '../tests/fixtures/multiple_techniques.fx',
+        '../tests/fixtures/conditional_technique.fx',
+    ),
+    depends: [shader_checker],
+)
+wayland_interpose_test = executable(
+    'wayland-interpose-test',
+    '../tests/wayland_interpose.cpp',
+    'wayland_interpose.cpp',
+    'input_blocker.cpp',
+    'wayland_pointer_geometry.cpp',
+    'logger.cpp',
+    pointer_constraints_code,
+    pointer_constraints_client_h,
+    relative_pointer_code,
+    relative_pointer_client_h,
+    viewporter_code,
+    viewporter_client_h,
+    include_directories: [vkShade_include_path],
+    dependencies: [wayland_client_dep, dl_dep],
+    export_dynamic: true,
+)
+test(
+    'wayland-interpose',
+    wayland_interpose_test,
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+dlsym_next_outer = shared_library(
+    'dlsym-next-outer',
+    '../tests/fixtures/dlsym_next_outer.cpp',
+    dependencies: [dl_dep],
+    install: false,
+)
+dlsym_next_inner = shared_library(
+    'dlsym-next-inner',
+    '../tests/fixtures/dlsym_next_inner.cpp',
+    install: false,
+)
+dlsym_next_test = executable(
+    'dlsym-next-test',
+    '../tests/dlsym_next.cpp',
+    dependencies: [dl_dep],
+)
+test(
+    'dlsym-next',
+    dlsym_next_test,
+    env: [
+        'ENABLE_VKSHADE=1',
+        'VKSHADE_LOG_LEVEL=none',
+        'LD_PRELOAD=' + vkshade_library.full_path() + ':' + dlsym_next_outer.full_path() + ':' + dlsym_next_inner.full_path(),
+    ],
+    depends: [vkshade_library, dlsym_next_outer, dlsym_next_inner],
+    timeout: 10,
+)
+wayland_mouse_input_test = executable(
+    'wayland-mouse-input-test',
+    '../tests/wayland_mouse_input.cpp',
+    'mouse_input_wayland.cpp',
+    'keyboard_input_wayland.cpp',
+    'wayland_input_common.cpp',
+    'wayland_pointer_geometry.cpp',
+    'logger.cpp',
+    relative_pointer_code,
+    relative_pointer_client_h,
+    relative_pointer_server_h,
+    include_directories: [vkShade_include_path],
+    dependencies: [wayland_client_dep, wayland_server_dep, xkbcommon_dep],
+)
+test(
+    'wayland-mouse-input',
+    wayland_mouse_input_test,
+    env: ['VKSHADE_LOG_LEVEL=none'],
+)
+async_texture_upload_test = executable(
+    'async-texture-upload-test',
+    '../tests/async_texture_upload.cpp',
+    'overlay/async_texture_upload.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('async-texture-upload', async_texture_upload_test)
+vulkan_helpers_test = executable(
+    'vulkan-helpers-test',
+    '../tests/vulkan_helpers.cpp',
+    'descriptor_set.cpp',
+    'image_view.cpp',
+    'shader.cpp',
+    'logger.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_params_inc,
+    ],
+    dependencies: [dl_dep],
+)
 test('vulkan-helpers', vulkan_helpers_test, env: ['VKSHADE_LOG_LEVEL=none'])
+fake_swapchain_test = executable(
+    'fake-swapchain-test',
+    '../tests/fake_swapchain.cpp',
+    'fake_swapchain.cpp',
+    'format.cpp',
+    'memory.cpp',
+    'logger.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_params_inc,
+    ],
+    dependencies: [dl_dep],
+)
+test('fake-swapchain', fake_swapchain_test, env: ['VKSHADE_LOG_LEVEL=none'])
 test('vkcube-launcher', find_program('../scripts/test-vkcube.sh'))
 test(
     'depth-selection',
@@ -261,7 +659,6 @@ test(
 # LD_AUDIT library for Wine Wayland input interposition.
 # Redirects wl_proxy_add_listener bindings from dlopen(RTLD_LOCAL) scopes
 # (e.g. Wine's winewayland.so) to our wrapper in libvkshade.so.
-dl_dep = cpp.find_library('dl')
 shared_library(
     'vkshade-audit',
     'wayland_audit.c',
@@ -270,24 +667,36 @@ shared_library(
     install_dir: lib_dir,
 )
 
-vkshade_run_conf = configuration_data()
-vkshade_run_conf.set_quoted(
+vkshade_launcher_conf = configuration_data()
+vkshade_launcher_conf.set_quoted(
     'VKSHADE_LIB',
     join_paths(get_option('prefix'), lib_dir, 'libvkshade.so'),
 )
-vkshade_run_conf.set_quoted(
+vkshade_launcher_conf.set_quoted(
     'VKSHADE_AUDIT_LIB',
     join_paths(get_option('prefix'), lib_dir, 'libvkshade-audit.so'),
 )
 
-vkshade_run = configure_file(
-    input: '../scripts/vkshade-run.in',
-    output: 'vkshade-run',
-    configuration: vkshade_run_conf,
+vkshade_launcher = configure_file(
+    input: '../scripts/vkshade.in',
+    output: 'vkshade',
+    configuration: vkshade_launcher_conf,
 )
 
 install_data(
-    vkshade_run,
+    vkshade_launcher,
     install_dir: get_option('bindir'),
     install_mode: ['rwxr-xr-x'],
+)
+
+test(
+    'vkshade-launcher',
+    find_program('../scripts/test-vkshade.sh'),
+    args: [
+        vkshade_launcher,
+        files('../scripts/vkshade.sh'),
+        meson.current_build_dir(),
+        join_paths(meson.current_build_dir(), 'libvkshade.so'),
+        join_paths(meson.current_build_dir(), 'libvkshade-audit.so'),
+    ],
 )

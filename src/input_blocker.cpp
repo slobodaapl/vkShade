@@ -64,10 +64,7 @@ namespace vkShade
         // interposition entirely. No workaround exists without LD_AUDIT
         // or a wrapper libwayland-client.so.
         Logger::debug(std::string("Wayland input blocking: ") + (shouldBlock ? "suppressing game events" : "forwarding game events"));
-        // Send synthetic leave/enter to game keyboards so held keys
-        // are released when overlay opens (prevents stuck movement/actions).
-        // Only works when wl_proxy_add_listener interposition is active.
-        notifyGameKeyboardFocus(!shouldBlock);
+        notifyGameInputBlocked(shouldBlock);
     }
 
     bool isInputBlocked()

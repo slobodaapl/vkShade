@@ -67,12 +67,10 @@ namespace vkShade
 
                 for (const auto& effect : effects)
                 {
-                    bool open = ImGui::TreeNode(
-                        effect.name.c_str(), "[%s] %s", effect.type == EffectType::BuiltIn ? "BuiltIn" : "ReShade", effect.name.c_str());
+                    bool open = ImGui::TreeNode(effect.name.c_str(), "[FX] %s", effect.name.c_str());
 
                     if (open)
                     {
-                        ImGui::TextDisabled("Type: %s", effect.effectType.c_str());
                         ImGui::TextDisabled("Enabled: %s", effect.enabled ? "true" : "false");
 
                         if (!effect.filePath.empty())

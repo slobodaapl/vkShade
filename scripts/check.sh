@@ -45,8 +45,12 @@ run_check 'Standalone shader tester type check' c++ -std=c++20 -Isrc -Isrc/resha
 # Cppcheck does not infer compiler or Vulkan calling-convention macros from system headers.
 run_check 'C and C++ static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --project="$build_dir/compile_commands.json" \
   -D__GNUC__=4 -DVKAPI_ATTR= -DVKAPI_CALL= --enable=warning,performance,portability --error-exitcode=1 \
-  --suppress=missingIncludeSystem '--suppress=*:src/reshade/*' '--suppress=*:src/imgui/*' "--suppress=*:$build_dir/*" \
-  -i src/imgui -i src/reshade -i src/stb_image.c -i src/stb_image_resize.c
+  --suppress=missingIncludeSystem '--suppress=*:src/reshade/*' '--suppress=*:src/imgui/*' '--suppress=*:src/proton/vendor/minhook/*' "--suppress=*:$build_dir/*" \
+  -i src/imgui -i src/reshade -i src/proton/vendor/minhook -i src/stb_image.c -i src/stb_image_resize.c
+run_check 'Proton Windows C static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --platform=win64 --std=c11 -Isrc -Isrc/proton \
+  -DMINHOOK_DISABLE_INTRINSICS --enable=warning,performance,portability --error-exitcode=1 --suppress=missingIncludeSystem \
+  '--suppress=*:src/proton/vendor/minhook/*' src/proton/injector.c src/proton/streamline_observer.c \
+  tests/proton_streamline_fake.c tests/proton_streamline_runtime.c
 run_check 'Standalone shader tester static analysis' uvx --from cppcheck-py==2.22.0 cppcheck --std=c++20 -Isrc -Isrc/reshade \
   --enable=warning,performance,portability --error-exitcode=1 --suppress=missingIncludeSystem \
   '--suppress=*:src/reshade/*' tools/test_shaders.cpp

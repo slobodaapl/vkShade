@@ -1,4 +1,5 @@
 #include "vulkan_include.hpp"
+#include "proton/host_bridge.hpp"
 
 #include <mutex>
 #include <map>
@@ -33,6 +34,7 @@
 #include "wayland_display.hpp"
 
 #include "logical_device.hpp"
+#include "device_features.hpp"
 #include "depth_clear_capture.hpp"
 #include "depth_copy_submission.hpp"
 #include "depth_image_capture.hpp"
@@ -2476,6 +2478,9 @@ namespace vkShade
             instanceVersionMap[GetKey(*pInstance)]  = modifiedCreateInfo.pApplicationInfo->apiVersion;
         }
 
+        if (ret == VK_SUCCESS)
+            vkshade_start_proton_bridge();
+
         return ret;
     }
 
@@ -2583,8 +2588,6 @@ namespace vkShade
         bool                                  enableNvCheckpoints       = false;
         bool                                  enableNvDiagnosticsConfig = false;
         bool                                  enableDeviceFault         = false;
-        bool                                  enableDeviceFaultFeature  = false;
-        VkPhysicalDeviceFaultFeaturesEXT      faultFeatureEnable        = {};
         VkDeviceDiagnosticsConfigCreateInfoNV diagnosticsConfigInfo     = {};
         if (gpuCrashDiagnosticsRequested)
         {
@@ -2621,52 +2624,24 @@ namespace vkShade
         modifiedCreateInfo.ppEnabledExtensionNames = enabledExtensionNames.data();
         modifiedCreateInfo.enabledExtensionCount   = enabledExtensionNames.size();
 
-        // Active needed Features
-        VkPhysicalDeviceFeatures deviceFeatures = {};
-        if (modifiedCreateInfo.pEnabledFeatures)
+        const auto&                instanceDispatch = instanceDispatchMap[GetKey(physicalDevice)];
+        const DeviceFeatureSupport featureSupport   = queryDeviceFeatureSupport(
+            physicalDevice, instanceDispatch.GetPhysicalDeviceFeatures2, instanceDispatch.GetPhysicalDeviceFeatures, enableDeviceFault);
+        DeviceFeatureConfiguration featureConfiguration(modifiedCreateInfo, featureSupport, enableDeviceFault);
+        if (enableDeviceFault && !featureConfiguration.deviceFaultEnabled())
         {
-            deviceFeatures = *(modifiedCreateInfo.pEnabledFeatures);
-        }
-        deviceFeatures.shaderImageGatherExtended            = VK_TRUE;
-        deviceFeatures.shaderStorageImageReadWithoutFormat  = VK_TRUE;
-        deviceFeatures.shaderStorageImageWriteWithoutFormat = VK_TRUE;
-        modifiedCreateInfo.pEnabledFeatures                 = &deviceFeatures;
-
-        void* extendedDevicePNext = const_cast<void*>(modifiedCreateInfo.pNext);
-
-        if (enableDeviceFault && !pNextChainContainsSType(modifiedCreateInfo.pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT))
-        {
-            VkPhysicalDeviceFaultFeaturesEXT faultFeatureQuery = {};
-            faultFeatureQuery.sType                            = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
-            VkPhysicalDeviceFeatures2 featureQuery             = {};
-            featureQuery.sType                                 = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-            featureQuery.pNext                                 = &faultFeatureQuery;
-            if (instanceDispatchMap[GetKey(physicalDevice)].GetPhysicalDeviceFeatures2)
-            {
-                instanceDispatchMap[GetKey(physicalDevice)].GetPhysicalDeviceFeatures2(physicalDevice, &featureQuery);
-                if (faultFeatureQuery.deviceFault == VK_TRUE)
-                {
-                    faultFeatureEnable             = {};
-                    faultFeatureEnable.sType       = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
-                    faultFeatureEnable.deviceFault = VK_TRUE;
-                    faultFeatureEnable.pNext       = extendedDevicePNext;
-                    extendedDevicePNext            = &faultFeatureEnable;
-                    enableDeviceFaultFeature       = true;
-                }
-                else
-                {
-                    Logger::warn("VK_EXT_device_fault is present but deviceFault feature is not supported");
-                }
-            }
-            else
-            {
+            if (pNextChainContainsSType(modifiedCreateInfo.pNext, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT))
+                Logger::warn("VK_EXT_device_fault feature is disabled by the application");
+            else if (!instanceDispatch.GetPhysicalDeviceFeatures2)
                 Logger::warn("Cannot query VkPhysicalDeviceFaultFeaturesEXT (vkGetPhysicalDeviceFeatures2 unavailable)");
-            }
+            else
+                Logger::warn("VK_EXT_device_fault is present but deviceFault feature is not supported");
         }
-        else if (enableDeviceFault)
-        {
-            enableDeviceFaultFeature = true;
-        }
+        modifiedCreateInfo                     = featureConfiguration.createInfo();
+        const bool deviceFaultExtensionEnabled = std::any_of(enabledExtensionNames.begin(), enabledExtensionNames.end(), [](const char* name) {
+            return std::strcmp(name, VK_EXT_DEVICE_FAULT_EXTENSION_NAME) == 0;
+        });
+        void*      extendedDevicePNext         = const_cast<void*>(modifiedCreateInfo.pNext);
 
         if (enableNvDiagnosticsConfig
             && !pNextChainContainsSType(modifiedCreateInfo.pNext, VK_STRUCTURE_TYPE_DEVICE_DIAGNOSTICS_CONFIG_CREATE_INFO_NV))
@@ -2690,6 +2665,7 @@ namespace vkShade
         pLogicalDevice->vki                             = instanceDispatchMap[GetKey(physicalDevice)];
         pLogicalDevice->device                          = *pDevice;
         pLogicalDevice->physicalDevice                  = physicalDevice;
+        pLogicalDevice->enabledFeatures                 = featureConfiguration.enabledFeatures();
         pLogicalDevice->instance                        = instanceMap[GetKey(physicalDevice)];
         pLogicalDevice->queue                           = VK_NULL_HANDLE;
         pLogicalDevice->queueFamilyIndex                = 0;
@@ -2701,7 +2677,7 @@ namespace vkShade
         pLogicalDevice->gpuCrashDiagnosticsEnabled      = gpuCrashDiagnosticsRequested;
         pLogicalDevice->supportsNvDiagnosticCheckpoints = enableNvCheckpoints;
         pLogicalDevice->supportsNvDiagnosticsConfig     = enableNvDiagnosticsConfig;
-        pLogicalDevice->supportsDeviceFaultExt          = enableDeviceFault && enableDeviceFaultFeature;
+        pLogicalDevice->supportsDeviceFaultExt          = deviceFaultExtensionEnabled && featureConfiguration.deviceFaultEnabled();
 
         fillDispatchTableDevice(*pDevice, gdpa, &pLogicalDevice->vkd);
 

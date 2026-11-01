@@ -41,6 +41,7 @@
               glslang
               util-linux
               wayland-scanner
+              pkgsCross.mingwW64.stdenv.cc
             ];
 
             buildInputs = with pkgs; [
@@ -58,6 +59,7 @@
 
             mesonFlags = [
               "-Dappend_libdir_vkshade=false"
+              "-Dproton_bridge=enabled"
               "--sysconfdir=/etc"
             ];
 
@@ -72,7 +74,11 @@
 
             meta = with pkgs.lib; {
               description = "Vulkan post-processing layer with real-time overlay UI (Wayland + X11)";
-              license = licenses.zlib;
+              license = with licenses; [
+                zlib
+                bsd2
+                mit
+              ];
               platforms = [ "x86_64-linux" ];
               mainProgram = "vkshade";
             };

@@ -1,4 +1,10 @@
 option(
+    'proton_bridge',
+    type: 'feature',
+    value: 'auto',
+    description: 'Build the Windows Proton bridge artifacts',
+)
+option(
     'with_so',
     type: 'boolean',
     value: true,

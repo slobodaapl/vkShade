@@ -38,6 +38,7 @@ vkShade_src = [
     'command_buffer.cpp',
     'depth_resolve_resources.cpp',
     'depth_copy_submission.cpp',
+    'device_features.cpp',
     'config.cpp',
     'config_serializer.cpp',
     'settings_manager.cpp',
@@ -61,6 +62,8 @@ vkShade_src = [
     'image_view.cpp',
     'keyboard_input.cpp',
     'logger.cpp',
+    'proton/feature_state.cpp',
+    'proton/host_bridge.cpp',
     'logical_swapchain.cpp',
     'memory.cpp',
     'renderpass.cpp',
@@ -264,6 +267,159 @@ vkshade_library = shared_library(
     install_dir: lib_dir,
 )
 
+proton_option = get_option('proton_bridge')
+proton_toolchain = ''
+proton_compiler = ''
+proton_linker = '-'
+proton_script = files('../scripts/build-proton-bridge.sh')
+proton_shell = find_program('sh')
+if not proton_option.disabled() and host_machine.system() == 'linux' and host_machine.cpu_family() == 'x86_64'
+    mingw = find_program('x86_64-w64-mingw32-gcc', required: false)
+    if mingw.found()
+        probe = run_command(
+            proton_shell,
+            proton_script,
+            'probe',
+            'mingw',
+            mingw.full_path(),
+            '-',
+            meson.current_source_dir(),
+            meson.current_build_dir(),
+            check: false,
+        )
+        if probe.returncode() == 0
+            proton_toolchain = 'mingw'
+            proton_compiler = mingw.full_path()
+        endif
+    endif
+    if proton_toolchain == ''
+        clang = find_program('/usr/bin/clang', required: false)
+        lld_link = find_program('lld-link', required: false)
+        if clang.found() and lld_link.found()
+            probe = run_command(
+                proton_shell,
+                proton_script,
+                'probe',
+                'clang',
+                clang.full_path(),
+                lld_link.full_path(),
+                meson.current_source_dir(),
+                meson.current_build_dir(),
+                check: false,
+            )
+            if probe.returncode() == 0
+                proton_toolchain = 'clang'
+                proton_compiler = clang.full_path()
+                proton_linker = lld_link.full_path()
+            endif
+        endif
+    endif
+endif
+if not proton_option.disabled() and proton_toolchain == ''
+    if proton_option.enabled()
+        error(
+            'Proton bridge requires Linux x86_64 and a working MinGW or clang/Wine SDK PE toolchain',
+        )
+    endif
+    message(
+        'Proton bridge PE capability unavailable; native vkShade build will still succeed',
+    )
+endif
+if proton_toolchain != ''
+    proton_inputs = files(
+        '../scripts/build-proton-bridge.sh',
+        'proton/injector.c',
+        'proton/streamline_observer.c',
+        'proton/bridge_events.h',
+        'proton/bridge_identity.h',
+        'proton/streamline_abi.h',
+        'proton/vendor/minhook/include/MinHook.h',
+        'proton/vendor/minhook/src/buffer.c',
+        'proton/vendor/minhook/src/buffer.h',
+        'proton/vendor/minhook/src/hook.c',
+        'proton/vendor/minhook/src/trampoline.c',
+        'proton/vendor/minhook/src/trampoline.h',
+        'proton/vendor/minhook/src/hde/hde64.c',
+        'proton/vendor/minhook/src/hde/hde64.h',
+        'proton/vendor/minhook/src/hde/pstdint.h',
+        'proton/vendor/minhook/src/hde/table64.h',
+    )
+    proton_bridge = custom_target(
+        'proton-bridge',
+        input: proton_inputs,
+        output: ['vkshade-proton-injector.exe', 'vkshade-proton-observer.dll'],
+        command: [
+            proton_shell,
+            proton_script,
+            'build',
+            proton_toolchain,
+            proton_compiler,
+            proton_linker,
+            meson.current_source_dir(),
+            meson.current_build_dir(),
+            '@OUTPUT0@',
+            '@OUTPUT1@',
+        ],
+        build_by_default: true,
+        install: true,
+        install_dir: lib_dir,
+    )
+    install_data(
+        'proton/vendor/minhook/LICENSE.txt',
+        'proton/streamline_LICENSE.txt',
+        install_dir: join_paths(get_option('datadir'), 'licenses', 'vkshade'),
+    )
+endif
+
+wine = find_program('wine', required: false)
+winepath = find_program('winepath', required: false)
+wineserver = find_program('wineserver', required: false)
+if proton_toolchain != '' and wine.found() and winepath.found() and wineserver.found()
+    proton_fixture = custom_target(
+        'proton-streamline-fixture',
+        input: files(
+            '../scripts/build-proton-bridge.sh',
+            '../tests/proton_streamline_fake.c',
+            '../tests/proton_streamline_runtime.c',
+            'proton/bridge_events.h',
+            'proton/bridge_identity.h',
+        ),
+        output: ['proton-streamline-fake.dll', 'proton-streamline-runtime.exe'],
+        command: [
+            proton_shell,
+            proton_script,
+            'fixture',
+            proton_toolchain,
+            proton_compiler,
+            proton_linker,
+            meson.current_source_dir(),
+            meson.current_build_dir(),
+            '@OUTPUT0@',
+            '@OUTPUT1@',
+        ],
+    )
+    test(
+        'proton-streamline-runtime',
+        proton_shell,
+        args: [
+            files('../scripts/test-proton-streamline.sh'),
+            wine.full_path(),
+            winepath.full_path(),
+            wineserver.full_path(),
+            proton_fixture[0],
+            proton_fixture[1],
+            proton_bridge[1],
+            proton_bridge[0],
+            meson.current_build_dir(),
+        ],
+        timeout: 300,
+    )
+else
+    message(
+        'Wine Proton runtime test unavailable (PE toolchain or Wine programs missing)',
+    )
+endif
+
 shader_checker = executable(
     'vkshade-shader-check',
     'shader_check.cpp',
@@ -321,6 +477,13 @@ depth_frame_tracker_test = executable(
     include_directories: [vkShade_include_path],
 )
 test('depth-frame-tracker', depth_frame_tracker_test)
+proton_observations_test = executable(
+    'proton-observations-test',
+    '../tests/proton_observations.cpp',
+    'proton/feature_state.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('proton-observations', proton_observations_test)
 depth_copy_submission_test = executable(
     'depth-copy-submission-test',
     '../tests/depth_copy_submission.cpp',
@@ -630,6 +793,30 @@ vulkan_helpers_test = executable(
     dependencies: [dl_dep],
 )
 test('vulkan-helpers', vulkan_helpers_test, env: ['VKSHADE_LOG_LEVEL=none'])
+device_features_test = executable(
+    'device-features-test',
+    '../tests/device_features.cpp',
+    'device_features.cpp',
+    include_directories: [vkShade_include_path],
+)
+test('device-features', device_features_test)
+shader_features_test = executable(
+    'shader-features-test',
+    '../tests/shader_features.cpp',
+    'shader.cpp',
+    'logger.cpp',
+    'overlay/shader_metadata_loader.cpp',
+    'shader_metadata.cpp',
+    include_directories: [
+        vkShade_include_path,
+        imgui_inc,
+        overlay_inc,
+        effects_inc,
+        effects_params_inc,
+    ],
+    dependencies: [dl_dep],
+)
+test('shader-features', shader_features_test, env: ['VKSHADE_LOG_LEVEL=none'])
 fake_swapchain_test = executable(
     'fake-swapchain-test',
     '../tests/fake_swapchain.cpp',

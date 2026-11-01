@@ -1,6 +1,7 @@
 #include "imgui_overlay.hpp"
 #include "config_serializer.hpp"
 #include "logger.hpp"
+#include "../proton/feature_state.hpp"
 
 #include <fstream>
 #include <filesystem>
@@ -545,6 +546,46 @@ namespace vkShade
             ImGui::TextDisabled("GPU stats not available");
             ImGui::TextDisabled("(No AMD/Intel/NVIDIA GPU detected via sysfs)");
         }
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Text("Streamline");
+        ImGui::Separator();
+        const auto  streamline = vkshade::proton::feature_snapshot();
+        const char* monitor    = streamline.unavailable          ? "Unavailable"
+                                 : !streamline.monitoring        ? "Not started"
+                                 : streamline.interposer_present ? "Interposer detected"
+                                                                 : "Monitoring; no interposer detected";
+        ImGui::Text("Observer: %s", monitor);
+        if (streamline.coverage_limited)
+            ImGui::TextWrapped("Observation coverage limited; reported state may be incomplete.");
+        const auto evaluationLabel = [](vkshade::proton::Evaluation value) {
+            switch (value)
+            {
+                case vkshade::proton::Evaluation::Recent: return "Within last 5 seconds";
+                case vkshade::proton::Evaluation::Earlier: return "Earlier";
+                default: return "Not observed";
+            }
+        };
+        ImGui::TextWrapped("Successful evaluations: DLSS %s; DLSS-G %s; DLSS-RR %s",
+                           evaluationLabel(streamline.dlss),
+                           evaluationLabel(streamline.dlssg),
+                           evaluationLabel(streamline.dlssrr));
+        const char* modes[] = {"Off", "On", "Auto", "Dynamic"};
+        ImGui::Text("Last observed frame generation mode: %s",
+                    streamline.framegen_mode >= 0 && streamline.framegen_mode <= 3 ? modes[streamline.framegen_mode] : "Unknown");
+        if (streamline.tag_submission_calls == 0)
+            ImGui::Text("Tag API calls: Not observed");
+        else
+            ImGui::Text("Tag API calls: %llu; last result: 0x%08llx; array entries: %llu",
+                        static_cast<unsigned long long>(streamline.tag_submission_calls),
+                        static_cast<unsigned long long>(streamline.last_tag_submission >> 32),
+                        static_cast<unsigned long long>(streamline.last_tag_submission & 0xffffffffULL));
+        const auto tag = [&streamline](unsigned bit) { return (streamline.resource_tags & (uint64_t{1} << bit)) ? "Yes" : "Not observed"; };
+        ImGui::TextDisabled("Game-submitted tags observed (past submissions; resource lifetime unknown):");
+        ImGui::TextDisabled("These observations do not indicate resources usable by shaders.");
+        ImGui::Text("Depth: %s; motion vectors: %s; normals: %s", tag(0), tag(1), tag(5));
+        ImGui::Text("Normals + roughness: %s; hi-res depth: %s; linear depth: %s", tag(14), tag(48), tag(49));
 
         // Game info
         ImGui::Spacing();

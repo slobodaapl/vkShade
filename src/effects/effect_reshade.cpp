@@ -2085,6 +2085,13 @@ namespace vkShade
             throw std::runtime_error("shader produced empty SPIR-V: " + effectName);
         }
 
+        if (const char* feature = missingShaderFeature(module.spirv, pLogicalDevice->enabledFeatures))
+        {
+            const std::string error = "shader requires enabled device feature " + std::string(feature) + ": " + effectName;
+            Logger::err(error);
+            throw std::runtime_error(error);
+        }
+
         VkShaderModuleCreateInfo shaderCreateInfo;
         shaderCreateInfo.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
         shaderCreateInfo.pNext    = nullptr;

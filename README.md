@@ -101,6 +101,8 @@ Place shaders in `~/.config/vkShade/reshade/Shaders/` and textures in `~/.config
 - wayland-client + wayland-protocols + wayland-scanner
 - libxkbcommon
 
+For Proton Streamline diagnostics, the build also needs an x86-64 MinGW compiler, or clang, lld, and the Wine development headers and import libraries. Meson detects these automatically. Use `-Dproton_bridge=enabled` to require them or `-Dproton_bridge=disabled` to omit the bridge.
+
 **Runtime requirement:** vkShade targets **Vulkan API 1.3 / SPIR-V 1.3** and does not support older stacks. In practice, most modern **NVIDIA** and **AMD** Linux drivers should work unless they are roughly older than about a year.
 
 ### From Source
@@ -152,6 +154,8 @@ Example with Proton optimizations and GameMode:
 ```
 PROTON_ENABLE_WAYLAND=1 PROTON_USE_NTSYNC=1 DXVK_ASYNC=1 PROTON_FSR4_UPGRADE=1 vkshade gamemoderun %command%
 ```
+
+The Diagnostics tab can show observed Streamline evaluations, the last observed frame-generation mode, and resource types submitted by the game. Calls made before the observer attaches may be missed; other upscaler APIs are not detected. These observations do not make the game resources available to shaders. The observer keeps the Streamline modules it hooks loaded until the game exits.
 
 ### Lutris
 
@@ -294,3 +298,5 @@ For Wayland, use `vkshade` so these interposition symbols are injected early eno
 - **Additional ReShade shader compatibility fixes** by this project maintainer
 - **ReShade** shader compiler by [@crosire](https://github.com/crosire)
 - **ImGui** by [@ocornut](https://github.com/ocornut)
+- **MinHook** for the Proton observer — [license](src/proton/vendor/minhook/LICENSE.txt)
+- **NVIDIA Streamline SDK** declarations — [license](src/proton/streamline_LICENSE.txt)

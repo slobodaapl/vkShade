@@ -11,12 +11,12 @@ javascript_files=()
 while IFS= read -r -d '' file; do
   [[ -f "$file" ]] || continue
   case "$file" in
-  src/imgui/* | src/reshade/* | src/shader/*.h | src/stb_image*) ;;
+  src/imgui/* | src/reshade/* | src/proton/vendor/minhook/* | src/shader/*.h | src/stb_image*) ;;
   *.c | *.cc | *.cpp | *.cxx | *.h | *.hh | *.hpp | *.hxx) native_files+=("$file") ;;
   esac
 
   case "$file" in
-  src/imgui/* | src/reshade/*) ;;
+  src/imgui/* | src/reshade/* | src/proton/vendor/minhook/*) ;;
   *.js | *.cjs | *.mjs) javascript_files+=("$file") ;;
   esac
 

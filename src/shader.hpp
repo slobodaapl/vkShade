@@ -14,8 +14,9 @@
 
 namespace vkShade
 {
-    void createShaderModule(LogicalDevice* pLogicalDevice, const std::vector<char>& code, VkShaderModule* shaderModule);
-    void createShaderModule(LogicalDevice* pLogicalDevice, const std::vector<uint32_t>& code, VkShaderModule* shaderModule);
+    const char* missingShaderFeature(const std::vector<uint32_t>& spirv, const VkPhysicalDeviceFeatures& enabled);
+    void        createShaderModule(LogicalDevice* pLogicalDevice, const std::vector<char>& code, VkShaderModule* shaderModule);
+    void        createShaderModule(LogicalDevice* pLogicalDevice, const std::vector<uint32_t>& code, VkShaderModule* shaderModule);
 } // namespace vkShade
 
 #endif // SHADER_HPP_INCLUDED

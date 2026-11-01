@@ -2,6 +2,7 @@
 #define VK_INSTANCE_FUNCS \
     FORVKFUNC(DestroyInstance) \
     FORVKFUNC(EnumerateDeviceExtensionProperties) \
+    FORVKFUNC(GetPhysicalDeviceFeatures) \
     FORVKFUNC(GetPhysicalDeviceFeatures2) \
     FORVKFUNC(GetInstanceProcAddr) \
     FORVKFUNC(GetPhysicalDeviceFormatProperties) \

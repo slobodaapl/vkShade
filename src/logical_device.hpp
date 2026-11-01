@@ -204,6 +204,7 @@ namespace vkShade
         InstanceDispatch                                                vki;
         VkDevice                                                        device;
         VkPhysicalDevice                                                physicalDevice;
+        VkPhysicalDeviceFeatures                                        enabledFeatures{};
         VkInstance                                                      instance;
         VkQueue                                                         queue;
         uint32_t                                                        queueFamilyIndex         = 0;
